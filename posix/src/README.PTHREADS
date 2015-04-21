@@ -1,0 +1,284 @@
+Implementation of the POSIX pthreads API for Real Time Linux.
+=============================================================
+
+COPYRIGHT (C) 1999 Zentropix LLC, 1999
+Author: Steve Papacharalambous (stevep@zentropix.com)
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
+
+-----------------------------------------------------------------------------
+
+This is release 0.9 of RTAI pthreads, which implements the Posix
+1003.1c Application Programming Interface (API).
+
+Please note that this release has been tested as much as possible, however
+these tests were not exhaustive, especially for SMP architectures.
+Please report all bugs to the author.
+
+RTAI pthreads provides hard real-time threads where each thread is a RTAI
+task.  All threads execute in the same address space and hence can work
+concurrently on shared data.
+
+-----------------------------------------------------------------------------
+
+Requirements.
+------------
+
+- RTAI version 1.2 - available from: http://www.zentropix.com
+                                     http://www.realtimelinux.org
+                                     http://www.aero.polimi.it/projects/rtai
+                                     http://www.rtai.org
+
+-----------------------------------------------------------------------------
+
+Supported POSIX Calls.
+----------------------
+
+int pthread_create(pthread_t *thread, pthread_attr_t *attr,
+                           void *(*start_routine) (void *), void *arg);
+
+void pthread_exit(void *retval);
+
+
+pthread_t pthread_self(void);
+
+
+int pthread_attr_init(pthread_attr_t *attr);
+
+
+int pthread_attr_destroy(pthread_attr_t *attr);
+
+
+int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate);
+
+
+int pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate);
+
+
+int pthread_attr_setschedparam(pthread_attr_t *attr, const struct sched_param *param);
+
+
+int pthread_attr_getschedparam(const pthread_attr_t *attr, struct sched_param *param);
+
+
+int pthread_attr_setschedpolicy(pthread_attr_t *attr, int policy);
+
+
+int pthread_attr_getschedpolicy(const pthread_attr_t *attr, int *policy);
+
+
+int pthread_attr_setinheritsched(pthread_attr_t *attr, int inherit);
+
+
+int pthread_attr_getinheritsched(const pthread_attr_t *attr, int *inherit);
+
+
+int pthread_attr_setscope(pthread_attr_t *attr, int scope);
+
+
+int pthread_attr_getscope(const pthread_attr_t *attr, int *scope);
+
+
+int pthread_setschedparam(pthread_t thread, int policy, const struct sched_param *param);
+
+
+int pthread_getschedparam(pthread_t thread, int *policy, struct sched_param *param);
+
+
+int sched_yield(void);
+
+
+int clock_gettime( int clockid, struct timespec *current_time);
+
+
+int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *mutex_attr);
+
+
+int pthread_mutex_destroy(pthread_mutex_t *mutex);
+
+
+int pthread_mutexattr_init(pthread_mutexattr_t *attr);
+
+
+int pthread_mutexattr_destroy(pthread_mutexattr_t *attr);
+
+
+int pthread_mutexattr_setkind_np(pthread_mutexattr_t *attr, int kind);
+
+
+int pthread_mutexattr_getkind_np(const pthread_mutexattr_t *attr, int *kind);
+
+
+int pthread_mutex_trylock(pthread_mutex_t *mutex);
+
+
+int pthread_mutex_lock(pthread_mutex_t *mutex);
+
+
+int pthread_mutex_unlock(pthread_mutex_t *mutex);
+
+
+int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *cond_attr);
+
+
+int pthread_cond_destroy(pthread_cond_t *cond);
+
+
+int pthread_condattr_init(pthread_condattr_t *attr);
+
+
+int pthread_condattr_destroy(pthread_condattr_t *attr);
+
+
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+
+
+int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+                           const struct timespec *abstime);
+
+
+int pthread_cond_signal(pthread_cond_t *cond);
+
+
+int pthread_cond_broadcast(pthread_cond_t *cond);
+
+int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+                           const struct timespec *abstime);
+
+-----------------------------------------------------------------------------
+
+Limitations.
+------------
+
+1/ Parent/Child Relationship.
+-----------------------------
+
+Currently all the pthreads are executed in the context of a single process,
+hence there is no parent sibling thread relationship implemented, so all
+threads are separate entities.  Consequently all api calls which use these
+relationships do nothing, for example: pthread_join, and pthread_detach.
+
+
+2/  Signal Handling.
+--------------------
+
+No signal handling calls are currently implemented.
+
+
+-----------------------------------------------------------------------------
+
+The examples directory contains various test programs.
+
+-----------------------------------------------------------------------------
+
+Installation.
+-------------
+
+Install a link from <base dir>/rtai to <base dir>/rtai<curent version>,
+for example if rtai-1.1 is the current version that is being used and
+it has been installed in: /usr/src
+
+	ln -s /usr/src/rtai-1.1 /usr/src/rtai
+
+
+This package is included in the standard RTAI distribution, and should already
+be installed.  However if this package has been obtained seperately then it
+should be installed in the base rtai directory, for example if rtai is installed
+in: /usr/src/rtai
+then:
+cd /usr/src/rtai
+tar zxvf rtai_posix-1.1.tgz
+
+
+To build the package:
+
+**** MAKE SURE that RTAI is set to the correct RTAI installation path FIRST,
+**** in the Makefiles.  One is located at the top level directory of this
+**** package and the other is in the examples subdirectory.  The default
+**** for this is set to: /usr/src/rtai
+
+
+cd /usr/src/rtai/posix
+make clean
+make all
+
+make all will build the example/test programs in the examples directory also.
+make realclean will clear the examples directory also.
+
+
+To build the examples:
+
+1/ From the top level directory.
+
+make ex
+
+
+2/ From the examples directory.
+
+make clean
+make
+
+
+To install the package:
+
+insmod /usr/src/rtai/rtai
+insmod /usr/src/rtai/<xxxx>/rtai_sched
+insmod /usr/src/rtai/posix/rtai_utils.o
+insmod /usr/src/rtai/posix/modules/rtai_pthread.o
+
+
+where <xxxx> is one on the following subdirectories:
+
+upscheduler			# This is for Uniprocessor platforms.
+smpscheduler			# This is for most SMP platforms.
+				# Please note that there are two schedulers
+				# available in this directory: rtai_sched_8254
+				# and rtai_sched_apic.  In general if the
+				# machine has an APIC available rtai_sched_apic
+				# should be used.  To determine if an APIC is
+				# check the flags entry in /proc/cpuinfo.
+mupscheduler			# This is for platforms with APICs where RT
+                                # tasks are bound to a single CPU on task
+                                # creation.
+
+The choice of scheduler depends on the final application and platform.
+
+NOTE: To determine whether there is an APIC available, type "cat /proc/cpuinfo"
+and search for "apic" in the flags field.
+
+-----------------------------------------------------------------------------
+
+TODO.
+-----
+
+- Parent/sibling related functionality.
+- Signal handling.
+- POSIX clocks & timers.
+
+-----------------------------------------------------------------------------
+
+Acknowledgements.
+-----------------
+
+- Paolo Mantegazza (mantegazza@aero.polimi.it) for the RTAI package, and for his
+  assistance and advice with this module.
+
+- Xavier Leroy (Xavier.Leroy@inria.fr) for his Linuxthreads package which has
+  provided a valuable reference.
+
+- Victor Yodaiken (yodaiken@fsmlabs.com) and Michael Baranbanov (baraban@fsmlabs.com)
+  for the RTLinux project.
+
+-----------------------------------------------------------------------------

@@ -1,0 +1,6 @@
+sync
+rmmod rtai_fifos_lxrt
+rmmod rtai_lxrt
+rmmod rtai_fifos
+rmmod rtai_sched_smp
+rmmod rtai

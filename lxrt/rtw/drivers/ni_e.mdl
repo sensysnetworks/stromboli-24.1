@@ -1,0 +1,233 @@
+Library {
+  Name			  "ni_e"
+  Version		  4.00
+  LibraryLinkDisplay	  "none"
+  CovSaveName		  "covdata"
+  CovNameIncrementing	  off
+  CovHtmlReporting	  on
+  BlockNameDataTip	  off
+  BlockParametersDataTip  off
+  BlockDescriptionStringDataTip	off
+  ToolBar		  off
+  StatusBar		  off
+  BrowserShowLibraryLinks off
+  BrowserLookUnderMasks	  off
+  Created		  "Thu Feb 21 17:11:54 2002"
+  Creator		  "root"
+  UpdateHistory		  "UpdateHistoryNever"
+  ModifiedByFormat	  "%<Auto>"
+  LastModifiedBy	  "root"
+  ModifiedDateFormat	  "%<Auto>"
+  LastModifiedDate	  "Thu Jun 13 10:53:10 2002"
+  ModelVersionFormat	  "1.%<AutoIncrement:50>"
+  ConfigurationManager	  "none"
+  SimParamPage		  "Solver"
+  AlgebraicLoopMsg	  "warning"
+  MinStepSizeMsg	  "warning"
+  UnconnectedInputMsg	  "warning"
+  UnconnectedOutputMsg	  "warning"
+  UnconnectedLineMsg	  "warning"
+  InheritedTsInSrcMsg	  "warning"
+  SingleTaskRateTransMsg  "none"
+  MultiTaskRateTransMsg	  "error"
+  IntegerOverflowMsg	  "warning"
+  CheckForMatrixSingularity "none"
+  UnnecessaryDatatypeConvMsg "none"
+  Int32ToFloatConvMsg	  "warning"
+  SignalLabelMismatchMsg  "none"
+  LinearizationMsg	  "none"
+  VectorMatrixConversionMsg "none"
+  SfunCompatibilityCheckMsg "none"
+  BlockPriorityViolationMsg "warning"
+  ArrayBoundsChecking	  "none"
+  ConsistencyChecking	  "none"
+  Profile		  off
+  SimulationMode	  "normal"
+  RTWRetainRTWFile	  off
+  RTWMakeCommand	  "make_rtw"
+  RTWGenerateCodeOnly	  off
+  TLCProfiler		  off
+  TLCDebug		  off
+  TLCCoverage		  off
+  ExtModeMexFile	  "ext_comm"
+  ExtModeBatchMode	  off
+  ExtModeTrigType	  "manual"
+  ExtModeTrigMode	  "normal"
+  ExtModeTrigPort	  "1"
+  ExtModeTrigElement	  "any"
+  ExtModeTrigDuration	  1000
+  ExtModeTrigHoldOff	  0
+  ExtModeTrigDelay	  0
+  ExtModeTrigDirection	  "rising"
+  ExtModeTrigLevel	  0
+  ExtModeArchiveMode	  "off"
+  ExtModeAutoIncOneShot	  off
+  ExtModeIncDirWhenArm	  off
+  ExtModeAddSuffixToVar	  off
+  ExtModeWriteAllDataToWs off
+  ExtModeArmWhenConnect	  on
+  ExtModeLogAll		  on
+  BlockDefaults {
+    Orientation		    "right"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    NamePlacement	    "normal"
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+    ShowName		    on
+  }
+  AnnotationDefaults {
+    HorizontalAlignment	    "center"
+    VerticalAlignment	    "middle"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  LineDefaults {
+    FontName		    "Helvetica"
+    FontSize		    9
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  System {
+    Name		    "ni_e"
+    Location		    [191, 381, 586, 646]
+    Open		    on
+    ModelBrowserVisibility  off
+    ModelBrowserWidth	    200
+    ScreenColor		    "white"
+    PaperOrientation	    "landscape"
+    PaperPositionMode	    "auto"
+    PaperType		    "usletter"
+    PaperUnits		    "inches"
+    ZoomFactor		    "100"
+    AutoZoom		    on
+    ReportName		    "simulink-default.rpt"
+    Block {
+      BlockType		      "S-Function"
+      Name		      "AI"
+      Ports		      [0, 1]
+      Position		      [50, 34, 170, 106]
+      FunctionName	      "ni_e_ai"
+      Parameters	      "nch,type,gain,pol,dither,timer,dt"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "NI_E_AI"
+      MaskPromptString	      "Number of channels|Channel type|Gain|Polarity|D"
+"ither enable|PC timer|Sampling time [s]"
+      MaskStyleString	      "edit,popup(differential | NRSE | RSE),edit,popu"
+"p(bipolar | unipolar),checkbox,checkbox,edit"
+      MaskTunableValueString  "off,off,off,off,off,off,off"
+      MaskCallbackString      "||||||"
+      MaskEnableString	      "on,on,on,on,on,on,on"
+      MaskVisibilityString    "on,on,on,on,on,on,on"
+      MaskToolTipString	      "on,on,on,on,on,on,on"
+      MaskVariables	      "nch=@1;type=@2;gain=@3;pol=@4;dither=@5;timer=@"
+"6;dt=@7;"
+      MaskDisplay	      "disp('National Instruments\\nPCI E Series\\n\\n"
+"Analog Input');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "| RSE||bipolar |off|on|"
+      MaskVariableAliases     ",,,,,,"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "AO"
+      Ports		      [1]
+      Position		      [220, 34, 340, 106]
+      FunctionName	      "ni_e_ao"
+      Parameters	      "chan,ref,pol,timer,dt"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "NI_E_AO"
+      MaskPromptString	      "Channel|Reference|Polarity|PC timer|Sampling ti"
+"me [s]"
+      MaskStyleString	      "popup(DAC0 | DAC1),popup(internal | external),p"
+"opup(unipolar | bipolar),checkbox,edit"
+      MaskTunableValueString  "off,off,off,off,off"
+      MaskCallbackString      "||||"
+      MaskEnableString	      "on,on,on,on,on"
+      MaskVisibilityString    "on,on,on,on,on"
+      MaskToolTipString	      "on,on,on,on,on"
+      MaskVariables	      "chan=@1;ref=@2;pol=@3;timer=@4;dt=@5;"
+      MaskDisplay	      "disp('National Instruments\\nPCI E Series\\n\\n"
+"Analog Output');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "DAC0 |internal |unipolar |on|"
+      MaskVariableAliases     ",,,,"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DI"
+      Ports		      [0, 1]
+      Position		      [220, 134, 340, 206]
+      FunctionName	      "ni_e_di"
+      Parameters	      "has_8255,port,nch_8255,daqstc_dio,nch_daqstc,dt"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "NI_E_DI"
+      MaskPromptString	      "82C55 digital I/O|Port|Channels|DAQ-STC digital"
+" I/O|DIO line|Sampling time [s]"
+      MaskStyleString	      "checkbox,popup(C_low|B|C_up|A),popup(1|2|3|4|5|"
+"6|7|8),checkbox,popup(1|2|3|4|5|6|7|8),edit"
+      MaskTunableValueString  "off,off,off,off,off,off"
+      MaskCallbackString      "ni_e_dio_mcb|||ni_e_dio_mcb||"
+      MaskEnableString	      "on,off,off,on,off,on"
+      MaskVisibilityString    "on,on,on,on,on,on"
+      MaskToolTipString	      "on,on,on,on,on,on"
+      MaskVariables	      "has_8255=@1;port=@2;nch_8255=@3;daqstc_dio=@4;n"
+"ch_daqstc=@5;dt=@6;"
+      MaskDisplay	      "disp('National Instruments\\nPCI E Series\\n\\n"
+"Digital Input');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "off|C_low|1|off|1|"
+      MaskVariableAliases     ",,,,,"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DO"
+      Ports		      [1]
+      Position		      [50, 134, 170, 206]
+      FunctionName	      "ni_e_do"
+      Parameters	      "has_8255,port,nch_8255,daqstc_dio,nch_daqstc,dt"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "NI_E_DO"
+      MaskPromptString	      "82C55 digital I/O|Port|Channels|DAQ-STC digital"
+" I/O|DIO line|Sampling time [s]"
+      MaskStyleString	      "checkbox,popup(C_low|B|C_up|A),popup(1|2|3|4|5|"
+"6|7|8),checkbox,popup(1|2|3|4|5|6|7|8),edit"
+      MaskTunableValueString  "off,off,off,off,off,off"
+      MaskCallbackString      "ni_e_dio_mcb|||ni_e_dio_mcb||"
+      MaskEnableString	      "on,off,off,on,off,on"
+      MaskVisibilityString    "on,on,on,on,on,on"
+      MaskToolTipString	      "on,on,on,on,on,on"
+      MaskVariables	      "has_8255=@1;port=@2;nch_8255=@3;daqstc_dio=@4;n"
+"ch_daqstc=@5;dt=@6;"
+      MaskDisplay	      "disp('National Instruments\\nPCI E Series\\n\\n"
+"Digital Output');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "off|C_low|1|off|1|"
+      MaskVariableAliases     ",,,,,"
+    }
+  }
+}

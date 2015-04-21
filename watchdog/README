@@ -1,0 +1,5 @@
+Watchdogs
+=========
+
+Please read ../Documentation/README.WATCHDOG for complete documentation.
+Type 'make install' to build and install the watchdog module in ../modules

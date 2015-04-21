@@ -1,0 +1,1075 @@
+diff -urN linux-2.4.x/arch/m68knommu/kernel/m68k_ksyms.c linux-2.4.x-rthal/arch/m68knommu/kernel/m68k_ksyms.c
+--- linux-2.4.x/arch/m68knommu/kernel/m68k_ksyms.c	Wed Feb 20 07:19:43 2002
++++ linux-2.4.x-rthal/arch/m68knommu/kernel/m68k_ksyms.c	Sat Feb 23 14:38:55 2002
+@@ -163,3 +163,23 @@
+ EXPORT_SYMBOL_NOVERS(_ramvec);
+ 
+ #endif
++
++// RTAI
++EXPORT_SYMBOL(rthal);
++extern void process_int(unsigned long vec, struct pt_regs *fp);
++EXPORT_SYMBOL(process_int);
++extern void *ret_from_interrupt;
++EXPORT_SYMBOL(ret_from_interrupt);
++extern unsigned int sw_usp, sw_ksp;
++EXPORT_SYMBOL(sw_usp);
++EXPORT_SYMBOL(sw_ksp);
++extern irq_node_t *int_irq_list;
++EXPORT_SYMBOL(int_irq_list);
++extern struct console *console_drivers;
++EXPORT_SYMBOL(console_drivers);
++extern unsigned int *mach_kstat_irqs;
++EXPORT_SYMBOL(mach_kstat_irqs);
++EXPORT_SYMBOL(mach_tick);
++unsigned int *local_irq_count;
++EXPORT_SYMBOL(local_irq_count);
++EXPORT_SYMBOL(rdtsc);
+diff -urN linux-2.4.x/arch/m68knommu/kernel/setup.c linux-2.4.x-rthal/arch/m68knommu/kernel/setup.c
+--- linux-2.4.x/arch/m68knommu/kernel/setup.c	Wed Feb 20 07:19:43 2002
++++ linux-2.4.x-rthal/arch/m68knommu/kernel/setup.c	Sat Feb 23 14:37:09 2002
+@@ -416,4 +416,7 @@
+ 		*year = *mon = *day = *hour = *min = *sec = 0;
+ }
+ 
+-
++// this is not the right place for abs()!
++int abs(int x) {
++  return (x<0)?-x:x;
++};
+diff -urN linux-2.4.x/arch/m68knommu/platform/5272/config.c linux-2.4.x-rthal/arch/m68knommu/platform/5272/config.c
+--- linux-2.4.x/arch/m68knommu/platform/5272/config.c	Wed Feb 20 07:19:44 2002
++++ linux-2.4.x-rthal/arch/m68knommu/platform/5272/config.c	Sat Feb 23 15:01:29 2002
+@@ -43,11 +43,24 @@
+ 
+ void coldfire_tick(void)
+ {
++#if 0
+ 	volatile unsigned char	*timerp;
+ 
+ 	/* Reset the ColdFire timer */
+ 	timerp = (volatile unsigned char *) (MCF_MBAR + MCFTIMER_BASE4);
+ 	timerp[MCFTIMER_TER] = MCFTIMER_TER_CAP | MCFTIMER_TER_REF;
++#else
++	volatile unsigned char	*timerp;
++	volatile unsigned short	*timerp2;
++
++	/* Reset the ColdFire timer */
++	timerp = (volatile unsigned char *) (MCF_MBAR + MCFTIMER_BASE4);
++	timerp[MCFTIMER_TER] = MCFTIMER_TER_CAP | MCFTIMER_TER_REF;
++
++         /* keep rdtsc up to date */
++	timerp2 = (volatile unsigned short *) (MCF_MBAR + MCFTIMER_BASE4);
++        timerp2[MCFTIMER_TRR] = rdtsc() + (CLOCK_TICK_RATE / HZ);
++#endif
+ }
+ 
+ /***************************************************************************/
+@@ -61,12 +74,18 @@
+ 	timerp = (volatile unsigned short *) (MCF_MBAR + MCFTIMER_BASE4);
+ 	timerp[MCFTIMER_TMR] = MCFTIMER_TMR_DISABLE;
+ 
++#if 0
+ 	timerp[MCFTIMER_TRR] = (unsigned short) ((MCF_CLK / 16) / HZ);
+ 	timerp[MCFTIMER_TMR] = MCFTIMER_TMR_ENORI | MCFTIMER_TMR_CLK16 |
+ 		MCFTIMER_TMR_RESTART | MCFTIMER_TMR_ENABLE;
++#else
++	timerp[MCFTIMER_TRR] = (unsigned short) (1000000 / HZ);
++	timerp[MCFTIMER_TMR] = MCFTIMER_TMR_ENORI | MCFTIMER_TMR_CLK1 |
++	        MCFTIMER_TMR_ENABLE | ( ((MCF_CLK/1000000)-1) << 8 );	
++#endif
+ 
+ 	icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR1);
+-	*icrp = 0x0000000d; /* TMR4 with priority 5 */
++	*icrp = 0x0000000c; /* TMR4 with priority 4 */
+ 	request_irq(72, handler, SA_INTERRUPT, "ColdFire Timer", NULL);
+ 
+ #ifdef CONFIG_RESETSWITCH
+diff -urN linux-2.4.x/arch/m68knommu/platform/5307/config.c linux-2.4.x-rthal/arch/m68knommu/platform/5307/config.c
+--- linux-2.4.x/arch/m68knommu/platform/5307/config.c	Wed Feb 20 07:19:45 2002
++++ linux-2.4.x-rthal/arch/m68knommu/platform/5307/config.c	Sat Feb 23 14:37:09 2002
+@@ -54,10 +54,15 @@
+ void coldfire_tick(void)
+ {
+ 	volatile unsigned char	*timerp;
++	volatile unsigned short	*timerp2;
+ 
+ 	/* Reset the ColdFire timer */
+ 	timerp = (volatile unsigned char *) (MCF_MBAR + MCFTIMER_BASE1);
+ 	timerp[MCFTIMER_TER] = MCFTIMER_TER_CAP | MCFTIMER_TER_REF;
++
++        /* keep rdtsc up to date */
++	timerp2 = (volatile unsigned short *) (MCF_MBAR + MCFTIMER_BASE1);
++        timerp2[MCFTIMER_TRR] = rdtsc() + (CLOCK_TICK_RATE / HZ);
+ }
+ 
+ /***************************************************************************/
+@@ -402,7 +407,12 @@
+ #if defined(CONFIG_NETtel) || defined(CONFIG_eLIA) || \
+ 		defined(CONFIG_DISKtel) || defined(CONFIG_SECUREEDGEMP3)
+ 	/* Copy command line from FLASH to local buffer... */
++#if 1
++	const char *bootopt = "CONSOLE=/dev/ttyS0,115200";
++	memcpy(commandp, bootopt, size);
++#else
+ 	memcpy(commandp, (char *) 0xf0004000, size);
++#endif
+ 	commandp[size-1] = 0;
+ #else
+ 	memset(commandp, 0, size);
+diff -urN linux-2.4.x/arch/m68knommu/platform/5307/entry.S linux-2.4.x-rthal/arch/m68knommu/platform/5307/entry.S
+--- linux-2.4.x/arch/m68knommu/platform/5307/entry.S	Wed Feb 20 07:19:45 2002
++++ linux-2.4.x-rthal/arch/m68knommu/platform/5307/entry.S	Sat Feb 23 14:37:09 2002
+@@ -58,7 +58,8 @@
+ #include <linux/linkage.h>
+ #include <asm/setup.h>
+ #include <asm/segment.h>
+-
++#include <asm/rt_level.h>
++	
+ #include "m68k_defs.h"
+ 
+ LENOSYS = 38
+@@ -85,85 +86,74 @@
+  *	construct a usp in software... When doing this we need to disable
+  *	interrupts, otherwise bad things could happen.
+  */
+-#define SAVE_ALL						\
+-	move	#0x2700,%sr;		/* disable intrs */	\
+-	btst	#5,%sp@(2);		/* from user? */	\
+-	bnes	6f;			/* no, skip */		\
+-	movel	%sp,sw_usp;		/* save user sp */	\
+-	addql	#8,sw_usp;		/* remove exception */	\
+-	movel	sw_ksp,%sp;		/* kernel sp */		\
+-	subql	#8,%sp;			/* room for exception */\
+-	clrl	%sp@-;			/* stk_adj */		\
+-	movel	%d0,%sp@-;		/* orig d0 */		\
+-	movel	%d0,%sp@-;		/* d0 */		\
+-	subl	#32,%sp;		/* space for 8 regs */	\
+-	moveml	%d1-%d5/%a0-%a2,%sp@;				\
+-	movel	sw_usp,%a0;		/* get usp */		\
+-	moveml	%a0@(-8),%d1-%d2;	/* get exception */	\
+-	moveml	%d1-%d2,%sp@(LFORMATVEC); /* copy exception */	\
+-	bra	7f;						\
+-	6:							\
+-	clrl	%sp@-;			/* stk_adj */		\
+-	movel	%d0,%sp@-;		/* orig d0 */		\
+-	movel	%d0,%sp@-;		/* d0 */		\
+-	subl	#32,%sp;		/* space for 7 regs */	\
+-	moveml	%d1-%d5/%a0-%a2,%sp@;				\
+-	7:
+-
+-#define RESTORE_ALL						\
+-	btst	#5,%sp@(LSR);		/* going user? */	\
+-	bnes	8f;			/* no, skip */		\
+-	move	#0x2700,%sr;		/* disable intrs */	\
+-	movel	sw_usp,%a0;		/* get usp */		\
+-	moveml	%sp@(LFORMATVEC),%d1-%d2; /* copy exception */	\
+-	moveml	%d1-%d2,%a0@(-8);				\
+-	moveml	%sp@,%d1-%d5/%a0-%a2;				\
+-	addl	#32,%sp;		/* space for 8 regs */	\
+-	movel	%sp@+,%d0;					\
+-	addql	#4,%sp;			/* orig d0 */		\
+-	addl	%sp@+,%sp;		/* stk adj */		\
+-	addql	#8,%sp;			/* remove exception */	\
+-	movel	%sp,sw_ksp;		/* save ksp */		\
+-	subql	#8,sw_usp;		/* set exception */	\
+-	movel	sw_usp,%sp;		/* restore usp */	\
+-	rte;							\
+-	8:							\
+-	moveml	%sp@,%d1-%d5/%a0-%a2;				\
+-	addl	#32,%sp;		/* space for 8 regs */	\
+-	movel	%sp@+,%d0;					\
+-	addql	#4,%sp;			/* orig d0 */		\
+-	addl	%sp@+,%sp;		/* stk adj */		\
+-	rte
+-
+-/*
+- *	Quick exception save, use current stack only.
+- */
+-#define SAVE_LOCAL						\
+-	move	#0x2700,%sr;		/* disable intrs */	\
+-	clrl	%sp@-;			/* stk_adj */		\
+-	movel	%d0,%sp@-;		/* orig d0 */		\
+-	movel	%d0,%sp@-;		/* d0 */		\
+-	subl	#32,%sp;		/* space for 8 regs */	\
++#define SAVE_ALL \
++	movew	#0x2700,%sr	; \
++	btst	#5,%sp@(2)	; \
++	bnes	1f		; \
++				; \
++	link	%a0,#12		; \
++	movel	%sp,sw_usp	; \
++	movel	sw_ksp,%sp	; \
++	movel	%a0@(8),%sp@-	; \
++	movel	%a0@(4),%sp@-	; \
++	movel	%a0@,%a0	; \
++1:				; \
++	movew	#LINUX_IRQS_DISABLE,%sr	; \
++	clrl	%sp@-		; \
++	movel	%d0,%sp@-	; \
++	movel	%d0,%sp@-	; \
++	lea	%sp@(-32),%sp	; \
+ 	moveml	%d1-%d5/%a0-%a2,%sp@;
+-
++	
++#define RESTORE_ALL		\
++	moveml	%sp@,%d1-%d5/%a0-%a2; \
++	lea	%sp@(32),%sp	; \
++	movel	%sp@+,%d0	; \
++	addql	#4,%sp		; \
++	addl	%sp@+,%sp	; \
++				; \
++	move	#0x2700,%sr	; \
++	btst	#5,%sp@(2)	; \
++	bnes	1f		; \
++				; \
++	link	%a0,#12		; \
++	movel	%sp,sw_ksp	; \
++	movel	sw_usp,%sp	; \
++	movel	%a0@(8),%sp@-	; \
++	movel	%a0@(4),%sp@-	; \
++	movel	%a0@,%a0	; \
++1:				; \
++	rte			; 
++			
++ /*
++  *	Quick exception save, use current stack only.
++  */
++#define SAVE_LOCAL						\
++	move	#LINUX_IRQS_DISABLE,%sr;/* disable intrs */	\
++ 	clrl	%sp@-;			/* stk_adj */		\
++ 	movel	%d0,%sp@-;		/* orig d0 */		\
++ 	movel	%d0,%sp@-;		/* d0 */		\
++	lea	%sp@(-32),%sp;		/* space for 8 regs */	\
++ 	moveml	%d1-%d5/%a0-%a2,%sp@;
++ 
+ #define RESTORE_LOCAL						\
+-	moveml	%sp@,%d1-%d5/%a0-%a2;				\
+-	addl	#32,%sp;		/* space for 8 regs */	\
+-	movel	%sp@+,%d0;					\
+-	addql	#4,%sp;			/* orig d0 */		\
+-	addl	%sp@+,%sp;		/* stk adj */		\
++ 	moveml	%sp@,%d1-%d5/%a0-%a2;				\
++	lea	%sp@(32),%sp;		/* space for 8 regs */	\
++ 	movel	%sp@+,%d0;					\
++ 	addql	#4,%sp;			/* orig d0 */		\
++ 	addl	%sp@+,%sp;		/* stk adj */		\
+ 	rte
+ 
+ 
+ #define SWITCH_STACK_SIZE (6*4+4)	/* includes return address */
+ 
+ #define SAVE_SWITCH_STACK		\
+-	subl    #24,%sp; /* 6 regs */	\
++	lea     %sp@(-24),%sp;	/* 6 regs */	\
+ 	moveml	%a3-%a6/%d6-%d7,%sp@
+ 
+ #define RESTORE_SWITCH_STACK		\
+ 	moveml	%sp@,%a3-%a6/%d6-%d7;	\
+-	addl	#24,%sp /* 6 regs */
++	lea	%sp@(24),%sp /* 6 regs */
+ 
+ /*
+  *	Software copy of the user and kernel stack pointers... Ugh...
+@@ -344,30 +334,25 @@
+ 	RESTORE_SWITCH_STACK
+ 	addql	#4,%sp
+ 
+-	btst    #5,%sp@(LSR);	/* going user? */   
+-	bnes    not_user;	/* no, skip */      
+-	move    #0x2700,%sr;	/* disable intrs */ 
+-	movel   sw_usp,%a0;	/* get usp */       
+-	moveml  %sp@(LFORMATVEC),%d1-%d2; /* copy exception */  
+-	moveml  %d1-%d2,%a0@(-8);               
+-	bclr    #5,%a0@(-8);  /* clear format byte, bit 5 to make stack appear modulo 4 which it WILL be when we do the rte because it was generated in setup_frame */
+-	bclr    #4,%a0@(-8);  /* clear format byte, bit 4 to make stack appear modulo 4 which it WILL be when we do the rte because it was generated in setup_frame */
+-	moveml  %sp@,%d1-%d5/%a0-%a2;               
+-	addl    #32,%sp;        /* space for 8 regs */  
+-	movel   %sp@+,%d0;                  
+-	addql   #4,%sp;         /* orig d0 */       
+-	addl    %sp@+,%sp;      /* stk adj */       
+-	addql   #8,%sp;         /* remove exception */  
+-	movel   %sp,sw_ksp;     /* save ksp */      
+-	movel   sw_usp,%sp;     /* restore usp */   
+-	subql   #8,%sp;         /* set exception */ 
+-	rte;                            
+-not_user:                          
+-	moveml  %sp@,%d1-%d5/%a0-%a2;               
+-	addl    #32,%sp;        /* space for 8 regs */  
+-	movel   %sp@+,%d0;                  
+-	addql   #4,%sp;         /* orig d0 */       
+-	addl    %sp@+,%sp;      /* stk adj */       
++	moveml	%sp@,%d1-%d5/%a0-%a2
++	lea	%sp@(32),%sp
++	movel	%sp@+,%d0
++	addql	#4,%sp
++	addl	%sp@+,%sp
++
++	move	#0x2700,%sr
++	btst	#5,%sp@(2)
++	bnes	1f
++
++	link	%a0,#12
++	movel	%sp,sw_ksp
++	movel	sw_usp,%sp
++	movel	%a0@(8),%sp@-
++	movel	%a0@(4),%sp@-
++	movel	%a0@,%a0
++	bclr	#4,%sp@
++	bclr	#5,%sp@
++1:
+ 	rte
+ 
+ /*--------------------------------------------------------------------------*/
+@@ -406,19 +391,12 @@
+ 					| get addr of kstat struct
+ 	addql	#1,%a0@(%d0)		| incr irq intr count
+ 
+-	lsrl	#2,%d0			| calculate real vector #
+-	movel	%d0,%d1			| calculate array offset
+-	lsll	#4,%d1
+-	lea	SYMBOL_NAME(irq_list),%a0
+-	addl	%d1,%a0			| pointer to array struct
+-
+ 	movel	%sp,%sp@-		| push regs arg onto stack
+-	movel	%a0@(8),%sp@-		| push devid arg
++	lsrl	#2,%d0			| calculate real vector #
+ 	movel	%d0,%sp@- 		| push vector # on stack
+-
+-	movel	%a0@,%a0		| get function to call
++	lea	SYMBOL_NAME(process_int),%a0
+ 	jbsr	%a0@			| call vector handler
+-	addl	#12,%sp			| pop parameters off stack
++	addl	#8,%sp			| pop parameters off stack
+ 
+ 	bra	ret_from_interrupt	| this was fallthrough
+ 
+@@ -440,16 +418,11 @@
+ 	addql	#1,%a0@(%d0)		| incr irq intr count
+ 
+ 	movel	%sp,%sp@-		| push regs arg onto stack
+-	clrl	%d1
+-	movel	%d1,%sp@- 		| push devid arg
+ 	lsrl	#2,%d0			| calculate real vector #
+ 	movel	%d0,%sp@- 		| push vector # on stack
+-
+-	lsll	#4,%d0			| adjust for array offset
+-	lea	SYMBOL_NAME(irq_list),%a0
+-	movel	%a0@(%d0),%a0		| get function to call
++	lea	SYMBOL_NAME(process_int),%a0
+ 	jbsr	%a0@			| call vector handler
+-	addl	#12,%sp			| pop parameters off stack
++	addl	#8,%sp			| pop parameters off stack
+ 
+ 	RESTORE_LOCAL
+ 
+@@ -549,7 +522,7 @@
+ 	movew	%d0,%a0@(TASK_THREAD+THREAD_SR)
+ 
+ 	/* disable interrupts */
+-	oril	#0x700,%d0
++	oril	#LINUX_IRQS_DISABLE,%d0
+ 	move	%d0,%sr
+ 
+ #ifndef NO_MM
+diff -urN linux-2.4.x/arch/m68knommu/platform/5307/ints.c linux-2.4.x-rthal/arch/m68knommu/platform/5307/ints.c
+--- linux-2.4.x/arch/m68knommu/platform/5307/ints.c	Wed Feb 20 07:19:45 2002
++++ linux-2.4.x-rthal/arch/m68knommu/platform/5307/ints.c	Sat Feb 23 15:01:58 2002
+@@ -27,10 +27,29 @@
+ #include <asm/page.h>
+ #include <asm/machdep.h>
+ 
++/* ----- irq node reservation ------ */
++
++#define NUM_IRQ_NODES (32)
++static irq_node_t nodes[NUM_IRQ_NODES];
++
++irq_node_t* new_irq_node(void) {
++  int i;
++  for(i=0;i<NUM_IRQ_NODES;i++) {
++    if(nodes[i].handler==0) return &nodes[i];
++  };
++  return 0;
++};
++
++void delete_irq_node(irq_node_t* node) {
++  node->handler=0;
++};
++
++/* ----- eof irq node reservation ----- */
++
+ /*
+  *	This table stores the address info for each vector handler.
+  */
+-irq_handler_t irq_list[SYS_IRQS];
++irq_node_t *int_irq_list[SYS_IRQS];
+ 
+ unsigned int *mach_kstat_irqs;
+ 
+@@ -61,9 +80,9 @@
+ 
+ void init_IRQ(void)
+ {
++	/*
+ 	int i;
+ 	
+-
+ 	for (i = 0; i < SYS_IRQS; i++) {
+ 		if (mach_default_handler)
+ 			irq_list[i].handler = (*mach_default_handler)[i];
+@@ -73,6 +92,7 @@
+ 		irq_list[i].dev_id  = NULL;
+ 		irq_list[i].devname = NULL;
+ 	}
++	*/
+ 
+ 	if (mach_init_IRQ)
+ 		mach_init_IRQ ();
+@@ -82,6 +102,8 @@
+ int request_irq(unsigned int irq, void (*handler)(int, void *, struct pt_regs *),
+                 unsigned long flags, const char *devname, void *dev_id)
+ {
++	irq_node_t *newirq;
++
+ #if DAVIDM
+ 	if ((irq & IRQ_MACHSPEC) && mach_request_irq) {
+ 		return mach_request_irq(IRQ_IDX(irq), handler, flags,
+@@ -95,18 +117,31 @@
+ 		return -ENXIO;
+ 	}
+ 
+-	if (!(irq_list[irq].flags & IRQ_FLG_STD)) {
+-		if (irq_list[irq].flags & IRQ_FLG_LOCK) {
+-			printk("%s: IRQ %d from %s is not replaceable\n",
+-			       __FUNCTION__, irq, irq_list[irq].devname);
+-			return -EBUSY;
+-		}
+-		if (flags & IRQ_FLG_REPLACE) {
+-			printk("%s: %s can't replace IRQ %d from %s\n",
+-			       __FUNCTION__, devname, irq, irq_list[irq].devname);
+-			return -EBUSY;
+-		}
+-	}
++  /*
++   * Sanity-check: shared interrupts should REALLY pass in
++   * a real dev-ID, otherwise we'll have trouble later trying
++   * to figure out which interrupt is which (messes up the
++   * interrupt freeing logic etc).
++   */
++  if (flags & SA_SHIRQ) {
++    if (!dev_id)
++      printk("Bad boy: %s called us without a dev_id!\n", devname);
++  }
++  
++  if(int_irq_list[irq]) {
++    if(!(int_irq_list[irq]->flags & flags & SA_SHIRQ)) {
++      return -EBUSY;
++    }
++    else {
++      irq_node_t *lastirq = int_irq_list[irq];
++      newirq = new_irq_node();
++      while(lastirq->next) lastirq = lastirq->next;
++      lastirq->next = newirq;
++    };
++  }
++  else {
++    int_irq_list[irq] = newirq = new_irq_node();
++  };
+ 
+ 	if (flags & IRQ_FLG_FAST) {
+ 		extern asmlinkage void fasthandler(void);
+@@ -114,15 +149,18 @@
+ 		set_evector(irq, fasthandler);
+ 	}
+ 
+-	irq_list[irq].handler = handler;
+-	irq_list[irq].flags   = flags;
+-	irq_list[irq].dev_id  = dev_id;
+-	irq_list[irq].devname = devname;
++	newirq->handler = handler;
++	newirq->flags   = flags;
++	newirq->dev_id  = dev_id;
++	newirq->devname = devname;
++	newirq->next    = 0;
+ 	return 0;
+ }
+ 
+ void free_irq(unsigned int irq, void *dev_id)
+ {
++	irq_node_t *nextirq,*previrq;
++
+ #if DAVIDM
+ 	if (irq & IRQ_MACHSPEC) {
+ 		mach_free_irq(IRQ_IDX(irq), dev_id);
+@@ -135,26 +173,27 @@
+ 		return;
+ 	}
+ 
+-	if (irq_list[irq].dev_id != dev_id)
+-		printk("%s: Removing probably wrong IRQ %d from %s\n",
+-		       __FUNCTION__, irq, irq_list[irq].devname);
++  nextirq = int_irq_list[irq];
++  previrq = 0;
++  if(!nextirq) return;
++  while(nextirq) {
++    if(nextirq->dev_id == dev_id) {
++      if(previrq) previrq->next=nextirq->next;
++      else int_irq_list[irq]=nextirq->next;
++      nextirq->handler = 0;
++      nextirq->flags   = IRQ_FLG_STD;
++      nextirq->dev_id  = NULL;
++      nextirq->devname = NULL;
++    }
++    else {
++      previrq = nextirq;
++    };
++    nextirq = nextirq->next;
++  };
+ 
+-	if (irq_list[irq].flags & IRQ_FLG_FAST) {
+-		extern asmlinkage void inthandler(void);
+-		extern void set_evector(int vecnum, void (*handler)(void));
+-		set_evector(irq, inthandler);
+-	}
+-
+-	if (mach_default_handler)
+-		irq_list[irq].handler = (*mach_default_handler)[irq];
+-	else
+-		irq_list[irq].handler = default_irq_handler;
+-	irq_list[irq].flags   = IRQ_FLG_STD;
+-	irq_list[irq].dev_id  = NULL;
+-	irq_list[irq].devname = NULL;
+ }
+ 
+-
++#if 0 // these are not used anyways ...
+ int sys_request_irq(unsigned int irq, 
+                     void (*handler)(int, void *, struct pt_regs *), 
+                     unsigned long flags, const char *devname, void *dev_id)
+@@ -165,7 +204,6 @@
+ 		return -ENXIO;
+ 	}
+ 
+-#if 0
+ 	if (!(irq_list[irq].flags & IRQ_FLG_STD)) {
+ 		if (irq_list[irq].flags & IRQ_FLG_LOCK) {
+ 			printk("%s: IRQ %d from %s is not replaceable\n",
+@@ -178,12 +216,11 @@
+ 			return -EBUSY;
+ 		}
+ 	}
+-#endif
+ 
+-	irq_list[irq].handler = handler;
+-	irq_list[irq].flags   = flags;
+-	irq_list[irq].dev_id  = dev_id;
+-	irq_list[irq].devname = devname;
++	irq_list[irq]->handler = handler;
++	irq_list[irq]->flags   = flags;
++	irq_list[irq]->dev_id  = dev_id;
++	irq_list[irq]->devname = devname;
+ 	return 0;
+ }
+ 
+@@ -203,6 +240,7 @@
+ 	irq_list[irq].dev_id  = NULL;
+ 	// irq_list[irq].devname = default_names[irq];
+ }
++#endif
+ 
+ /*
+  * Do we need these probe functions on the m68k?
+@@ -221,40 +259,42 @@
+ 
+ asmlinkage void process_int(unsigned long vec, struct pt_regs *fp)
+ {
+-	if (vec >= VEC_INT1 && vec <= VEC_INT7) {
+-		vec -= VEC_SPUR;
+-		kstat.irqs[0][vec]++;
+-		irq_list[vec].handler(vec, irq_list[vec].dev_id, fp);
+-	} else {
+-		if (mach_process_int)
+-			mach_process_int(vec, fp);
+-		else
+-			panic("Can't process interrupt vector %ld\n", vec);
+-		return;
+-	}
+-}
++  irq_node_t *irqnode = int_irq_list[vec];
++  while(irqnode) {
++    irqnode->handler(vec, irqnode->dev_id, fp);
++    irqnode = irqnode->next;
++  };
++};
+ 
+ 
+ int get_irq_list(char *buf)
+ {
+ 	int i, len = 0;
++        irq_node_t *node;
+ 
+-	for (i = 0; i < NR_IRQS; i++) {
+-		if (irq_list[i].flags & IRQ_FLG_STD)
+-			continue;
+-
+-		len += sprintf(buf+len, "%3d: %10u ", i,
+-		               i ? kstat.irqs[0][i] : num_spurious);
+-		if (irq_list[i].flags & IRQ_FLG_LOCK)
+-			len += sprintf(buf+len, "L ");
+-		else
+-			len += sprintf(buf+len, "  ");
+-		len += sprintf(buf+len, "%s\n", irq_list[i].devname);
+-	}
++        len += sprintf(buf+len, "Internal 68VZ328 interrupts\n");
+ 
+-	if (mach_get_irq_list)
+-		len += mach_get_irq_list(buf+len);
+-	return len;
++        for (i = 0; i < NR_IRQS; i++) {
++                int start=1,any=0;
++                irq_node_t *nextirq = int_irq_list[i];
++                while(nextirq) {
++                  if(nextirq->handler) {
++                    if(start) {
++                      start=0;
++                      len += sprintf(buf+len, " %2d: %10u    %s", i,
++                                     i ? kstat.irqs[0][i] : num_spurious,
++				     nextirq->devname);
++                    }
++                    else {
++                      len += sprintf(buf+len, ", %s", nextirq->devname);
++                    };
++                    any=1;
++                  };
++                  nextirq = nextirq->next;
++                };
++                if(any) len += sprintf(buf+len, "\n");
++        }
++        return len;
+ }
+ 
+ void init_irq_proc(void);
+@@ -263,3 +303,79 @@
+ 	/* Insert /proc/irq driver here */
+ }
+ 
++
++/* --------------------------- rtai stuff -------------------------- */
++
++#define soft_cli()  __asm__ __volatile__ ( \
++                        "move %0,%/sr\n" \
++                        : /* no output */ \
++                        : "i" (LINUX_IRQS_DISABLE) \
++                        : "cc", "memory")
++
++#define soft_sti()  __asm__ __volatile__ ( \
++                        "move #0x2000,%/sr\n" \
++                        : /* no output */ \
++                        : /* no input */ \
++                        : "cc", "memory")
++
++static void linux_sti(void) {
++  soft_sti();
++};
++
++static void linux_cli(void) {
++  soft_cli();
++};
++
++static unsigned int linux_save_flags(void) {
++  int x;
++  hard_save_flags(x);
++  return x;
++}
++
++static void linux_restore_flags(unsigned int x) {
++  hard_restore_flags(x);
++};
++
++static unsigned int linux_save_flags_and_cli(void) {
++  int x;
++  hard_save_flags(x);
++  soft_cli();
++  return x;
++};
++
++struct rt_hal rthal = {
++  0, // &ret_from_intr,
++  0, // __switch_to,
++  0, // idt_table,
++  linux_cli,
++  linux_sti,
++  linux_save_flags,
++  linux_restore_flags,
++  linux_save_flags_and_cli,
++  0, // irq_desc,
++  0, // irq_vector,
++  0, // irq_affinity,
++  0, // smp_invalidate_interrupt,
++  0, // ack_8259_irq,
++  0, // &idle_weight,
++  0,
++  0, // switch_mem,
++  0, // init_tasks
++};
++
++#include <asm/coldfire.h>
++#include <asm/mcftimer.h>
++
++long long rt_time_rdtsc = 0;
++
++long long rdtsc(void) {
++  volatile unsigned short *timerp;
++  long flags;
++  unsigned short diff;
++  hard_save_flags_and_cli(flags);
++  timerp = (volatile unsigned short *) (MCF_MBAR + MCFTIMER_BASE4);
++  diff = timerp[MCFTIMER_TCN] - rt_time_rdtsc;
++  rt_time_rdtsc += diff;
++  hard_restore_flags(flags);
++  return rt_time_rdtsc;
++};
+diff -urN linux-2.4.x/drivers/char/mcfserial.c linux-2.4.x-rthal/drivers/char/mcfserial.c
+--- linux-2.4.x/drivers/char/mcfserial.c	Wed Feb 20 07:20:13 2002
++++ linux-2.4.x-rthal/drivers/char/mcfserial.c	Sat Feb 23 14:37:09 2002
+@@ -1584,10 +1584,10 @@
+ 	icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR2);
+ 	switch (info->line) {
+ 	case 0:
+-		*icrp = 0xe0000000;
++		*icrp = 0xc0000000;
+ 		break;
+ 	case 1:
+-		*icrp = 0x0e000000;
++		*icrp = 0x0c000000;
+ 		break;
+ 	default:
+ 		printk("SERIAL: don't know how to handle UART %d interrupt?\n",
+@@ -1606,13 +1606,13 @@
+ 	switch (info->line) {
+ 	case 0:
+ 		icrp = (volatile unsigned char *) (MCF_MBAR + MCFSIM_UART1ICR);
+-		*icrp = /*MCFSIM_ICR_AUTOVEC |*/ MCFSIM_ICR_LEVEL6 |
++		*icrp = /*MCFSIM_ICR_AUTOVEC |*/ MCFSIM_ICR_LEVEL1 |
+ 			MCFSIM_ICR_PRI1;
+ 		mcf_setimr(mcf_getimr() & ~MCFSIM_IMR_UART1);
+ 		break;
+ 	case 1:
+ 		icrp = (volatile unsigned char *) (MCF_MBAR + MCFSIM_UART2ICR);
+-		*icrp = /*MCFSIM_ICR_AUTOVEC |*/ MCFSIM_ICR_LEVEL6 |
++		*icrp = /*MCFSIM_ICR_AUTOVEC |*/ MCFSIM_ICR_LEVEL1 |
+ 			MCFSIM_ICR_PRI2;
+ 		mcf_setimr(mcf_getimr() & ~MCFSIM_IMR_UART2);
+ 		break;
+diff -urN linux-2.4.x/drivers/net/fec.c linux-2.4.x-rthal/drivers/net/fec.c
+--- linux-2.4.x/drivers/net/fec.c	Wed Feb 20 07:20:26 2002
++++ linux-2.4.x-rthal/drivers/net/fec.c	Sat Feb 23 14:37:09 2002
+@@ -1696,10 +1696,10 @@
+ 		volatile unsigned long  *icrp;
+ 
+ 		icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR3);
+-		*icrp = 0x00000ddd;
++		*icrp = 0x00000ccc;
+ 
+ 		icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR1);
+-		*icrp = (*icrp & 0x70777777) | 0x0d000000;
++		*icrp = (*icrp & 0x70777777) | 0x0c000000;
+ 	}
+ #else
+ 	if (request_8xxirq(FEC_INTERRUPT, fec_enet_interrupt, 0, "fec", dev) != 0)
+diff -urN linux-2.4.x/drivers/net/smc9194.c linux-2.4.x-rthal/drivers/net/smc9194.c
+--- linux-2.4.x/drivers/net/smc9194.c	Wed Feb 20 07:20:26 2002
++++ linux-2.4.x-rthal/drivers/net/smc9194.c	Sat Feb 23 14:37:09 2002
+@@ -139,7 +139,7 @@
+ 
+ #ifdef CONFIG_NETtel
+ static smcio_t smc_portlist[]      = { 0x30600300, 0x30600000, 0 };
+-static unsigned int smc_irqlist[]  = {         29,         27, 0 };
++static unsigned int smc_irqlist[]  = {         28,         27, 0 };
+ #elif defined(CONFIG_SH_KEYWEST)
+ static smcio_t smc_portlist[]      = { KEYWEST_ETHR, 0 };
+ static unsigned int smc_irqlist[]  = { IRQ4_IRQ,     0 };
+@@ -823,6 +823,10 @@
+ 	/*  check for special auto-probe address */
+ 	int base_addr = (dev && dev->base_addr != 0xffe0) ? dev->base_addr : 0;
+ 
++#ifdef CONFIG_NETtel
++	*((volatile unsigned char *) MCF_MBAR + MCFSIM_IRQPAR) |= IRQ5_LEVEL4;
++#endif
++
+ 	SET_MODULE_OWNER(dev);
+ 
+ 	/*  try a specific location */
+@@ -1195,7 +1199,7 @@
+ 	/* Grab the IRQ */
+ #ifdef CONFIG_COLDFIRE
+ 	mcf_autovector(dev->irq);
+-    retval = request_irq(dev->irq, &smc_interrupt, 0, dev->name, dev);
++	retval = request_irq(dev->irq, &smc_interrupt, 0, dev->name, dev);
+ #elif defined(CONFIG_M68EZ328)
+ 	retval = request_irq(IRQ_MACHSPEC | dev->irq, &smc_interrupt,
+ 			IRQ_FLG_STD, dev->name, dev);
+diff -urN linux-2.4.x/include/asm-m68k/module.h linux-2.4.x-rthal/include/asm-m68k/module.h
+--- linux-2.4.x/include/asm-m68k/module.h	Wed Feb 20 07:21:04 2002
++++ linux-2.4.x-rthal/include/asm-m68k/module.h	Sat Feb 23 14:37:09 2002
+@@ -4,8 +4,8 @@
+  * This file contains the m68k architecture specific module code.
+  */
+ 
+-#define module_map(x)		vmalloc(x)
+-#define module_unmap(x)		vfree(x)
++#define module_map(x)		kmalloc(x,GFP_KERNEL)
++#define module_unmap(x)		kfree(x)
+ #define module_arch_init(x)	(0)
+ #define arch_init_modules(x)	do { } while (0)
+ 
+diff -urN linux-2.4.x/include/asm-m68k/timex.h linux-2.4.x-rthal/include/asm-m68k/timex.h
+--- linux-2.4.x/include/asm-m68k/timex.h	Wed Feb 20 07:21:05 2002
++++ linux-2.4.x-rthal/include/asm-m68k/timex.h	Sat Feb 23 14:37:09 2002
+@@ -6,7 +6,13 @@
+ #ifndef _ASMm68k_TIMEX_H
+ #define _ASMm68k_TIMEX_H
+ 
++extern long long rdtsc(void);
++
++#ifdef CONFIG_COLDFIRE
++#define CLOCK_TICK_RATE 1000000
++#else
+ #define CLOCK_TICK_RATE	1193180 /* Underlying HZ */
++#endif
+ #define CLOCK_TICK_FACTOR	20	/* Factor of both 1000000 and CLOCK_TICK_RATE */
+ #define FINETUNE ((((((long)LATCH * HZ - CLOCK_TICK_RATE) << SHIFT_HZ) * \
+ 	(1000000/CLOCK_TICK_FACTOR) / (CLOCK_TICK_RATE/CLOCK_TICK_FACTOR)) \
+diff -urN linux-2.4.x/include/asm-m68knommu/bitops.h linux-2.4.x-rthal/include/asm-m68knommu/bitops.h
+--- linux-2.4.x/include/asm-m68knommu/bitops.h	Sat Feb 23 02:27:09 2002
++++ linux-2.4.x-rthal/include/asm-m68knommu/bitops.h	Sat Feb 23 14:49:33 2002
+@@ -58,9 +58,9 @@
+ 
+ 	a += nr >> 5;
+ 	mask = 1 << (nr & 0x1f);
+-	save_flags(flags); cli();
++	hard_save_flags_and_cli(flags);
+ 	*a |= mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ }
+ 
+ extern __inline__ void __set_bit(int nr, volatile void * addr)
+@@ -87,9 +87,9 @@
+ 
+ 	a += nr >> 5;
+ 	mask = 1 << (nr & 0x1f);
+-	save_flags(flags); cli();
++	hard_save_flags_and_cli(flags);
+ 	*a &= ~mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ }
+ 
+ extern __inline__ void change_bit(int nr, volatile void * addr)
+@@ -99,9 +99,9 @@
+ 
+ 	ADDR += nr >> 5;
+ 	mask = 1 << (nr & 31);
+-	save_flags(flags); cli();
++	hard_save_flags_and_cli(flags);
+ 	*ADDR ^= mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ }
+ 
+ extern __inline__ void __change_bit(int nr, volatile void * addr)
+@@ -122,10 +122,10 @@
+ 
+ 	a += nr >> 5;
+ 	mask = 1 << (nr & 0x1f);
+-	save_and_cli(flags);
++	hard_save_flags_and_cli(flags);
+ 	retval = (mask & *a) != 0;
+ 	*a |= mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ 
+ 	return retval;
+ }
+@@ -150,10 +150,10 @@
+ 
+ 	a += nr >> 5;
+ 	mask = 1 << (nr & 0x1f);
+-	save_and_cli(flags);
++	hard_save_flags_and_cli(flags);
+ 	retval = (mask & *a) != 0;
+ 	*a &= ~mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ 
+ 	return retval;
+ }
+@@ -178,10 +178,10 @@
+ 
+ 	a += nr >> 5;
+ 	mask = 1 << (nr & 0x1f);
+-	save_and_cli(flags);
++	hard_save_flags_and_cli(flags);
+ 	retval = (mask & *a) != 0;
+ 	*a ^= mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ 
+ 	return retval;
+ }
+@@ -280,10 +280,10 @@
+ 
+ 	ADDR += nr >> 3;
+ 	mask = 1 << (nr & 0x07);
+-	save_and_cli(flags);
++	hard_save_flags_and_cli(flags);
+ 	retval = (mask & *ADDR) != 0;
+ 	*ADDR |= mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ 	return retval;
+ }
+ 
+@@ -295,10 +295,10 @@
+ 
+ 	ADDR += nr >> 3;
+ 	mask = 1 << (nr & 0x07);
+-	save_and_cli(flags);
++	hard_save_flags_and_cli(flags);
+ 	retval = (mask & *ADDR) != 0;
+ 	*ADDR &= ~mask;
+-	restore_flags(flags);
++	hard_restore_flags(flags);
+ 	return retval;
+ }
+ 
+diff -urN linux-2.4.x/include/asm-m68knommu/hw_irq.h linux-2.4.x-rthal/include/asm-m68knommu/hw_irq.h
+--- linux-2.4.x/include/asm-m68knommu/hw_irq.h	Thu Jan  1 01:00:00 1970
++++ linux-2.4.x-rthal/include/asm-m68knommu/hw_irq.h	Sat Feb 23 14:37:09 2002
+@@ -0,0 +1,5 @@
++#ifndef _ASM_HW_IRQ_H
++#define _ASM_HW_IRQ_H
++
++#endif /* _ASM_HW_IRQ_H */
++
+diff -urN linux-2.4.x/include/asm-m68knommu/irq.h linux-2.4.x-rthal/include/asm-m68knommu/irq.h
+--- linux-2.4.x/include/asm-m68knommu/irq.h	Sat Feb 23 02:27:11 2002
++++ linux-2.4.x-rthal/include/asm-m68knommu/irq.h	Sat Feb 23 14:49:35 2002
+@@ -109,7 +109,7 @@
+ 
+ #endif /* CONFIG_M68360 */
+ 
+-#ifndef CONFIG_COLDFIRE
++// #ifndef CONFIG_COLDFIRE
+ /*
+  * This structure is used to chain together the ISRs for a particular
+  * interrupt source (if it supports chaining).
+@@ -122,7 +122,7 @@
+ 	struct irq_node *next;
+ } irq_node_t;
+ 
+-#endif /* CONFIG_COLDFIRE */
++// #endif /* CONFIG_COLDFIRE */
+ 
+ /*
+  * This structure has only 4 elements for speed reasons
+diff -urN linux-2.4.x/include/asm-m68knommu/rt.h linux-2.4.x-rthal/include/asm-m68knommu/rt.h
+--- linux-2.4.x/include/asm-m68knommu/rt.h	Thu Jan  1 01:00:00 1970
++++ linux-2.4.x-rthal/include/asm-m68knommu/rt.h	Sat Feb 23 14:37:09 2002
+@@ -0,0 +1,46 @@
++#ifndef RT_H
++#define RT_H
++
++#include <asm/rt_level.h>
++
++#define hard_cli() asm volatile ("movew #0x2700,%%sr": : : "memory")
++#define hard_sti() asm volatile ("movew #0x2000,%%sr": : : "memory")
++#define hard_save_flags(x) asm volatile ("movew %%sr,%0":"=d" (x) : : "memory")
++#define hard_restore_flags(x) asm volatile ("movew %0,%%sr": :"d" (x) : "memory")
++#define hard_save_flags_and_cli(flags) do { hard_save_flags(flags); hard_cli(); } while(0)
++
++struct task_struct;
++
++struct rt_hal {
++       void *ret_from_intr;
++       void *__switch_to;
++       struct desc_struct *idt_table;
++       void (*disint)(void);
++       void (*enint)(void);
++       unsigned int (*getflags)(void);
++       void (*setflags)(unsigned int flags); 
++       unsigned int (*getflags_and_cli)(void);
++       void *irq_desc;
++       int *irq_vector;
++       unsigned long *irq_affinity;
++       void (*smp_invalidate_interrupt)(void);
++       void (*ack_8259_irq)(unsigned int);
++       int *idle_weight;
++       void (*lxrt_global_cli)(void);
++       void (*switch_mem)(struct task_struct *, struct task_struct *, int );
++       struct task_struct **init_tasks;
++};
++
++extern struct rt_hal rthal;
++
++#define __cli()                (rthal.disint())
++#define __sti()                (rthal.enint())
++#define __save_flags(x)        ((x) = rthal.getflags())
++#define __restore_flags(x)     (rthal.setflags(x))
++#define __save_and_cli(x)      ((x) = rthal.getflags_and_cli())
++#define local_irq_disable()    (rthal.disint())
++#define local_irq_enable()     (rthal.enint())
++#define local_irq_save(x)      ((x) = rthal.getflags_and_cli())
++#define local_irq_restore(x)   (rthal.setflags(x))
++
++#endif
+diff -urN linux-2.4.x/include/asm-m68knommu/rt_level.h linux-2.4.x-rthal/include/asm-m68knommu/rt_level.h
+--- linux-2.4.x/include/asm-m68knommu/rt_level.h	Thu Jan  1 01:00:00 1970
++++ linux-2.4.x-rthal/include/asm-m68knommu/rt_level.h	Sat Feb 23 14:37:09 2002
+@@ -0,0 +1,4 @@
++#ifndef RT_LEVEL
++#define RT_LEVEL
++#define LINUX_IRQS_DISABLE 0x2400
++#endif
+diff -urN linux-2.4.x/include/asm-m68knommu/system.h linux-2.4.x-rthal/include/asm-m68knommu/system.h
+--- linux-2.4.x/include/asm-m68knommu/system.h	Sat Feb 23 02:27:09 2002
++++ linux-2.4.x-rthal/include/asm-m68knommu/system.h	Sat Feb 23 14:49:33 2002
+@@ -49,6 +49,10 @@
+   (last) = _last; 									\
+ }
+ 
++#if 1
++#include <asm/rt.h>
++#else
++
+ #ifdef CONFIG_COLDFIRE
+ #define __sti() __asm__ __volatile__ ( \
+ 	"move %/sr,%%d0\n\t" \
+@@ -59,7 +63,7 @@
+         : "cc", "%d0", "memory")
+ #define __cli() __asm__ __volatile__ ( \
+ 	"move %/sr,%%d0\n\t" \
+-	"ori.l  #0x0700,%%d0\n\t" \
++	"ori.l  #0x0400,%%d0\n\t" \
+ 	"move %%d0,%/sr\n" \
+ 	: /* no inputs */ \
+ 	: \
+@@ -77,13 +81,14 @@
+ #define __restore_flags(x) asm volatile ("movew %0,%%sr": :"d" (x) : "memory")
+ #define	__save_and_cli(flags) do { save_flags(flags); cli(); } while(0) 
+ 
+-#define iret() __asm__ __volatile__ ("rte": : :"memory", "sp", "cc")
+-
+ /* For spinlocks etc */
+ #define local_irq_save(x)	({ __save_flags(x); __cli(); })
+ #define local_irq_restore(x)	__restore_flags(x)
+ #define local_irq_disable()	__cli()
+ #define local_irq_enable()	__sti()
++#endif // RT_H
++
++#define iret() __asm__ __volatile__ ("rte": : :"memory", "sp", "cc")
+ 
+ #define cli()			__cli()
+ #define sti()			__sti()

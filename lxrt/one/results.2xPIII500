@@ -1,0 +1,28 @@
+SMP 2 PIII500 using SMP scheduler
+---------------------------------
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    24 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    21 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    27 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    21 (us)
+HRT ost sig, MAX JIT: PERIOD    73 (us), SLEEP    20 (us)
+[root@MaBox one]# ./test_suite
+SFT ost    , MAX JIT: PERIOD  4934 (us), SLEEP 74886 (us)
+SFT ost    , MAX JIT: PERIOD    33 (us), SLEEP  6917 (us)
+SFT ost    , MAX JIT: PERIOD  7307 (us), SLEEP  2044 (us)
+SFT ost    , MAX JIT: PERIOD  5000 (us), SLEEP 10003 (us)
+SFT ost    , MAX JIT: PERIOD   371 (us), SLEEP  1061 (us)
+SFT ost    , MAX JIT: PERIOD  9055 (us), SLEEP  2421 (us)
+HRT ost    , MAX JIT: PERIOD    74 (us), SLEEP    27 (us)
+HRT ost    , MAX JIT: PERIOD    74 (us), SLEEP    18 (us)
+HRT ost    , MAX JIT: PERIOD    74 (us), SLEEP    22 (us)
+HRT ost    , MAX JIT: PERIOD    74 (us), SLEEP    20 (us)
+HRT ost    , MAX JIT: PERIOD    74 (us), SLEEP    15 (us)
+HRT ost    , MAX JIT: PERIOD    74 (us), SLEEP    14 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    14 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    17 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    20 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    18 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    18 (us)
+HRT ost sig, MAX JIT: PERIOD    74 (us), SLEEP    13 (us)
+[root@MaBox one]#
+

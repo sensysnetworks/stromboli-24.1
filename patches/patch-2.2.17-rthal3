@@ -1,0 +1,1065 @@
+diff -uNr linux-2.2.16/Documentation/Configure.help linux-2.2.16-rthal3/Documentation/Configure.help
+--- linux-2.2.16/Documentation/Configure.help	Wed Jun  7 21:26:42 2000
++++ linux-2.2.16-rthal3/Documentation/Configure.help	Fri Aug 18 15:35:33 2000
+@@ -110,6 +110,16 @@
+   
+   If you don't know what to do here, say N.
+   
++Real-Time Hardware Abstraction Layer
++CONFIG_RTHAL
++  This enables support of the Real-Time features provided by RTAI.
++  To use this, you will also need to build the RTAI modules, normally
++  found under /usr/src/rtai-xxx.  For more details about RTAI, please
++  refer to http://www.rtai.org/.  The RTAI project is maintained by
++  Prof Paolo Mantegazza.
++
++  Say Y here, as it won't harm you even if you don't use it.
++
+ Kernel math emulation
+ CONFIG_MATH_EMULATION
+   Linux can emulate a math coprocessor (used for floating point
+diff -uNr linux-2.2.16/Makefile linux-2.2.16-rthal3/Makefile
+--- linux-2.2.16/Makefile	Wed Jun  7 21:26:42 2000
++++ linux-2.2.16-rthal3/Makefile	Fri Aug 18 15:35:33 2000
+@@ -1,7 +1,7 @@
+ VERSION = 2
+ PATCHLEVEL = 2
+ SUBLEVEL = 17
+-EXTRAVERSION =
++EXTRAVERSION = -rthal3
+ 
+ ARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ -e s/arm.*/arm/ -e s/sa110/arm/)
+ 
+diff -uNr linux-2.2.16/arch/i386/config.in linux-2.2.16-rthal3/arch/i386/config.in
+--- linux-2.2.16/arch/i386/config.in	Wed Jun  7 21:26:42 2000
++++ linux-2.2.16-rthal3/arch/i386/config.in	Fri Aug 18 15:35:33 2000
+@@ -40,6 +40,7 @@
+ bool 'Math emulation' CONFIG_MATH_EMULATION
+ bool 'MTRR (Memory Type Range Register) support' CONFIG_MTRR
+ bool 'Symmetric multi-processing support' CONFIG_SMP
++bool 'Real-Time Hardware Abstraction Layer' CONFIG_RTHAL
+ endmenu
+ 
+ mainmenu_option next_comment
+diff -uNr linux-2.2.16/arch/i386/kernel/entry.S linux-2.2.16-rthal3/arch/i386/kernel/entry.S
+--- linux-2.2.16/arch/i386/kernel/entry.S	Thu May  4 00:16:31 2000
++++ linux-2.2.16-rthal3/arch/i386/kernel/entry.S	Fri Aug 18 15:35:33 2000
+@@ -190,12 +190,19 @@
+ 	jne reschedule
+ 	cmpl $0,sigpending(%ebx)
+ 	jne signal_return
++#ifdef CONFIG_RTHAL
++	call *SYMBOL_NAME(rthal + 8)
++#endif
+ restore_all:
+ 	RESTORE_ALL
+ 
+ 	ALIGN
+ signal_return:
+-	sti				# we can get here from an interrupt handler
++#ifndef CONFIG_RTHAL
++	sti
++#else
++	call *SYMBOL_NAME(rthal + 8) # we can get here from an interrupt handler
++#endif
+ 	testl $(VM_MASK),EFLAGS(%esp)
+ 	movl %esp,%eax
+ 	jne v86_signal_return
+diff -uNr linux-2.2.16/arch/i386/kernel/i386_ksyms.c linux-2.2.16-rthal3/arch/i386/kernel/i386_ksyms.c
+--- linux-2.2.16/arch/i386/kernel/i386_ksyms.c	Wed Oct 27 00:53:39 1999
++++ linux-2.2.16-rthal3/arch/i386/kernel/i386_ksyms.c	Fri Aug 18 15:35:33 2000
+@@ -21,6 +21,20 @@
+ extern void dump_thread(struct pt_regs *, struct user *);
+ extern int dump_fpu(elf_fpregset_t *);
+ 
++#ifdef CONFIG_RTHAL
++EXPORT_SYMBOL(rthal);
++EXPORT_SYMBOL(do_gettimeofday_nolock);
++
++extern unsigned long cpu_hz;
++EXPORT_SYMBOL(cpu_hz);
++
++#include <linux/vt_kern.h>
++EXPORT_SYMBOL(kd_mksound);
++
++#include <linux/console.h>
++EXPORT_SYMBOL(console_drivers);
++#endif
++
+ #if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_HD) || defined(CONFIG_BLK_DEV_IDE_MODULE) || defined(CONFIG_BLK_DEV_HD_MODULE)
+ extern struct drive_info_struct drive_info;
+ EXPORT_SYMBOL(drive_info);
+diff -uNr linux-2.2.16/arch/i386/kernel/io_apic.c linux-2.2.16-rthal3/arch/i386/kernel/io_apic.c
+--- linux-2.2.16/arch/i386/kernel/io_apic.c	Wed Jun  7 21:26:42 2000
++++ linux-2.2.16-rthal3/arch/i386/kernel/io_apic.c	Fri Aug 18 15:35:33 2000
+@@ -1109,6 +1109,10 @@
+ 	spin_unlock(&irq_controller_lock);
+ }
+ 
++#ifdef CONFIG_RTHAL
++extern struct rt_hal rthal;
++#endif
++
+ static void do_level_ioapic_IRQ(unsigned int irq, struct pt_regs * regs)
+ {
+ 	irq_desc_t *desc = irq_desc + irq;
+@@ -1124,7 +1128,11 @@
+ 	 * disable has to happen before the ACK, to avoid IRQ storms.
+ 	 * So this all has to be within the spinlock.
+ 	 */
++#ifdef CONFIG_RTHAL
++	rthal.mask_IO_APIC_irq(irq);
++#else
+ 	mask_IO_APIC_irq(irq);
++#endif
+ 	status = desc->status & ~(IRQ_REPLAY | IRQ_WAITING);
+ 
+ 	/*
+@@ -1149,8 +1157,13 @@
+ 
+ 	spin_lock(&irq_controller_lock);
+ 	desc->status &= ~IRQ_INPROGRESS;
+-	if (!(desc->status & IRQ_DISABLED))
++	if (!(desc->status & IRQ_DISABLED)){
++#ifdef CONFIG_RTHAL
++		rthal.unmask_IO_APIC_irq(irq);
++#else
+ 		unmask_IO_APIC_irq(irq);
++#endif
++	}
+ 	spin_unlock(&irq_controller_lock);
+ }
+ 
+@@ -1379,6 +1392,12 @@
+ 	setup_IO_APIC_irqs();
+ 	init_IO_APIC_traps();
+ 	check_timer();
++
++#ifdef CONFIG_RTHAL
++	rthal.mask_IO_APIC_irq = mask_IO_APIC_irq;
++	rthal.unmask_IO_APIC_irq = unmask_IO_APIC_irq;
++	rthal.irq_2_pin = irq_2_pin;
++#endif
+ 
+ 	print_IO_APIC();
+ }
+diff -uNr linux-2.2.16/arch/i386/kernel/irq.c linux-2.2.16-rthal3/arch/i386/kernel/irq.c
+--- linux-2.2.16/arch/i386/kernel/irq.c	Wed Jun  7 21:26:42 2000
++++ linux-2.2.16-rthal3/arch/i386/kernel/irq.c	Fri Aug 18 15:35:33 2000
+@@ -215,21 +215,29 @@
+  * first, _then_ send the EOI, and the order of EOI
+  * to the two 8259s is important!
+  */
+-static inline void mask_and_ack_8259A(unsigned int irq)
++static void mask_and_ack_8259A(unsigned int irq)
+ {
+ 	cached_irq_mask |= 1 << irq;
+ 	if (irq & 8) {
++#ifndef CONFIG_RTHAL
+ 		inb(0xA1);	/* DUMMY */
++#endif
+ 		outb(cached_A1,0xA1);
+ 		outb(0x60+(irq&7),0xA0);/* Specific EOI to slave */
+ 		outb(0x62,0x20);	/* Specific EOI to cascade */
+ 	} else {
++#ifndef CONFIG_RTHAL
+ 		inb(0x21);	/* DUMMY */
++#endif
+ 		outb(cached_21,0x21);
+ 		outb(0x60+irq,0x20);	/* Specific EOI to master */
+ 	}
+ }
+ 
++#ifdef CONFIG_RTHAL
++extern struct rt_hal rthal;
++#endif
++
+ static void do_8259A_IRQ(unsigned int irq, struct pt_regs * regs)
+ {
+ 	struct irqaction * action;
+@@ -238,7 +246,11 @@
+ 	spin_lock(&irq_controller_lock);
+ 	{
+ 		unsigned int status;
++#ifdef CONFIG_RTHAL
++		rthal.mask_and_ack_8259A(irq);
++#else
+ 		mask_and_ack_8259A(irq);
++#endif
+ 		status = desc->status & ~(IRQ_REPLAY | IRQ_WAITING);
+ 		action = NULL;
+ 		if (!(status & (IRQ_DISABLED | IRQ_INPROGRESS))) {
+@@ -259,8 +271,13 @@
+ 	{
+ 		unsigned int status = desc->status & ~IRQ_INPROGRESS;
+ 		desc->status = status;
+-		if (!(status & IRQ_DISABLED))
++		if (!(status & IRQ_DISABLED)){
++#ifdef CONFIG_RTHAL
++			rthal.unmask_8259A_irq(irq);
++#else
+ 			enable_8259A_irq(irq);
++#endif
++		}
+ 	}
+ 	spin_unlock(&irq_controller_lock);
+ }
+@@ -1158,5 +1175,72 @@
+ 		if (IO_APIC_VECTOR(i) > 0)
+ 			set_intr_gate(IO_APIC_VECTOR(i), interrupt[i]);
+ }
++#endif
++
++
++#ifdef CONFIG_RTHAL
++static void linux_cli(void)
++{
++	hard_cli();
++}
++
++static void linux_sti(void)
++{
++	hard_sti();
++}
++
++static unsigned int linux_save_flags(void)
++{
++	int flags;
++	hard_save_flags(flags);
++	return flags;
++}
++
++static void linux_restore_flags(unsigned int flags)
++{
++	hard_restore_flags(flags);
++}
++
++#ifdef CONFIG_SMP
++static void linux_ack_APIC_irq(void)
++{
++	apic_read(APIC_SPIV);
++	apic_write(APIC_EOI, 0);
++}
++#else
++int irq_vector[NR_IRQS];
++static void linux_ack_APIC_irq(void){}
++#endif
++
++extern struct desc_struct idt_table[];
++extern struct desc_struct gdt_table[];
++extern int idle_weight;
++extern ret_from_intr;
++
++struct rt_hal rthal = { 
++
++	idt_table,
++	linux_cli,
++	linux_sti,
++	linux_save_flags,
++	linux_restore_flags,
++
++	mask_and_ack_8259A,
++	enable_8259A_irq,
++
++	linux_ack_APIC_irq,
++	0       ,       // to be set in io_apic.c
++	0       ,       // to be set in io_apic.c
++
++	&io_apic_irqs,
++	&irq_controller_lock,
++	irq_desc,
++	irq_vector,
++	0,              // to be set in io_apic.c
++	&ret_from_intr,
++	gdt_table,
++	&idle_weight,
++	0,
++};
+ #endif
+ 
+diff -uNr linux-2.2.16/arch/i386/kernel/smp.c linux-2.2.16-rthal3/arch/i386/kernel/smp.c
+--- linux-2.2.16/arch/i386/kernel/smp.c	Wed Jun  7 21:26:42 2000
++++ linux-2.2.16-rthal3/arch/i386/kernel/smp.c	Fri Aug 18 15:35:33 2000
+@@ -171,8 +171,15 @@
+ 		max_cpus = 0;
+ }
+ 
++#ifdef CONFIG_RTHAL
++extern struct rt_hal rthal;
++#endif
++
+ void ack_APIC_irq(void)
+ {
++#ifdef CONFIG_RTHAL
++	rthal.ack_APIC_irq();
++#else
+ 	/* Clear the IPI */
+ 
+ 	/* Dummy read */
+@@ -180,6 +187,7 @@
+ 
+ 	/* Docs say use 0 for future compatibility */
+ 	apic_write(APIC_EOI, 0);
++#endif
+ }
+ 
+ /*
+diff -uNr linux-2.2.16/arch/i386/kernel/time.c linux-2.2.16-rthal3/arch/i386/kernel/time.c
+--- linux-2.2.16/arch/i386/kernel/time.c	Wed Jun  7 21:26:42 2000
++++ linux-2.2.16-rthal3/arch/i386/kernel/time.c	Fri Aug 18 15:35:33 2000
+@@ -61,8 +61,45 @@
+  */
+ #include "irq.h"
+ 
++#ifdef CONFIG_RTHAL
++#ifdef __SMP__
++static volatile inline void rt_spin_lock(spinlock_t *lock)
++{
++	while(test_and_set_bit(0, &(lock->lock)));
++}
++
++static volatile inline void rt_spin_unlock(spinlock_t *lock)
++{
++	clear_bit(0, &(lock->lock));
++}
++#else
++# define rt_spin_lock(whatever)
++# define rt_spin_unlock(whatever)
++#endif /* __SMP__ */
++
++static inline unsigned int rt_spin_lock_irqsave(spinlock_t *lock)
++{
++	unsigned int flags;
++	hard_save_flags(flags);
++	hard_cli();
++	rt_spin_lock(lock);
++	return flags;
++}
++
++static inline void rt_spin_unlock_irqrestore(unsigned int flags,
++						spinlock_t *lock)
++{
++	rt_spin_unlock(lock);
++	hard_restore_flags(flags);
++}
++
++extern spinlock_t xtime_lock;
++#else
++extern rwlock_t xtime_lock;
++#endif  /* CONFIG_RTHAL */
+ 
+ unsigned long cpu_khz;	/* Detected as we calibrate the TSC */
++unsigned long cpu_hz;	/* Detected as we calibrate the TSC */
+ 
+ /* Number of usecs that the last interrupt was delayed */
+ static int delay_at_last_interrupt;
+@@ -76,7 +113,6 @@
+  */
+ unsigned long fast_gettimeoffset_quotient=0;
+ 
+-extern rwlock_t xtime_lock;
+ 
+ static inline unsigned long do_fast_gettimeoffset(void)
+ {
+@@ -105,7 +141,11 @@
+ 		 "0" (eax));
+ 
+ 	/* our adjusted time offset in microseconds */
++#if defined(CONFIG_RTHAL)
++	return edx;
++#else
+ 	return delay_at_last_interrupt + edx;
++#endif
+ }
+ 
+ #define TICK_SIZE tick
+@@ -241,7 +281,11 @@
+ 	unsigned long flags;
+ 	unsigned long usec, sec;
+ 
++#ifdef CONFIG_RTHAL
++	flags = rt_spin_lock_irqsave(&xtime_lock);
++#else
+ 	read_lock_irqsave(&xtime_lock, flags);
++#endif
+ 	usec = do_gettimeoffset();
+ 	{
+ 		unsigned long lost = lost_ticks;
+@@ -250,7 +294,11 @@
+ 	}
+ 	sec = xtime.tv_sec;
+ 	usec += xtime.tv_usec;
++#ifdef CONFIG_RTHAL
++	rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 	read_unlock_irqrestore(&xtime_lock, flags);
++#endif
+ 
+ 	while (usec >= 1000000) {
+ 		usec -= 1000000;
+@@ -261,9 +309,47 @@
+ 	tv->tv_usec = usec;
+ }
+ 
++#ifdef CONFIG_RTHAL
++/* This is a version of do_gettimeofday is RTAI safe 
++   by Karim Yaghmour <karym@opersys.com> */
++spinlock_t rt_gettime_lock = SPIN_LOCK_UNLOCKED;
++void do_gettimeofday_nolock(struct timeval *tv)
++{
++	extern volatile unsigned long lost_ticks;
++	unsigned long usec, sec;
++	unsigned long flags;
++
++	flags = rt_spin_lock_irqsave(&rt_gettime_lock);
++
++	usec = do_gettimeoffset();
++	{
++		unsigned long lost = lost_ticks;
++		if (lost)
++			usec += lost * (1000000 / HZ);
++	}
++	sec = xtime.tv_sec;
++	usec += xtime.tv_usec;
++
++	rt_spin_unlock_irqrestore(flags, &rt_gettime_lock);
++
++	while (usec >= 1000000) {
++		usec -= 1000000;
++		sec++;
++	}
++
++	tv->tv_sec = sec;
++	tv->tv_usec = usec;
++ }
++#endif
++
+ void do_settimeofday(struct timeval *tv)
+ {
++#ifdef CONFIG_RTHAL
++	unsigned long flags;
++	flags = rt_spin_lock_irqsave(&xtime_lock);
++#else
+ 	write_lock_irq(&xtime_lock);
++#endif
+ 	/* This is revolting. We need to set the xtime.tv_usec
+ 	 * correctly. However, the value in this location is
+ 	 * is value at the last tick.
+@@ -282,7 +368,11 @@
+ 	time_status |= STA_UNSYNC;
+ 	time_maxerror = NTP_PHASE_LIMIT;
+ 	time_esterror = NTP_PHASE_LIMIT;
++#ifdef CONFIG_RTHAL
++	rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 	write_unlock_irq(&xtime_lock);
++#endif
+ }
+ 
+ /*
+@@ -418,7 +508,12 @@
+  */
+ static void timer_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+ {
++#ifdef CONFIG_RTHAL
++	unsigned long tsc_value, tsc_delta, micros_elapsed;
++	extern volatile unsigned long lost_ticks;
++#else
+ 	int count;
++#endif
+ 
+ 	/*
+ 	 * Here we are in the timer irq handler. We just have irqs locally
+@@ -427,6 +522,50 @@
+ 	 * the irq version of write_lock because as just said we have irq
+ 	 * locally disabled. -arca
+ 	 */
++#ifdef CONFIG_RTHAL
++	unsigned long flags;
++	flags = rt_spin_lock_irqsave(&xtime_lock);
++
++	/* This is for RTAI only to correct the time reported by do_gettimeofday */
++	if (use_tsc)
++	{
++		/* Read the TSC's value */
++		rdtscl(tsc_value);
++
++		/* Compute difference between the current TSC value and the last low val */
++		tsc_delta = tsc_value - last_tsc_low;
++
++		/* Time elapsed since last interrupt */
++		{
++		unsigned long eax=tsc_delta, edx=0;
++		__asm__("mull %2"
++			:"=a" (eax), "=d" (micros_elapsed)
++			:"g" (fast_gettimeoffset_quotient),
++			"0" (eax), "1" (edx));
++			}
++
++		/* Did 10ms pass since the last time the TSC's low value was updated */
++		if(micros_elapsed >= 10000)
++		{
++			/* Loop until we've taken in account all 10ms lost interrupts */
++			do
++			{
++				/* We've lost one tick */
++				lost_ticks++;
++
++				/* We've taken in account 10ms */
++				micros_elapsed -= 10000;
++			} while (micros_elapsed >= 10000);
++
++			/* We've incremented one lost-tick too many since do_timer will increment one more */
++			lost_ticks--;
++		}
++
++		/* Update the TSC low val (this should be good t'il we reach 4 GHz K.Y.) */
++		/* 2 divisions are done to keep precision as best can be */
++		last_tsc_low = tsc_value - (micros_elapsed * (cpu_hz / 10000)) / 100;
++	}
++#else 
+ 	write_lock(&xtime_lock);
+ 
+ 	if (use_tsc)
+@@ -453,12 +592,19 @@
+ 		count |= inb(0x40) << 8;
+ 
+ 		count = ((LATCH-1) - count) * TICK_SIZE;
++#ifndef CONFIG_RTHAL
+ 		delay_at_last_interrupt = (count + LATCH/2) / LATCH;
++#endif
+ 	}
+- 
++
++#endif /* CONFIG_RTHAL */
+ 	do_timer_interrupt(irq, NULL, regs);
+ 
++#ifdef CONFIG_RTHAL
++	rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 	write_unlock(&xtime_lock);
++#endif
+ 
+ }
+ 
+@@ -672,6 +818,7 @@
+ 	                	"0" (eax), "1" (edx));
+ 				printk("Detected %ld kHz processor.\n", cpu_khz);
+ 			}
++			cpu_hz=cpu_khz*1000;
+ 		}
+ 	}
+ 
+diff -uNr linux-2.2.16/include/asm-i386/system.h linux-2.2.16-rthal3/include/asm-i386/system.h
+--- linux-2.2.16/include/asm-i386/system.h	Tue May 11 17:35:42 1999
++++ linux-2.2.16-rthal3/include/asm-i386/system.h	Fri Aug 18 16:04:14 2000
+@@ -1,6 +1,7 @@
+ #ifndef __ASM_SYSTEM_H
+ #define __ASM_SYSTEM_H
+ 
++#include <linux/config.h>
+ #include <linux/kernel.h>
+ #include <asm/segment.h>
+ 
+@@ -9,7 +10,11 @@
+ struct task_struct;	/* one of the stranger aspects of C forward declarations.. */
+ extern void FASTCALL(__switch_to(struct task_struct *prev, struct task_struct *next));
+ 
++#ifdef CONFIG_RTHAL
+ #define switch_to(prev,next,last) do {					\
++	if (rthal.lxrt_cli){						\
++		rthal.lxrt_cli();					\
++	}								\
+ 	asm volatile("pushl %%esi\n\t"					\
+ 		     "pushl %%edi\n\t"					\
+ 		     "pushl %%ebp\n\t"					\
+@@ -22,12 +27,34 @@
+ 		     "popl %%ebp\n\t"					\
+ 		     "popl %%edi\n\t"					\
+ 		     "popl %%esi\n\t"					\
++		     "sti\n\t"						\
+ 		     :"=m" (prev->tss.esp),"=m" (prev->tss.eip),	\
+ 		      "=b" (last)					\
+ 		     :"m" (next->tss.esp),"m" (next->tss.eip),		\
+ 		      "a" (prev), "d" (next),				\
+ 		      "b" (prev));					\
+ } while (0)
++#else
++#define switch_to(prev,next,last) do {					\
++	asm volatile("pushl %%esi\n\t"					\
++		     "pushl %%edi\n\t"					\
++		     "pushl %%ebp\n\t"					\
++		     "movl %%esp,%0\n\t"	/* save ESP */		\
++		     "movl %3,%%esp\n\t"	/* restore ESP */	\
++		     "movl $1f,%1\n\t"		/* save EIP */		\
++		     "pushl %4\n\t"		/* restore EIP */	\
++		     "jmp __switch_to\n"				\
++		     "1:\t"						\
++		     "popl %%ebp\n\t"					\
++		     "popl %%edi\n\t"					\
++		     "popl %%esi\n\t"					\
++		     :"=m" (prev->tss.esp),"=m" (prev->tss.eip),	\
++		      "=b" (last)					\
++		     :"m" (next->tss.esp),"m" (next->tss.eip),		\
++		      "a" (prev), "d" (next),				\
++		      "b" (prev));					\
++} while (0)
++#endif
+ 
+ #define _set_base(addr,base) do { unsigned long __pr; \
+ __asm__ __volatile__ ("movw %%dx,%1\n\t" \
+@@ -174,13 +201,54 @@
+ #define wmb()	__asm__ __volatile__ ("": : :"memory")
+ 
+ /* interrupt control.. */
++#ifndef CONFIG_RTHAL
+ #define __sti() __asm__ __volatile__ ("sti": : :"memory")
+ #define __cli() __asm__ __volatile__ ("cli": : :"memory")
+ #define __save_flags(x) \
+ __asm__ __volatile__("pushfl ; popl %0":"=g" (x): /* no input */ :"memory")
+ #define __restore_flags(x) \
+ __asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory")
++#else
++#define hard_sti() __asm__ __volatile__ ("sti": : :"memory")
++#define hard_cli() __asm__ __volatile__ ("cli": : :"memory")
++#define hard_save_flags(x) \
++__asm__ __volatile__("pushfl ; popl %0":"=g" (x): /* no input */ :"memory")
++#define hard_restore_flags(x) \
++__asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory")
++
++struct rt_hal {
+ 
++	struct desc_struct *idt_table;
++	void (*disint)(void);
++	void (*enint)(void);
++	unsigned int (*getflags)(void);
++	void (*setflags)(unsigned int flags);
++
++	void (*mask_and_ack_8259A)(unsigned int irq);
++	void (*unmask_8259A_irq)(unsigned int irq);
++
++	void (*ack_APIC_irq)(void);
++	void (*mask_IO_APIC_irq)(unsigned int irq);
++	void (*unmask_IO_APIC_irq)(unsigned int irq);
++
++	unsigned long *io_apic_irqs;
++	void *irq_controller_lock;
++	void *irq_desc;
++	int *irq_vector;
++	void *irq_2_pin;
++	void *ret_from_intr;
++	struct desc_struct *gdt_table;
++	volatile int *idle_weight;
++	void (*lxrt_cli)(void);
++};
++
++extern struct rt_hal rthal;
++
++#define __cli()            (rthal.disint())
++#define __sti()            (rthal.enint())
++#define __save_flags(x)    ((x) = rthal.getflags())
++#define __restore_flags(x) (rthal.setflags(x))
++#endif
+ 
+ #ifdef __SMP__
+ 
+diff -uNr linux-2.2.16/include/linux/sched.h linux-2.2.16-rthal3/include/linux/sched.h
+--- linux-2.2.16/include/linux/sched.h	Thu May  4 00:16:52 2000
++++ linux-2.2.16-rthal3/include/linux/sched.h	Fri Aug 18 16:04:20 2000
+@@ -332,8 +332,18 @@
+ 
+ /* oom handling */
+ 	int oom_kill_try;
++
++#ifdef CONFIG_RTHAL
++	void *this_rt_task[2];
++#endif
+ };
+ 
++#ifdef CONFIG_RTHAL
++#define THIS_RT_TASK { 0, 0 },
++#else
++#define THIS_RT_TASK
++#endif
++
+ /*
+  * Per process flags
+  */
+@@ -400,6 +410,7 @@
+ /* signals */	SPIN_LOCK_UNLOCKED, &init_signals, {{0}}, {{0}}, NULL, &init_task.sigqueue, 0, 0, \
+ /* exec cts */	0,0, \
+ /* oom */	0, \
++/* this_rt_task */ THIS_RT_TASK \
+ }
+ 
+ union task_union {
+diff -uNr linux-2.2.16/include/linux/time.h linux-2.2.16-rthal3/include/linux/time.h
+--- linux-2.2.16/include/linux/time.h	Mon Dec 28 06:18:28 1998
++++ linux-2.2.16-rthal3/include/linux/time.h	Fri Aug 18 16:04:14 2000
+@@ -60,6 +60,9 @@
+ 
+ #ifdef __KERNEL__
+ extern void do_gettimeofday(struct timeval *tv);
++#ifdef CONFIG_RTHAL
++extern void do_gettimeofday_nolock(struct timeval *tv);
++#endif
+ extern void do_settimeofday(struct timeval *tv);
+ extern void get_fast_time(struct timeval *tv);
+ extern void (*do_get_fast_time)(struct timeval *);
+diff -uNr linux-2.2.16/kernel/exit.c linux-2.2.16-rthal3/kernel/exit.c
+--- linux-2.2.16/kernel/exit.c	Tue Jan  4 18:12:25 2000
++++ linux-2.2.16-rthal3/kernel/exit.c	Fri Aug 18 15:35:33 2000
+@@ -372,6 +372,64 @@
+ 		disassociate_ctty(1);
+ }
+ 
++#ifdef CONFIG_RTHAL
++// PGGC added these lines to callback rtai when a task dies.
++// A list of functions allows different rt_modules to be informed.
++static struct t_callback {
++	void (*rtai_callback)(struct task_struct *tsk);
++        struct t_callback *next;
++	} *rtai_callback_list;
++
++extern int  set_rtai_callback(    void (*fun)(struct task_struct *tsk));
++extern void remove_rtai_callback( void (*fun)(struct task_struct *tsk));
++
++void inform_rtai(void)
++{
++struct t_callback *pt ;
++
++pt = rtai_callback_list;
++while( pt ) {
++	(*(pt->rtai_callback))(current);
++	pt = pt->next;
++	}
++//printk( "Task pid %d going down\n", current->pid );
++}
++
++int set_rtai_callback( void (*pt)(struct task_struct *tsk))
++{
++struct t_callback *ptn ;
++
++ptn = kmalloc(sizeof(struct t_callback), GFP_KERNEL);
++if(!ptn) return -ENOMEM ;
++
++ptn->rtai_callback = pt ;
++ptn->next = rtai_callback_list ? rtai_callback_list : 0 ;
++rtai_callback_list = ptn ;
++return 0 ;
++}
++
++void remove_rtai_callback(void (*pt)(struct task_struct *tsk))
++{
++struct t_callback *pto, *ptoo, *ptd ;
++
++pto  = rtai_callback_list;
++ptoo = 0;
++while(pto) {
++        if(pto->rtai_callback == pt) {
++		if(!ptoo) rtai_callback_list = pto->next; else ptoo->next = pto->next; 
++ 		ptd = pto;
++                pto = pto->next;
++                kfree(ptd);
++                }
++	else {
++	        ptoo = pto;
++	        pto = pto->next;
++		}	
++	}
++//printk("rtai_callback_list %X\n", rtai_callback_list);
++}
++#endif /* CONFIG_RTHAL */
++
+ NORET_TYPE void do_exit(long code)
+ {
+ 	struct task_struct *tsk = current;
+@@ -409,6 +467,17 @@
+ 		__MOD_DEC_USE_COUNT(tsk->exec_domain->module);
+ 	if (tsk->binfmt && tsk->binfmt->module)
+ 		__MOD_DEC_USE_COUNT(tsk->binfmt->module);
++#ifdef CONFIG_RTHAL
++	/*
++	 * This assumes that a LXRT task should/will always set its
++	 * scheduling police to SCHED_FIFO or SCHED_RR.
++	 * We may want to enforce this in rt_task_init(...).
++	 *
++	 * What an incredible hack.  --ds
++	 */
++	if((tsk->policy == SCHED_FIFO) || (tsk->policy == SCHED_RR)) inform_rtai();
++#endif /* CONFIG_RTHAL */
++
+ 	schedule();
+ /*
+  * In order to get rid of the "volatile function does return" message
+diff -uNr linux-2.2.16/kernel/ksyms.c linux-2.2.16-rthal3/kernel/ksyms.c
+--- linux-2.2.16/kernel/ksyms.c	Wed Jun  7 21:26:44 2000
++++ linux-2.2.16-rthal3/kernel/ksyms.c	Fri Aug 18 15:35:33 2000
+@@ -424,3 +424,12 @@
+ /* init task, for moving kthread roots - ought to export a function ?? */
+ EXPORT_SYMBOL(init_task_union);
+ 
++
++#ifdef CONFIG_RTHAL
++/* inform rtai a task is about to die. */
++extern int  set_rtai_callback(   void (*fun)(struct task_struct *tsk));
++extern void remove_rtai_callback(void (*fun)(struct task_struct *tsk));
++EXPORT_SYMBOL(set_rtai_callback);
++EXPORT_SYMBOL(remove_rtai_callback);
++#endif /* CONFIG_RTHAL */
++
+diff -uNr linux-2.2.16/kernel/sched.c linux-2.2.16-rthal3/kernel/sched.c
+--- linux-2.2.16/kernel/sched.c	Wed Jun  7 21:26:44 2000
++++ linux-2.2.16-rthal3/kernel/sched.c	Fri Aug 18 15:35:33 2000
+@@ -40,6 +40,40 @@
+ 
+ #include <linux/timex.h>
+ 
++#ifdef CONFIG_RTHAL
++
++#ifdef __SMP__
++static volatile inline void rt_spin_lock(spinlock_t *lock)
++{
++	while(test_and_set_bit(0, &(lock->lock)));
++}
++
++static volatile inline void rt_spin_unlock(spinlock_t *lock)
++{
++	clear_bit(0, &(lock->lock));
++}
++#else
++# define rt_spin_lock(whatever)
++# define rt_spin_unlock(whatever)
++#endif /* __SMP__ */
++
++static inline unsigned int rt_spin_lock_irqsave(spinlock_t *lock)
++{
++	unsigned int flags;
++	hard_save_flags(flags);
++	hard_cli();
++	rt_spin_lock(lock);
++	return flags;
++}
++
++static inline void rt_spin_unlock_irqrestore(unsigned int flags,
++						spinlock_t *lock)
++{
++	rt_spin_unlock(lock);
++	hard_restore_flags(flags);
++}
++#endif  /* CONFIG_RTHAL */
++
+ /*
+  * kernel variables
+  */
+@@ -690,6 +724,10 @@
+  * tasks can run. It can not be killed, and it cannot sleep. The 'state'
+  * information in task[0] is never used.
+  */
++#ifdef CONFIG_RTHAL
++int idle_weight = -1000;
++#endif
++
+ asmlinkage void schedule(void)
+ {
+ 	struct schedule_data * sched_data;
+@@ -747,7 +785,11 @@
+ 	p = init_task.next_run;
+ 	/* Default process to select.. */
+ 	next = idle_task(this_cpu);
++#ifdef CONFIG_RTHAL
++	c = idle_weight;
++#else
+ 	c = -1000;
++#endif
+ 	if (prev->state == TASK_RUNNING)
+ 		goto still_running;
+ still_running_back:
+@@ -1507,7 +1549,11 @@
+ /*
+  * This spinlock protect us from races in SMP while playing with xtime. -arca
+  */
++#ifdef CONFIG_RTHAL
++spinlock_t xtime_lock = SPIN_LOCK_UNLOCKED;
++#else
+ rwlock_t xtime_lock = RW_LOCK_UNLOCKED;
++#endif
+ 
+ static inline void update_times(void)
+ {
+@@ -1518,7 +1564,12 @@
+ 	 * just know that the irqs are locally enabled and so we don't
+ 	 * need to save/restore the flags of the local CPU here. -arca
+ 	 */
++#ifdef CONFIG_RTHAL
++	unsigned long flags;
++	flags = rt_spin_lock_irqsave(&xtime_lock);
++#else
+ 	write_lock_irq(&xtime_lock);
++#endif
+ 
+ 	ticks = lost_ticks;
+ 	lost_ticks = 0;
+@@ -1529,12 +1580,20 @@
+ 
+ 		calc_load(ticks);
+ 		update_wall_time(ticks);
++#ifdef CONFIG_RTHAL
++		rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 		write_unlock_irq(&xtime_lock);
++#endif
+ 		
+ 		update_process_times(ticks, system);
+ 
+ 	} else
++#ifdef CONFIG_RTHAL
++		rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 		write_unlock_irq(&xtime_lock);
++#endif
+ }
+ 
+ static void timer_bh(void)
+diff -uNr linux-2.2.16/kernel/time.c linux-2.2.16-rthal3/kernel/time.c
+--- linux-2.2.16/kernel/time.c	Wed Oct 27 00:53:42 1999
++++ linux-2.2.16-rthal3/kernel/time.c	Fri Aug 18 15:47:10 2000
+@@ -32,6 +32,40 @@
+ 
+ #include <asm/uaccess.h>
+ 
++#ifdef CONFIG_RTHAL
++
++#ifdef __SMP__
++static volatile inline void rt_spin_lock(spinlock_t *lock)
++{
++	while(test_and_set_bit(0, &(lock->lock)));
++}
++
++static volatile inline void rt_spin_unlock(spinlock_t *lock)
++{
++	clear_bit(0, &(lock->lock));
++}
++#else
++# define rt_spin_lock(whatever)
++# define rt_spin_unlock(whatever)
++#endif /* __SMP__ */
++static inline unsigned int rt_spin_lock_irqsave(spinlock_t *lock)
++{
++	unsigned int flags;
++	hard_save_flags(flags);
++	hard_cli();
++	rt_spin_lock(lock);
++	return flags;
++}
++
++static inline void rt_spin_unlock_irqrestore(unsigned int flags,
++						spinlock_t *lock)
++{
++	rt_spin_unlock(lock);
++	hard_restore_flags(flags);
++}
++#endif  /* CONFIG_RTHAL */
++
++
+ /* 
+  * The timezone where the local system is located.  Used as a default by some
+  * programs who obtain this value by using gettimeofday.
+@@ -61,7 +95,11 @@
+    NOTE NOTE: We really need a spinlock here as the global irq locking
+    only protect us against the timer irq and not against other time-related
+    syscall running under us. */
++#ifdef CONFIG_RTHAL
++extern spinlock_t xtime_lock;
++#else
+ extern rwlock_t xtime_lock;
++#endif /* CONFIG_RTHAL */
+ 
+ #ifndef __alpha__
+ 
+@@ -95,19 +133,31 @@
+ asmlinkage int sys_stime(int * tptr)
+ {
+ 	int value;
++#ifdef CONFIG_RTHAL
++	unsigned long flags;
++#endif
+ 
+ 	if (!capable(CAP_SYS_TIME))
+ 		return -EPERM;
+ 	if (get_user(value, tptr))
+ 		return -EFAULT;
++
++#ifdef CONFIG_RTHAL
++	flags = rt_spin_lock_irqsave(&xtime_lock);
++#else
+ 	write_lock_irq(&xtime_lock);
++#endif
+ 	xtime.tv_sec = value;
+ 	xtime.tv_usec = 0;
+ 	time_adjust = 0;	/* stop active adjtime() */
+ 	time_status |= STA_UNSYNC;
+ 	time_maxerror = NTP_PHASE_LIMIT;
+ 	time_esterror = NTP_PHASE_LIMIT;
++#ifdef CONFIG_RTHAL
++	rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 	write_unlock_irq(&xtime_lock);
++#endif
+ 	return 0;
+ }
+ 
+@@ -146,9 +196,18 @@
+  */
+ inline static void warp_clock(void)
+ {
++#ifdef CONFIG_RTHAL
++	unsigned long flags;
++	flags = rt_spin_lock_irqsave(&xtime_lock);
++#else
+ 	write_lock_irq(&xtime_lock);
++#endif
+ 	xtime.tv_sec += sys_tz.tz_minuteswest * 60;
++#ifdef CONFIG_RTHAL
++	rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 	write_unlock_irq(&xtime_lock);
++#endif
+ }
+ 
+ /*
+@@ -231,6 +290,10 @@
+         long ltemp, mtemp, save_adjust;
+ 	int result;
+ 
++#ifdef CONFIG_RTHAL
++	unsigned long flags;
++#endif
++
+ 	/* In order to modify anything, you gotta be super-user! */
+ 	if (txc->modes && !capable(CAP_SYS_TIME))
+ 		return -EPERM;
+@@ -247,7 +310,11 @@
+ 		if (txc->tick < 900000/HZ || txc->tick > 1100000/HZ)
+ 			return -EINVAL;
+ 
++#ifdef CONFIG_RTHAL
++	flags = rt_spin_lock_irqsave(&xtime_lock);
++#else
+ 	write_lock_irq(&xtime_lock);
++#endif
+ 	result = time_state;	/* mostly `TIME_OK' */
+ 
+ 	/* Save for later - semantics of adjtime is to return old value */
+@@ -402,7 +469,11 @@
+ 	txc->calcnt	   = pps_calcnt;
+ 	txc->errcnt	   = pps_errcnt;
+ 	txc->stbcnt	   = pps_stbcnt;
++#ifdef CONFIG_RTHAL
++	rt_spin_unlock_irqrestore(flags, &xtime_lock);
++#else
+ 	write_unlock_irq(&xtime_lock);
++#endif
+ 	do_gettimeofday(&txc->time);
+ 	return(result);
+ }

@@ -1,0 +1,13 @@
+sync
+echo " "
+echo "This example features NTASKS realtime tasks running periodically."
+echo "On each period one of them sets a bit on the parallel port,"
+echo "another one resets it. By choosing an appropriate timings"
+echo "one can produce a rectangular wave on the parallel port"
+echo "which can be watched on an oscilloscope plugged into it."
+echo "Type <return> to install modules"
+read junk
+sync
+insmod ../../rtai
+insmod ../../modules/rtai_sched
+insmod ./rt_process

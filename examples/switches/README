@@ -1,0 +1,19 @@
+****** SWITCHES EXAMPLE ******
+
+This directory checks task switching time by repeated use of suspend/resumes
+and semphore signal/waits. In case you are slicing microsecs note that the
+results are related to a relativily heavily loaded task queues, i.e. 30 tasks,
+both for the semaphore waiting and suspended tasks lists. Moreover they 
+include full FPU support.
+
+To run the example type:
+
+make clean
+make
+./run
+
+When it stops type:
+
+./rem
+
+Alternatively use your own insmod/rmmod after make.

@@ -1,0 +1,5 @@
+insmod ../modules/rtai_fifos.o
+cd ../latency_calibration
+insmod ./latency_calibrate.o start_timer=0
+./check
+rmmod latency_calibrate

@@ -1,0 +1,1 @@
+vim -c startinsert arch/i386/rtai.c

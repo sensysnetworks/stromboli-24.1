@@ -1,0 +1,4 @@
+#!/bin/sh
+
+../../scripts/rt_rmmod ex_parport_receiver
+

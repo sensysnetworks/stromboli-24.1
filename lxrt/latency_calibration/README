@@ -1,0 +1,37 @@
+The running of this test is self contained. Nonetheless you need to have 
+compiled and installed: rtai.c and a scheduler appropriate to your PC.
+To have them all available just follow the usual RTAI installation procedure, 
+do "make all" and then install the needed scheduler.
+Note that "make clean"s are repeated just to make it safe, please do them at 
+least once after installing. There is the possibility of doing it all at once
+from within directory "newlxrt" by: "making cleanall", just to be sure, followed
+by "make all".
+
+This test mimics the one already used in RTAI to calibrate the oneshot timer.
+Try it under load and see that it is not so bad, compared to its kernel brother.
+For a quick idea of min/max jitters note that you should take away the average 
+from min/max. The difference in averages between the latency calibration run 
+for the kernel module and the one here gives you a fair idea of the overhead 
+of doing it in user space. You'll see that what you get is more overhead, not 
+really bad taking into account what must be done to run it in user space, but
+not so more jitter. 
+
+To run it:
+make clean
+make
+./run
+./check
+(type enter to end check only, a-enter or CTRL-C to end both, when it will be 
+informed "a la Pierre" it will be simpler)
+./del
+
+If you want to check the jitter while one of the other examples is running, 
+you should enter the latency_calibration directory under another screen and 
+type "./rt_process 1 &" followed by "./check", and end it has explained above.
+Try it varying Linux load. Be carefull, you must end it before the other 
+running examples end. So some care is required for all the examples but the
+clocks and sound, since they can run for a short time if you do not change 
+the related parameters.
+For the above purpose all the tasks of the other examples use a priority lower
+than that of the rt_process in this directory. Thus you have a check both on
+preemption and jitter under load.

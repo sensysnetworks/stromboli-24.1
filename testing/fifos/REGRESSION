@@ -1,0 +1,30 @@
+#!/bin/sh
+if `uname -r | grep -q rtl` ; then
+	insmod ../modules/rtl.o
+	insmod ../modules/rtl_time.o
+	insmod ../modules/rtl_sched.o
+	insmod ./rtai_fifos.o
+	./regression
+	./regression2
+	./regression3
+	rmmod rtai_fifos
+	rmmod rtl_sched
+	rmmod rtl_time
+	rmmod rtl
+else
+	insmod ../../modules/rtai.o
+	insmod ../../modules/rt_mem_mgr.o
+	insmod ../../modules/rtai_sched.o
+	insmod ../../modules/rtai_fifos.o
+#	insmod ../rtai
+#	insmod ../modules/rtai_sched
+#	insmod ./rtai_fifos.o
+	./regression
+	./regression2
+	./regression3
+	rmmod rtai_fifos
+	rmmod rtai_sched
+	rmmod rt_mem_mgr
+	rmmod rtai
+
+fi

@@ -1,0 +1,28 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example demonstrates the use of messages. It implements a digital 
+wrist clock in the way detailed in: Andre' Schiper, Programmation Concurrent, 
+Presses Polytechnique et Universitaires Romandes, Geneve.
+
+Type <return> to install modules
+EOF
+read junk
+
+../../scripts/rt_modprobe dispclk.o
+../../scripts/rt_modprobe cmdclk.o
+../../scripts/rt_modprobe cmdcrn.o
+../../scripts/rt_modprobe clock.o
+
+echo "Now start the application"
+echo "Type <return> to continue"
+read junk
+
+./keybrd
+
+../../scripts/rt_rmmod clock
+../../scripts/rt_rmmod cmdcrn
+../../scripts/rt_rmmod cmdclk
+../../scripts/rt_rmmod dispclk
+

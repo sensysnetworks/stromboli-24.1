@@ -1,0 +1,2035 @@
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/Makefile linux-2.4.16-nwa1/Makefile
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/Makefile	Sat Dec  1 14:03:02 2001
++++ linux-2.4.16-nwa1/Makefile	Sat Dec  8 02:11:28 2001
+@@ -1,7 +1,7 @@
+ VERSION = 2
+ PATCHLEVEL = 4
+ SUBLEVEL = 16
+-EXTRAVERSION =
++EXTRAVERSION = -nwa
+ 
+ KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
+ 
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/config.in linux-2.4.16-nwa1/arch/i386/config.in
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/config.in	Sat Dec  1 14:02:31 2001
++++ linux-2.4.16-nwa1/arch/i386/config.in	Sat Dec  8 02:11:06 2001
+@@ -16,6 +16,13 @@
+ endmenu
+ 
+ mainmenu_option next_comment
++comment 'Hard real-time support'
++bool 'High priority interrupt support' CONFIG_PRIORITY_IRQ
++bool 'Lazy IRQ disabling on 8259A' CONFIG_LAZY_IRQ_DISABLE
++bool 'APICs in dual-destination mode' CONFIG_APIC_DUAL_DEST
++endmenu
++
++mainmenu_option next_comment
+ comment 'Loadable module support'
+ bool 'Enable loadable module support' CONFIG_MODULES
+ if [ "$CONFIG_MODULES" = "y" ]; then
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/entry.S linux-2.4.16-nwa1/arch/i386/kernel/entry.S
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/entry.S	Tue Nov 13 00:38:51 2001
++++ linux-2.4.16-nwa1/arch/i386/kernel/entry.S	Sat Dec  8 02:11:06 2001
+@@ -207,11 +207,13 @@
+ 	jne reschedule
+ 	cmpl $0,sigpending(%ebx)
+ 	jne signal_return
++//	call *SYMBOL_NAME(local_irq_enable)	# this needs thot
+ restore_all:
+ 	RESTORE_ALL
+ 
+ 	ALIGN
+ signal_return:
++//	call *SYMBOL_NAME(local_irq_enable)	# this needs thot
+ 	sti				# we can get here from an interrupt handler
+ 	testl $(VM_MASK),EFLAGS(%esp)
+ 	movl %esp,%eax
+@@ -246,6 +248,8 @@
+ 
+ 	ALIGN
+ ENTRY(ret_from_intr)
++	cmpl $0,%eax
++	je restore_all
+ 	GET_CURRENT(%ebx)
+ ret_from_exception:
+ 	movl EFLAGS(%esp),%eax		# mix EFLAGS and CS
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/i386_ksyms.c linux-2.4.16-nwa1/arch/i386/kernel/i386_ksyms.c
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/i386_ksyms.c	Sat Dec  1 14:02:31 2001
++++ linux-2.4.16-nwa1/arch/i386/kernel/i386_ksyms.c	Sat Dec  8 05:25:42 2001
+@@ -14,6 +14,7 @@
+ #include <linux/kernel.h>
+ #include <linux/string.h>
+ #include <linux/tty.h>
++#include <linux/irq.h>
+ 
+ #include <asm/semaphore.h>
+ #include <asm/processor.h>
+@@ -28,6 +29,7 @@
+ #include <asm/desc.h>
+ #include <asm/pgtable.h>
+ #include <asm/pgalloc.h>
++#include <asm/system.h>
+ 
+ extern void dump_thread(struct pt_regs *, struct user *);
+ extern spinlock_t rtc_lock;
+@@ -49,6 +51,12 @@
+ 
+ extern unsigned long get_cmos_time(void);
+ 
++
++typedef struct rt_timer_s rt_timer;
++extern void timer_add(rt_timer *timer);
++EXPORT_SYMBOL(timer_add);
++
++
+ /* platform dependent support */
+ EXPORT_SYMBOL(boot_cpu_data);
+ #ifdef CONFIG_EISA
+@@ -150,6 +158,15 @@
+ 
+ #ifdef CONFIG_VT
+ EXPORT_SYMBOL(screen_info);
++#endif
++
++#ifdef CONFIG_PRIORITY_IRQ
++EXPORT_SYMBOL(local_irq_save_ret);
++EXPORT_SYMBOL(local_save_flags_ret);
++EXPORT_SYMBOL(local_irq_restore);
++EXPORT_SYMBOL(local_irq_disable);
++EXPORT_SYMBOL(local_irq_enable);
++EXPORT_SYMBOL(rt_scheduler);
+ #endif
+ 
+ EXPORT_SYMBOL(get_wchan);
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/i8259.c linux-2.4.16-nwa1/arch/i386/kernel/i8259.c
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/i8259.c	Mon Oct  1 09:59:59 2001
++++ linux-2.4.16-nwa1/arch/i386/kernel/i8259.c	Sat Dec  8 14:05:00 2001
+@@ -141,11 +141,7 @@
+ 
+ void mask_and_ack_8259A(unsigned int);
+ 
+-static unsigned int startup_8259A_irq(unsigned int irq)
+-{ 
+-	enable_8259A_irq(irq);
+-	return 0; /* never anything pending */
+-}
++static unsigned int startup_8259A_irq(unsigned int irq,unsigned int priority);
+ 
+ static struct hw_interrupt_type i8259A_irq_type = {
+ 	"XT-PIC",
+@@ -164,8 +160,23 @@
+ 
+ /*
+  * This contains the irq mask for both 8259A irq controllers,
++ *
++ * The masks work as follows:
++ *   cached_irq_mask:	What is currently in the controller
++ *   irq_mask:		The general IRQ mask
++ *   priority_mask:	The mask to OR with irq_mask when at high priority
++ *   current_priority_mask:	priority mask, if at high priority, else 0
+  */
+ static unsigned int cached_irq_mask = 0xffff;
++#ifdef CONFIG_PRIORITY_IRQ
++static unsigned int irq_mask = 0xffff;
++static unsigned int current_priority_mask = 0;
++static unsigned int priority_mask = 0xffff;
++#else
++#define irq_mask		cached_irq_mask
++#define current_priority_mask	0
++#define priority_mask		0
++#endif
+ 
+ #define __byte(x,y) 	(((unsigned char *)&(y))[x])
+ #define cached_21	(__byte(0,cached_irq_mask))
+@@ -188,7 +199,8 @@
+ 	unsigned long flags;
+ 
+ 	spin_lock_irqsave(&i8259A_lock, flags);
+-	cached_irq_mask |= mask;
++	irq_mask |= mask;
++	cached_irq_mask = irq_mask | current_priority_mask;
+ 	if (irq & 8)
+ 		outb(cached_A1,0xA1);
+ 	else
+@@ -202,7 +214,8 @@
+ 	unsigned long flags;
+ 
+ 	spin_lock_irqsave(&i8259A_lock, flags);
+-	cached_irq_mask &= mask;
++	irq_mask &= mask;
++	cached_irq_mask = irq_mask | current_priority_mask;
+ 	if (irq & 8)
+ 		outb(cached_A1,0xA1);
+ 	else
+@@ -234,6 +247,73 @@
+ 	enable_irq(irq);
+ }
+ 
++static unsigned int startup_8259A_irq(unsigned int irq,unsigned int priority)
++{ 
++#ifdef CONFIG_PRIORITY_IRQ
++	unsigned int mask = 1 << irq;
++	if(priority){
++		priority_mask &= ~mask;
++	}else{
++		priority_mask |= mask;
++	}
++	current_priority_mask = (current_priority?priority_mask:0);
++#endif
++	enable_8259A_irq(irq);
++	return 0; /* never anything pending */
++}
++
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++int being_lazy=0;
++#endif
++
++void set_priority_8259A(unsigned int priority)
++{
++#ifdef CONFIG_PRIORITY_IRQ
++	current_priority_mask = (priority?priority_mask:0);
++	cached_irq_mask = irq_mask | current_priority_mask;
++
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++	if(priority){
++		being_lazy=1;
++	}else{
++		if(!being_lazy){
++			outb(cached_A1,0xA1);
++			outb(cached_21,0x21);
++		}
++		being_lazy=0;
++	}
++#else
++	outb(cached_A1,0xA1);
++	outb(cached_21,0x21);
++#endif
++#endif
++}
++
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++int update_8259A_regs(int irq)
++{
++	//if(being_lazy){
++		//mask_and_ack_8259A(irq);
++		outb(cached_A1,0xA1);
++		outb(cached_21,0x21);
++		being_lazy=0;
++		return 1;
++	//}
++	return 0;
++}
++#endif
++
++void dump_8259A_status(void)
++{
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++	printk("being lazy: %d\n",being_lazy);
++#endif
++	printk("cached irq mask: %04x\n",cached_irq_mask);
++
++	printk("a1=0x%02x 21=0x%02x\n",inb(0xa1),inb(0x21));
++}
++
++
+ /*
+  * This function assumes to be called rarely. Switching between
+  * 8259A registers is slow.
+@@ -284,18 +364,22 @@
+ 	 * but should be enough to warn the user that there
+ 	 * is something bad going on ...
+ 	 */
++
++#ifndef CONFIG_LAZY_IRQ_DISABLE
+ 	if (cached_irq_mask & irqmask)
+ 		goto spurious_8259A_irq;
+-	cached_irq_mask |= irqmask;
++#endif
++	irq_mask |= irqmask;
++	cached_irq_mask = irq_mask | current_priority_mask;
+ 
+ handle_real_irq:
+ 	if (irq & 8) {
+-		inb(0xA1);		/* DUMMY - (do we need this?) */
++		//inb(0xA1);		/* DUMMY - (do we need this?) */
+ 		outb(cached_A1,0xA1);
+ 		outb(0x60+(irq&7),0xA0);/* 'Specific EOI' to slave */
+ 		outb(0x62,0x20);	/* 'Specific EOI' to master-IRQ2 */
+ 	} else {
+-		inb(0x21);		/* DUMMY - (do we need this?) */
++		//inb(0x21);		/* DUMMY - (do we need this?) */
+ 		outb(cached_21,0x21);
+ 		outb(0x60+irq,0x20);	/* 'Specific EOI' to master */
+ 	}
+@@ -489,6 +573,7 @@
+ 	set_intr_gate(ERROR_APIC_VECTOR, error_interrupt);
+ #endif
+ 
++#if 0
+ 	/*
+ 	 * Set the clock to HZ Hz, we already have a valid
+ 	 * vector now:
+@@ -496,6 +581,15 @@
+ 	outb_p(0x34,0x43);		/* binary, mode 2, LSB/MSB, ch 0 */
+ 	outb_p(LATCH & 0xff , 0x40);	/* LSB */
+ 	outb(LATCH >> 8 , 0x40);	/* MSB */
++#endif
++
++#ifdef CONFIG_PRIORITY_IRQ
++	/*
++	 *  Careful... we came in with IRQs hard disabled, and since we
++	 *  have the controller set up now, we can switch to soft disabled.
++	 */
++	local_irq_disable();
++#endif
+ 
+ #ifndef CONFIG_VISWS
+ 	setup_irq(2, &irq2);
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/irq.c linux-2.4.16-nwa1/arch/i386/kernel/irq.c
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/irq.c	Tue Nov 13 00:38:52 2001
++++ linux-2.4.16-nwa1/arch/i386/kernel/irq.c	Sat Dec  8 15:36:31 2001
+@@ -45,6 +45,9 @@
+ #include <asm/irq.h>
+ 
+ 
++int probe_on=0;
++int update_8259A_regs(int irq);
++void dump_8259A_status(void);
+ 
+ /*
+  * Linux has a controller-independent x86 interrupt architecture.
+@@ -81,7 +84,7 @@
+  */
+ 
+ static void enable_none(unsigned int irq) { }
+-static unsigned int startup_none(unsigned int irq) { return 0; }
++static unsigned int startup_none(unsigned int irq,unsigned int priority) { return 0; }
+ static void disable_none(unsigned int irq) { }
+ static void ack_none(unsigned int irq)
+ {
+@@ -443,8 +446,12 @@
+ 
+ 	status = 1;	/* Force the "do bottom halves" bit */
+ 
+-	if (!(action->flags & SA_INTERRUPT))
+-		__sti();
++	if (!(action->flags & SA_PRIORITY)){
++		__local_irq_enable();
++		if (!(action->flags & SA_INTERRUPT)){
++			local_irq_enable();
++		}
++	}
+ 
+ 	do {
+ 		status |= action->flags;
+@@ -453,7 +460,8 @@
+ 	} while (action);
+ 	if (status & SA_SAMPLE_RANDOM)
+ 		add_interrupt_randomness(irq);
+-	__cli();
++	local_irq_disable();
++	__local_irq_disable();
+ 
+ 	irq_exit(cpu, irq);
+ 
+@@ -484,12 +492,12 @@
+ 	irq_desc_t *desc = irq_desc + irq;
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&desc->lock, flags);
++	spin_lock_hard_irqsave(&desc->lock, flags);
+ 	if (!desc->depth++) {
+ 		desc->status |= IRQ_DISABLED;
+ 		desc->handler->disable(irq);
+ 	}
+-	spin_unlock_irqrestore(&desc->lock, flags);
++	spin_unlock_hard_irqrestore(&desc->lock, flags);
+ }
+ 
+ /**
+@@ -533,7 +541,7 @@
+ 	irq_desc_t *desc = irq_desc + irq;
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&desc->lock, flags);
++	spin_lock_hard_irqsave(&desc->lock, flags);
+ 	switch (desc->depth) {
+ 	case 1: {
+ 		unsigned int status = desc->status & ~IRQ_DISABLED;
+@@ -549,12 +557,28 @@
+ 		desc->depth--;
+ 		break;
+ 	case 0:
++		spin_unlock_hard_irqrestore(&desc->lock, flags);
+ 		printk("enable_irq(%u) unbalanced from %p\n", irq,
+ 		       __builtin_return_address(0));
++		return;
+ 	}
+-	spin_unlock_irqrestore(&desc->lock, flags);
++	spin_unlock_hard_irqrestore(&desc->lock, flags);
+ }
+ 
++#ifdef CONFIG_PRIORITY_IRQ
++void __rt_schedule(void){}
++void (*rt_scheduler)(void) = &__rt_schedule;
++
++int resend_irq;
++int do_resend_irq;
++#endif
++
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++extern int being_lazy;
++#endif
++
++static void run_pending_srqs(void);
++
+ /*
+  * do_IRQ handles all normal device IRQ's (the special
+  * SMP cross-CPU interrupts have their own specific
+@@ -577,6 +601,53 @@
+ 	irq_desc_t *desc = irq_desc + irq;
+ 	struct irqaction * action;
+ 	unsigned int status;
++	int do_bh = 0;
++#ifdef CONFIG_PRIORITY_IRQ
++	unsigned long flags;
++
++	local_irq_save(flags);
++#endif
++
++//printk("do_IRQ: %d\n",irq);
++
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++	if(do_resend_irq){
++		//printk("do_resend_irq set! old_irq=%d irq=%d\n",resend_irq,irq);
++		//do_resend_irq=0;
++	}
++#endif
++
++#ifdef CONFIG_PRIORITY_IRQ
++	if(flags>0){
++		do_bh = 0;
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++		if(being_lazy){
++			//printk("Ack! caught being lazy irq=%d\n",irq);
++			do_resend_irq = 1;
++			resend_irq = irq;
++			desc = irq_desc + irq;
++			spin_lock(&desc->lock);
++			desc->handler->ack(irq);
++			desc->handler->end(irq);
++			update_8259A_regs(irq);
++			ret = 0;
++			spin_unlock(&desc->lock);
++			goto out2;
++		}
++#endif
++		/*
++		 * Of course, a real-time interrupt will trigger this.
++		 * Remove if you actually want to use RT
++		 */
++		/*      
++		 * Probably a spurious interrupt
++		 */
++		//panic("Ack! interrupt when interrupts soft disabled!\n");
++		//printk("Ack! interrupt when interrupts soft disabled!\n");
++		//dump_8259A_status();
++	}
++#endif
++//if(probe_on)printk("irq=%d\n",irq);
+ 
+ 	kstat.irqs[cpu][irq]++;
+ 	spin_lock(&desc->lock);
+@@ -637,11 +708,111 @@
+ 	desc->handler->end(irq);
+ 	spin_unlock(&desc->lock);
+ 
+-	if (softirq_pending(cpu))
+-		do_softirq();
+-	return 1;
++	if(do_bh){
++#ifdef CONFIG_PRIORITY_IRQ
++		__local_irq_enable();
++#endif
++		run_pending_srqs();
++
++		if (softirq_pending(cpu))
++			do_softirq();
++	}
++
++#ifdef CONFIG_PRIORITY_IRQ
++	local_irq_restore(flags);
++#endif
++	return do_bh;
+ }
+ 
++
++#ifdef CONFIG_PRIORITY_IRQ
++extern spinlock_t i8259A_lock;
++
++unsigned int current_priority;
++
++void local_irq_disable(void)
++{
++	set_irq_priority(1);
++}
++
++void local_irq_enable(void)
++{
++	set_irq_priority(0);
++}
++
++unsigned long local_save_flags_ret(void)
++{
++	return current_priority;
++}
++
++unsigned long local_irq_save_ret(void)
++{
++	return set_irq_priority(1);
++}
++
++void local_irq_restore(unsigned long x)
++{
++	if(x>1){
++		static void *p = NULL;
++		if(!p)p=__builtin_return_address(0);
++		printk("bad flags %08lx called from %p [%p]\n",x,
++			__builtin_return_address(0),p);
++		BUG();
++	}
++	set_irq_priority(x);
++}
++
++void prepare_safe_halt(void)
++{
++	__local_irq_disable();
++	set_irq_priority(0);
++}
++
++static int set_irq_priority_reenter=0;
++
++unsigned int set_irq_priority(unsigned int priority)
++{
++	unsigned long flags;
++	unsigned int old_priority;
++
++//outb(priority^0xff,0x378);
++
++	spin_lock_hard_irqsave(&i8259A_lock,flags);
++	set_irq_priority_reenter++;
++	old_priority = current_priority;
++	set_priority_8259A(priority);
++	current_priority=priority;
++
++#ifdef CONFIG_LAZY_IRQ_DISABLE
++	if(set_irq_priority_reenter==1 && do_resend_irq && priority==0){
++		struct pt_regs regs;
++
++		//printk("resending irq %d status=0x%02x\n",resend_irq,
++		//	irq_desc[resend_irq].status);
++		regs.orig_eax=resend_irq;
++		irq_desc[resend_irq].status |= IRQ_REPLAY;
++
++		spin_unlock(&i8259A_lock);
++		do_IRQ(regs);
++		spin_lock(&i8259A_lock);
++		do_resend_irq=0;
++	}
++#endif
++	set_irq_priority_reenter--;
++	spin_unlock_hard_irqrestore(&i8259A_lock,flags);
++
++	return old_priority;
++}
++
++void dump_irq_status(void)
++{
++	printk("current_priority = %d\n",current_priority);
++	dump_8259A_status();
++
++}
++#endif
++
++
+ /**
+  *	request_irq - allocate an interrupt line
+  *	@irq: Interrupt line to allocate
+@@ -700,6 +871,10 @@
+ 		return -EINVAL;
+ 	if (!handler)
+ 		return -EINVAL;
++#ifndef CONFIG_PRIORITY_IRQ
++	if (irqflags & SA_PRIORITY)
++		return -EINVAL;
++#endif
+ 
+ 	action = (struct irqaction *)
+ 			kmalloc(sizeof(struct irqaction), GFP_KERNEL);
+@@ -747,7 +922,7 @@
+ 		return;
+ 
+ 	desc = irq_desc + irq;
+-	spin_lock_irqsave(&desc->lock,flags);
++	spin_lock_hard_irqsave(&desc->lock,flags);
+ 	p = &desc->action;
+ 	for (;;) {
+ 		struct irqaction * action = *p;
+@@ -763,7 +938,7 @@
+ 				desc->status |= IRQ_DISABLED;
+ 				desc->handler->shutdown(irq);
+ 			}
+-			spin_unlock_irqrestore(&desc->lock,flags);
++			spin_unlock_hard_irqrestore(&desc->lock,flags);
+ 
+ #ifdef CONFIG_SMP
+ 			/* Wait to make sure it's not being used on another CPU */
+@@ -776,7 +951,7 @@
+ 			return;
+ 		}
+ 		printk("Trying to free free IRQ%d\n",irq);
+-		spin_unlock_irqrestore(&desc->lock,flags);
++		spin_unlock_hard_irqrestore(&desc->lock,flags);
+ 		return;
+ 	}
+ }
+@@ -807,6 +982,8 @@
+ 	unsigned long val;
+ 	unsigned long delay;
+ 
++printk("probe on!\n");
++probe_on=1;
+ 	down(&probe_sem);
+ 	/* 
+ 	 * something may have generated an irq long ago and we want to
+@@ -815,16 +992,18 @@
+ 	for (i = NR_IRQS-1; i > 0; i--)  {
+ 		desc = irq_desc + i;
+ 
+-		spin_lock_irq(&desc->lock);
++		spin_lock_hard_irq(&desc->lock);
+ 		if (!irq_desc[i].action) 
+-			irq_desc[i].handler->startup(i);
+-		spin_unlock_irq(&desc->lock);
++			irq_desc[i].handler->startup(i,0);
++		spin_unlock_hard_irq(&desc->lock);
+ 	}
+ 
+ 	/* Wait for longstanding interrupts to trigger. */
+ 	for (delay = jiffies + HZ/50; time_after(delay, jiffies); )
+ 		/* about 20ms delay */ synchronize_irq();
+ 
++printk("synchronized\n");
++
+ 	/*
+ 	 * enable any unassigned irqs
+ 	 * (we must startup again here because if a longstanding irq
+@@ -833,13 +1012,13 @@
+ 	for (i = NR_IRQS-1; i > 0; i--) {
+ 		desc = irq_desc + i;
+ 
+-		spin_lock_irq(&desc->lock);
++		spin_lock_hard_irq(&desc->lock);
+ 		if (!desc->action) {
+ 			desc->status |= IRQ_AUTODETECT | IRQ_WAITING;
+-			if (desc->handler->startup(i))
++			if (desc->handler->startup(i,0))
+ 				desc->status |= IRQ_PENDING;
+ 		}
+-		spin_unlock_irq(&desc->lock);
++		spin_unlock_hard_irq(&desc->lock);
+ 	}
+ 
+ 	/*
+@@ -856,7 +1035,7 @@
+ 		irq_desc_t *desc = irq_desc + i;
+ 		unsigned int status;
+ 
+-		spin_lock_irq(&desc->lock);
++		spin_lock_hard_irq(&desc->lock);
+ 		status = desc->status;
+ 
+ 		if (status & IRQ_AUTODETECT) {
+@@ -868,9 +1047,10 @@
+ 				if (i < 32)
+ 					val |= 1 << i;
+ 		}
+-		spin_unlock_irq(&desc->lock);
++		spin_unlock_hard_irq(&desc->lock);
+ 	}
+ 
++printk("now probing\n");
+ 	return val;
+ }
+ 
+@@ -901,7 +1081,7 @@
+ 		irq_desc_t *desc = irq_desc + i;
+ 		unsigned int status;
+ 
+-		spin_lock_irq(&desc->lock);
++		spin_lock_hard_irq(&desc->lock);
+ 		status = desc->status;
+ 
+ 		if (status & IRQ_AUTODETECT) {
+@@ -911,9 +1091,11 @@
+ 			desc->status = status & ~IRQ_AUTODETECT;
+ 			desc->handler->shutdown(i);
+ 		}
+-		spin_unlock_irq(&desc->lock);
++		spin_unlock_hard_irq(&desc->lock);
+ 	}
+ 	up(&probe_sem);
++printk("probe off\n");
++probe_on = 0;
+ 
+ 	return mask & val;
+ }
+@@ -951,7 +1133,7 @@
+ 		irq_desc_t *desc = irq_desc + i;
+ 		unsigned int status;
+ 
+-		spin_lock_irq(&desc->lock);
++		spin_lock_hard_irq(&desc->lock);
+ 		status = desc->status;
+ 
+ 		if (status & IRQ_AUTODETECT) {
+@@ -963,10 +1145,12 @@
+ 			desc->status = status & ~IRQ_AUTODETECT;
+ 			desc->handler->shutdown(i);
+ 		}
+-		spin_unlock_irq(&desc->lock);
++		spin_unlock_hard_irq(&desc->lock);
+ 	}
+ 	up(&probe_sem);
+ 
++printk("probe off\n");
++probe_on = 0;
+ 	if (nr_irqs > 1)
+ 		irq_found = -irq_found;
+ 	return irq_found;
+@@ -1000,15 +1184,22 @@
+ 	/*
+ 	 * The following block of code has to be executed atomically
+ 	 */
+-	spin_lock_irqsave(&desc->lock,flags);
++	spin_lock_hard_irqsave(&desc->lock,flags);
+ 	p = &desc->action;
+ 	if ((old = *p) != NULL) {
+ 		/* Can't share interrupts unless both agree to */
+ 		if (!(old->flags & new->flags & SA_SHIRQ)) {
+-			spin_unlock_irqrestore(&desc->lock,flags);
++			spin_unlock_hard_irqrestore(&desc->lock,flags);
+ 			return -EBUSY;
+ 		}
+ 
++#ifdef CONFIG_PRIORITY_IRQ
++		/* Can't share interrupt if either is SA_PRIORITY */
++		if ((old->flags | new->flags) & SA_PRIORITY){
++			spin_unlock_hard_irqrestore(&desc->lock,flags);
++			return -EBUSY;
++		}
++#endif
+ 		/* add new interrupt at end of irq queue */
+ 		do {
+ 			p = &old->next;
+@@ -1020,11 +1211,16 @@
+ 	*p = new;
+ 
+ 	if (!shared) {
++		unsigned int priority;
++
++		priority = (new->flags & SA_PRIORITY)?1:0;
++		//priority = 0;
++
+ 		desc->depth = 0;
+ 		desc->status &= ~(IRQ_DISABLED | IRQ_AUTODETECT | IRQ_WAITING);
+-		desc->handler->startup(irq);
++		desc->handler->startup(irq,priority);
+ 	}
+-	spin_unlock_irqrestore(&desc->lock,flags);
++	spin_unlock_hard_irqrestore(&desc->lock,flags);
+ 
+ 	register_irq_proc(irq);
+ 	return 0;
+@@ -1197,4 +1393,109 @@
+ 	for (i = 0; i < NR_IRQS; i++)
+ 		register_irq_proc(i);
+ }
++
++
++
++
++typedef struct rt_irq_state_struct rt_irq_state;
++struct rt_irq_state_struct {
++	rt_irq_state	*pnext;
++	rt_irq_state	*pprev;
++	int		(*action)(int, void *, struct pt_regs *);
++	void		*dev_id;
++	unsigned long	arg;
++};
++
++static rt_irq_state rt_srq_desc[16];
++
++spinlock_t pending_irq_list_lock = SPIN_LOCK_UNLOCKED;
++
++rt_irq_state pending_irq_list = { pnext: &pending_irq_list, pprev: &pending_irq_list };
++
++/* pending irq list control */
++
++static void __pirq_list_remove(rt_irq_state *pirq)
++{
++	pirq->pprev->pnext = pirq->pnext;
++	pirq->pnext->pprev = pirq->pprev;
++	pirq->pnext = NULL;
++	pirq->pprev = NULL;
++}
++
++static void __pirq_list_insert_before(rt_irq_state *pirq,rt_irq_state *list)
++{
++	pirq->pprev = list->pprev;
++	pirq->pnext = list;
++	list->pprev = pirq;
++	pirq->pprev->pnext = pirq;
++}
++
++#ifdef unused
++static void pirq_list_remove(rt_irq_state *pirq)
++{
++	unsigned long flags;
++	rt_spin_lock_irqsave(&pending_irq_list_lock,flags);
++	__pirq_list_remove(pirq);
++	rt_spin_unlock_irqrestore(&pending_irq_list_lock,flags);
++}
++#endif
++
++#ifdef unused
++static void pirq_list_insert_before(rt_irq_state *pirq,rt_irq_state *list)
++{
++	unsigned long flags;
++	rt_spin_lock_irqsave(&pending_irq_list_lock,flags);
++	__pirq_list_insert_before(pirq,list);
++	rt_spin_unlock_irqrestore(&pending_irq_list_lock,flags);
++}
++#endif
++
++
++void __pend_irq(rt_irq_state *pirq)
++{
++	unsigned long flags;
++
++	spin_lock_irqsave(&pending_irq_list_lock,flags);
++
++	if(pirq->pnext){
++		//RT_BUG();
++		printk("pend_irq(): irq already pending\n");
++		return;
++	}
++
++	__pirq_list_insert_before(pirq,&pending_irq_list);
++	//pirq->status = PIRQ_PENDING;
++	spin_unlock_irqrestore(&pending_irq_list_lock,flags);
++}
++
++static void pend_srq(int srq)
++{
++	__pend_irq(rt_srq_desc+srq);
++}
++
++static int run_pending_srq(void)
++{
++	unsigned long flags;
++	rt_irq_state *pirq;
++	struct pt_regs fake_regs;
++
++	spin_lock_irqsave(&pending_irq_list_lock,flags);
++	pirq = pending_irq_list.pnext;
++	if(pirq != &pending_irq_list){
++		__pirq_list_remove(pirq);
++		spin_unlock_irqrestore(&pending_irq_list_lock,flags);
++		pirq->action(0,(void *)pirq->arg,&fake_regs);
++		return 1;
++	}else{
++		spin_unlock_irqrestore(&pending_irq_list_lock,flags);
++		return 0;
++	}
++}
++
++static void run_pending_srqs(void)
++{
++	while(run_pending_srq());
++}
++
++
+ 
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/time.c linux-2.4.16-nwa1/arch/i386/kernel/time.c
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/kernel/time.c	Sat Dec  1 14:02:31 2001
++++ linux-2.4.16-nwa1/arch/i386/kernel/time.c	Sat Dec  8 14:55:08 2001
+@@ -1,3 +1,4 @@
++#define USE_TK
+ /*
+  *  linux/arch/i386/kernel/time.c
+  *
+@@ -63,6 +64,8 @@
+  */
+ #include <linux/irq.h>
+ 
++void timekeeper_init(void);
++void timekeeper_update(void);
+ 
+ unsigned long cpu_khz;	/* Detected as we calibrate the TSC */
+ 
+@@ -259,11 +262,12 @@
+ 
+ #endif
+ 
++#define do_gettimeofday_tk do_gettimeofday
+ /*
+  * This version of gettimeofday has microsecond resolution
+  * and better than microsecond precision on fast x86 machines with TSC.
+  */
+-void do_gettimeofday(struct timeval *tv)
++void do_gettimeofday_old(struct timeval *tv)
+ {
+ 	unsigned long flags;
+ 	unsigned long usec, sec;
+@@ -456,6 +460,8 @@
+ 		outb_p( irq|0x80, 0x61 );	/* reset the IRQ */
+ 	}
+ #endif
++
++	timekeeper_update();
+ }
+ 
+ static int use_tsc;
+@@ -465,6 +471,7 @@
+  * Time Stamp Counter value at the time of the timer interrupt, so that
+  * we later on can estimate the time of day more exactly.
+  */
++#ifdef unused
+ static void timer_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+ {
+ 	int count;
+@@ -512,6 +519,327 @@
+ 	write_unlock(&xtime_lock);
+ 
+ }
++#endif
++
++/* timer list control */
++
++void timer_set_expiry(unsigned long expires);
++
++
++typedef struct rt_timer_s rt_timer;
++struct rt_timer_s{
++	rt_timer *pnext;
++	rt_timer *pprev;
++	unsigned int expires;
++	void (*handler)(rt_timer *);
++	unsigned long arg;
++};
++
++static rt_timer timer_list;
++static spinlock_t timer_list_lock = SPIN_LOCK_UNLOCKED;
++
++static void __timer_list_remove(rt_timer *timer)
++{
++	timer->pprev->pnext = timer->pnext;
++	timer->pnext->pprev = timer->pprev;
++	timer->pnext = NULL;
++	timer->pprev = NULL;
++}
++
++static void __timer_list_insert_before(rt_timer *timer,rt_timer *list)
++{
++	timer->pprev = list->pprev;
++	timer->pnext = list;
++	list->pprev = timer;
++	timer->pprev->pnext = timer;
++}
++
++#ifdef unused
++static void timer_list_remove(rt_timer *timer)
++{
++	unsigned long flags;
++	spin_lock_hard_irqsave(&timer_list_lock,flags);
++	if(timer->pprev==&timer_list){
++		timer_set_expiry(timer->expires);
++	}
++	__timer_list_remove(timer);
++	spin_unlock_hard_irqrestore(&timer_list_lock,flags);
++}
++#endif
++
++#ifdef unused
++static void timer_list_insert_before(rt_timer *timer,rt_timer *list)
++{
++	unsigned long flags;
++	spin_lock_hard_irqsave(&timer_list_lock,flags);
++	__timer_list_insert_before(timer,list);
++	spin_unlock_hard_irqrestore(&timer_list_lock,flags);
++}
++#endif
++
++static void timer_list_add(rt_timer *timer,rt_timer *list)
++{
++	unsigned long flags;
++	rt_timer *t;
++	spin_lock_hard_irqsave(&timer_list_lock,flags);
++	t = list->pnext;
++	while(t!=list && (long)(t->expires-timer->expires)<=0){
++		t=t->pnext;
++	}
++	__timer_list_insert_before(timer,t);
++	if(timer->pprev==list){
++		timer_set_expiry(timer->expires);
++	}
++	spin_unlock_hard_irqrestore(&timer_list_lock,flags);
++}
++
++void timer_add(rt_timer *timer)
++{
++	timer_list_add(timer,&timer_list);
++}
++
++/* decrementer set function */
++
++static int tb_ticks_per_jiffy = 10000000;
++
++static unsigned int tv_to_nsec(struct timeval *tv)
++{
++	unsigned int ret;
++
++	ret = ((unsigned int)tv->tv_sec)*1000000000;
++	ret += tv->tv_usec*1000;
++	return ret;
++}
++
++unsigned int get_tbl(void)
++{
++	struct timeval tv;
++
++	do_gettimeofday(&tv);
++
++	return tv_to_nsec(&tv);
++}
++
++unsigned int xmul(unsigned int a,unsigned int b)
++{
++	unsigned eax,edx;
++	eax = a;
++	__asm__("mull %2"
++		:"=a" (eax), "=d" (edx)
++		:"rm" (b),
++		 "0" (eax));
++	return edx;
++}
++
++static int cached_tick;
++static int updating_timer = 1;
++
++void update_timer(void);
++
++void set_dec(int dec)
++{
++	/* convert nanoseconds to timer units */
++	unsigned int tick = xmul(dec, 5124669); /* 1193180/1e9*2^32 */
++
++	if(tick<1)tick=1;
++	if(tick>0xffff)tick=0xffff;
++
++	cached_tick = tick;
++	if(updating_timer){
++		update_timer();
++	}
++}
++
++void update_timer(void)
++{
++	outb(0x30, 0x43);
++	outb(cached_tick & 0xff, 0x40);
++	outb(cached_tick>>8, 0x40);
++
++	//outb(cached_tick^0xff, 0x378);
++}
++
++void timer_set_expiry(unsigned long expires)
++{
++	long diff = expires - get_tbl();
++
++	if(diff<1)diff=1;
++	if(diff>tb_ticks_per_jiffy){
++		printk("warning: setting decr to %ld\n",diff);
++	}
++
++	set_dec(diff);
++}
++
++/* timer dispatch routines */
++
++static int run_one_timer(void)
++{
++	unsigned long flags;
++	unsigned long time;
++	rt_timer *timer;
++
++	spin_lock_hard_irqsave(&timer_list_lock,flags);
++	timer = timer_list.pnext;
++	if(timer==&timer_list){
++		/* This isn't supposed to happen, but might. */
++		printk("no timers!\n");
++		set_dec(10000000);
++		spin_unlock_hard_irqrestore(&timer_list_lock,flags);
++		return 0;
++		//BUG();
++	}
++	time = get_tbl();
++	if((long)(timer->expires-time)<=0){
++		__timer_list_remove(timer);
++		spin_unlock_hard_irqrestore(&timer_list_lock,flags);
++		timer->handler(timer);
++		return 1;
++	}else{
++		timer_set_expiry(timer->expires);
++		spin_unlock_hard_irqrestore(&timer_list_lock,flags);
++		return 0;
++	}
++}
++
++static void run_timers(void)
++{
++	updating_timer = 0;
++	while(run_one_timer());
++	updating_timer = 1;
++	update_timer();
++}
++
++/* Linux 100 HZ tick emulation */
++
++typedef struct rt_irq_state_struct rt_irq_state;
++struct rt_irq_state_struct {
++        rt_irq_state    *pnext;
++        rt_irq_state    *pprev;
++        int             (*action)(int, void *, struct pt_regs *);
++        void            *dev_id;
++        unsigned long   arg;
++};
++
++static rt_irq_state linux_timer_srq = {
++	action: do_timer_interrupt,
++	arg: 0,
++};
++
++static rt_timer linux_timer;
++static void linux_timer_handler(rt_timer *timer);
++extern void __pend_irq(rt_irq_state *pirq);
++
++static struct timeval linux_time;
++
++static void linux_timer_init(void)
++{
++	do_gettimeofday(&linux_time);
++	linux_timer.handler = linux_timer_handler;
++
++	linux_time.tv_usec += 10000;
++	if(linux_time.tv_usec>=1000000){
++		linux_time.tv_usec -= 1000000;
++		linux_time.tv_sec++;
++	}
++	linux_timer.expires = tv_to_nsec(&linux_time);
++
++	timer_list_add(&linux_timer,&timer_list);
++}
++
++
++static void linux_timer_handler(rt_timer *timer)
++{
++	struct timeval tv;
++	int lat;
++	static int latency = 0;
++	static int i = 0;
++
++	do_gettimeofday(&tv);
++
++	lat = tv.tv_usec - linux_time.tv_usec;
++	lat += (tv.tv_sec - linux_time.tv_sec)*1000000;
++
++	if(lat>=1000000){
++		/* hmmm... probably slewed time -- reset */
++		linux_time = tv;
++	}else{
++		if(latency<lat) latency=lat;
++	}
++
++	linux_time.tv_usec += 10000;
++	if(linux_time.tv_usec>=1000000){
++		linux_time.tv_usec -= 1000000;
++		linux_time.tv_sec++;
++	}
++	i++;
++	if(i==100){
++		printk("latency %d\n",latency);
++		latency=0;
++		i=0;
++	}
++
++	linux_timer.expires = tv_to_nsec(&linux_time);
++	timer_list_add(&linux_timer,&timer_list);
++
++	__pend_irq(&linux_timer_srq);
++}
++
++
++static rt_timer onesec_timer;
++static void onesec_timer_handler(rt_timer *timer);
++static int latency;
++
++static void onesec_timer_init(void)
++{
++	struct timeval tv;
++	do_gettimeofday(&tv);
++	onesec_timer.handler = onesec_timer_handler;
++	tv.tv_sec++;
++	tv.tv_usec=0;
++	onesec_timer.expires = tv_to_nsec(&tv);
++	timer_list_add(&onesec_timer,&timer_list);
++}
++
++static int sec;
++static int oldsec;
++static int usec;
++static void onesec_timer_handler(rt_timer *timer)
++{
++	struct timeval tv;
++	int lat;
++	do_gettimeofday(&tv);
++
++	lat = tv.tv_usec - usec;
++	lat += (tv.tv_sec - sec)*1000000;
++	if(latency<lat) latency=lat;
++
++	if(oldsec!=tv.tv_sec){
++		printk("onesec: %d\n",latency);
++		sec = oldsec = tv.tv_sec;
++		usec = (tv.tv_usec/1000)*1000;
++		latency = 0;
++	}
++
++	usec += 1000;
++	if(usec>=1000000){
++		usec -= 1000000;
++		sec++;
++	}
++	tv.tv_sec = sec;
++	tv.tv_usec = usec;
++	onesec_timer.expires = tv_to_nsec(&tv);
++
++	timer_list_add(&onesec_timer,&timer_list);
++}
++
++
++
++static void timer_interrupt(int irq, void *dev_id, struct pt_regs *regs)
++{
++	run_timers();
++}
++
+ 
+ /* not static: needed by APM */
+ unsigned long get_cmos_time(void)
+@@ -555,7 +883,8 @@
+ 	return mktime(year, mon, day, hour, min, sec);
+ }
+ 
+-static struct irqaction irq0  = { timer_interrupt, SA_INTERRUPT, 0, "timer", NULL, NULL};
++static struct irqaction irq0  = { timer_interrupt, SA_INTERRUPT|SA_PRIORITY, 0, "timer", NULL, NULL};
++//static struct irqaction irq0  = { timer_interrupt, SA_INTERRUPT, 0, "timer", NULL, NULL};
+ 
+ /* ------ Calibrate the TSC ------- 
+  * Return 2^32 * (1 / (TSC clocks per usec)) for do_fast_gettimeoffset().
+@@ -714,4 +1043,413 @@
+ #else
+ 	setup_irq(0, &irq0);
+ #endif
++
++	timekeeper_init();
++
++	timer_list.pnext = &timer_list;
++	timer_list.pprev = &timer_list;
++
++	linux_timer_init();
+ }
++
++
++
++#ifdef USE_TK
++
++typedef struct timekeeper_struct timekeeper_t;
++
++struct timekeeper_struct {
++	struct timeval xtime;
++	unsigned int fraction;
++	unsigned long xcount;
++
++	unsigned long multiplier;
++	unsigned long latch;
++
++	void (*get_fasttime)(timekeeper_t *tk,struct timeval *tv);
++	void (*get_slowtime)(timekeeper_t *tk,struct timeval *tv);
++	void (*update)(timekeeper_t *tk);
++};
++
++struct tk_node{
++	unsigned long index;
++	unsigned long begin_count;
++	unsigned long end_count;
++	unsigned long multiplier;
++};
++
++struct tk_timer{
++	unsigned long current_index;
++	int n_nodes;
++};
++
++struct tk_timer tk_default_timer;
++struct tk_node tk_nodes[4];
++
++void tsc_get_time(timekeeper_t *tk,struct timeval *tv);
++void tsc_update(timekeeper_t *tk);
++
++timekeeper_t tk_tsc = {
++	get_fasttime:	tsc_get_time,
++	get_slowtime:	tsc_get_time,
++	update:		tsc_update,
++};
++
++void tsc_get_time(timekeeper_t *tk,struct timeval *tv)
++{
++	unsigned int count;
++	long long x;
++
++	/* Read the Time Stamp Counter */
++
++	rdtscl(count);
++
++	/* .. relative to previous jiffy (32 bits is enough) */
++	count -= tk->xcount;
++
++	x = count;
++	x *= tk->multiplier;
++	x += tk->fraction;
++
++	*tv = tk_tsc.xtime;
++	tv->tv_usec += x>>32;
++
++	if(tv->tv_usec >= 1000000){
++		tv->tv_usec -= 1000000;
++		tv->tv_sec++;
++	}
++}
++
++void tsc_update(timekeeper_t *tk)
++{
++	unsigned int count;
++	struct timeval new_xtime;
++	unsigned int new_xcount;
++	long long x;
++
++	/* Read the Time Stamp Counter */
++
++	rdtscl(count);
++	new_xcount=count;
++
++	/* .. relative to previous jiffy (32 bits is enough) */
++	count -= tk->xcount;
++
++	x = count;
++	x *= tk->multiplier;
++	x += tk->fraction;
++
++	new_xtime = tk_tsc.xtime;
++	new_xtime.tv_usec += x>>32;
++	tk->fraction = x&0xffffffffLL;
++
++	if(new_xtime.tv_usec >= 1000000){
++		new_xtime.tv_usec -= 1000000;
++		new_xtime.tv_sec++;
++	}
++	tk->xtime = new_xtime;
++	tk->xcount = new_xcount;
++}
++
++void tsc_setup(void)
++{
++	tk_tsc.xtime = xtime;
++	tk_tsc.fraction = 0;
++	rdtscl(tk_tsc.xcount);
++	//tk_tsc.multiplier = 10737418; /* 1e6/400Mhz*2^32 */
++	tk_tsc.multiplier = fast_gettimeoffset_quotient;
++
++	printk("tsc_setup: multiplier=%ld\n",tk_tsc.multiplier);
++}
++
++
++/* 8253 timer */
++
++void i8253_get_fasttime(timekeeper_t *tk,struct timeval *tv);
++void i8253_get_slowtime(timekeeper_t *tk,struct timeval *tv);
++void i8253_update(timekeeper_t *tk);
++
++timekeeper_t tk_i8253 = {
++	get_fasttime:	i8253_get_fasttime,
++	get_slowtime:	i8253_get_slowtime,
++	update:		i8253_update,
++};
++
++static inline unsigned int i8253_get_counter(void)
++{
++	unsigned int count;
++
++	outb_p(0x00, 0x43);	/* latch the count ASAP */
++
++	count = inb_p(0x40);	/* read the latched count */
++	count |= inb_p(0x40)<<8;
++	count = LATCH-count;
++
++	return count;
++}
++
++void i8253_get_fasttime(timekeeper_t *tk,struct timeval *tv)
++{
++	*tv = tk->xtime;
++}
++
++void i8253_get_slowtime(timekeeper_t *tk,struct timeval *tv)
++{
++	unsigned int count;
++
++	/* get counter */
++	count = i8253_get_counter();
++
++	/* handle overflows */
++	if(count<tk->xcount){
++		count+=LATCH;
++	}
++	count -= tk->xcount;
++
++	/* convert to usec */
++	*tv = tk->xtime;
++	tv->tv_usec += count * tk->multiplier;
++	if(tv->tv_usec >= 1000000){
++		tv->tv_usec -= 1000000;
++		tv->tv_sec++;
++	}
++}
++
++void i8253_update(timekeeper_t *tk)
++{
++	unsigned int new_xcount;
++	struct timeval new_xtime;
++	unsigned int count;
++
++	count = i8253_get_counter();
++	new_xcount = count;
++
++	/* handle overflow */
++	if(count<tk->xcount){
++		count+=LATCH;
++	}
++	count -= tk->xcount;
++	
++	/* convert to usec */
++	new_xtime = tk->xtime;
++	new_xtime.tv_usec += count * tk->multiplier;
++	if(new_xtime.tv_usec >= 1000000){
++		new_xtime.tv_usec -= 1000000;
++		new_xtime.tv_sec++;
++	}
++
++	tk->xtime = new_xtime;
++	tk->xcount = new_xcount;
++}
++
++void i8253_setup(void)
++{
++	tk_i8253.multiplier = 54925; /* 1e6/CLOCK_TICK_RATE*65536 */
++
++	printk("i8253_setup: multiplier=%ld\n",tk_i8253.multiplier);
++
++}
++
++/* 8253-2 timer */
++
++void i8253_2_get_fasttime(timekeeper_t *tk,struct timeval *tv);
++void i8253_2_get_slowtime(timekeeper_t *tk,struct timeval *tv);
++void i8253_2_update(timekeeper_t *tk);
++
++timekeeper_t tk_i8253_2 = {
++	get_fasttime:	i8253_2_get_fasttime,
++	get_slowtime:	i8253_2_get_slowtime,
++	update:		i8253_2_update,
++};
++
++#define LATCH2 65536
++
++static inline unsigned int i8253_2_get_counter(void)
++{
++	unsigned int count;
++
++	outb_p(0x80, 0x43);	/* latch the count ASAP */
++
++	count = inb_p(0x42);	/* read the latched count */
++	count |= inb_p(0x42)<<8;
++	count = LATCH2-count;
++
++	return count;
++}
++
++void i8253_2_get_fasttime(timekeeper_t *tk,struct timeval *tv)
++{
++	*tv = tk->xtime;
++}
++
++void i8253_2_get_slowtime(timekeeper_t *tk,struct timeval *tv)
++{
++	unsigned int count;
++
++	/* get counter */
++	count = i8253_2_get_counter();
++
++	/* handle overflows */
++	if(count<tk->xcount){
++		count+=LATCH2;
++	}
++	count -= tk->xcount;
++
++	/* convert to usec */
++	*tv = tk->xtime;
++	count *= tk->multiplier;
++
++	count += tk->fraction;
++	tv->tv_usec += count>>16;
++	if(tv->tv_usec >= 1000000){
++		tv->tv_usec -= 1000000;
++		tv->tv_sec++;
++	}
++}
++
++void i8253_2_update(timekeeper_t *tk)
++{
++	unsigned int new_xcount;
++	struct timeval new_xtime;
++	unsigned int count;
++
++	count = i8253_2_get_counter();
++	new_xcount = count;
++
++	/* handle overflow */
++	if(count<tk->xcount){
++		count+=LATCH2;
++	}
++	count -= tk->xcount;
++	
++	/* convert to usec */
++	new_xtime = tk->xtime;
++	count *= tk->multiplier;
++
++	count += tk->fraction;
++	new_xtime.tv_usec += count>>16;
++	tk->fraction = (count&0xffff);
++	if(new_xtime.tv_usec >= 1000000){
++		new_xtime.tv_usec -= 1000000;
++		new_xtime.tv_sec++;
++	}
++
++	tk->xtime = new_xtime;
++	tk->xcount = new_xcount;
++}
++
++void i8253_2_setup(void)
++{
++	tk_i8253_2.multiplier = 54925; /* 1e6/CLOCK_TICK_RATE*65536 */
++	tk_i8253_2.xtime = xtime;
++	tk_i8253_2.fraction = 0;
++
++	printk("i8253_2_setup: multiplier=%ld\n",tk_i8253.multiplier);
++
++	//outb_p(inb_p(0x61)|3, 0x61);
++
++	outb_p(0xb0,0x43);
++	outb_p(0,0x42);
++	outb_p(0,0x42);
++
++	//i8253_2_update(&tk_i8253_2);
++
++}
++
++/* cmos timer */
++
++void cmos_get_fasttime(timekeeper_t *tk,struct timeval *tv);
++void cmos_get_slowtime(timekeeper_t *tk,struct timeval *tv);
++void cmos_update(timekeeper_t *tk);
++
++timekeeper_t tk_cmos = {
++	get_fasttime:	cmos_get_fasttime,
++	get_slowtime:	cmos_get_slowtime,
++	update:		cmos_update,
++};
++
++void cmos_get_fasttime(timekeeper_t *tk,struct timeval *tv)
++{
++	*tv = tk->xtime;
++}
++
++void cmos_get_slowtime(timekeeper_t *tk,struct timeval *tv)
++{
++	tk->xtime.tv_sec = get_cmos_time();
++	tk->xtime.tv_usec = 0;
++
++	*tv = tk->xtime;
++}
++
++void cmos_update(timekeeper_t *tk)
++{
++	tk->xtime.tv_sec = get_cmos_time();
++	tk->xtime.tv_usec = 0;
++}
++
++/* generic setup */
++
++void timekeeper_init(void)
++{
++	printk("timekeeper_init: cpu_khz=%ld\n",cpu_khz);
++
++	//i8253_setup();
++	i8253_2_setup();
++	tsc_setup();
++
++}
++
++void timekeeper_update(void)
++{
++#if 0
++	static int dumb_ctr = 0;
++	static int dc2 = 0;
++#endif
++
++	i8253_2_update(&tk_i8253_2);
++	tsc_update(&tk_tsc);
++
++#if 0
++	if(dc2<1000){
++		dumb_ctr++;
++		if(dumb_ctr>=HZ*10){
++			struct timeval t1,t2;
++	
++			do_gettimeofday(&t1);
++			//i8253_2_get_slowtime(&tk_i8253_2,&t2);
++			tsc_get_time(&tk_tsc,&t2);
++	
++			printk("%ld.%06ld %ld.%06ld\n",
++				t1.tv_sec,t1.tv_usec,
++				t2.tv_sec,t2.tv_usec);
++	
++			dumb_ctr=0;
++			dc2++;
++		}
++	}
++#endif
++}
++
++void do_gettimeofday_tk(struct timeval *tv)
++{
++	tsc_get_time(&tk_tsc,tv);
++}
++
++#endif
++
++
++
++void fc_handler(int irq, void *arg, struct pt_regs *regs)
++{
++	printk("ack\n");
++}
++
++void __init fc_init(void)
++{
++	printk("fc_init\n");
++	request_irq(7,fc_handler,SA_PRIORITY,"fc",&fc_init);
++	outb(0x10,0x378 + 2);
++}
++
++//__initcall(fc_init);
++//__initcall(onesec_timer_init);
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/mm/fault.c linux-2.4.16-nwa1/arch/i386/mm/fault.c
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/arch/i386/mm/fault.c	Tue Nov 13 00:36:23 2001
++++ linux-2.4.16-nwa1/arch/i386/mm/fault.c	Sat Dec  8 13:49:48 2001
+@@ -161,8 +161,9 @@
+ 	__asm__("movl %%cr2,%0":"=r" (address));
+ 
+ 	/* It's safe to allow irq's after cr2 has been saved */
+-	if (regs->eflags & X86_EFLAGS_IF)
+-		local_irq_enable();
++	if (regs->eflags & X86_EFLAGS_IF){
++		__local_irq_enable();
++	}
+ 
+ 	tsk = current;
+ 
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/drivers/char/vt.c linux-2.4.16-nwa1/drivers/char/vt.c
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/drivers/char/vt.c	Sat Dec  1 14:02:35 2001
++++ linux-2.4.16-nwa1/drivers/char/vt.c	Sat Dec  8 03:15:26 2001
+@@ -90,10 +90,11 @@
+  * comments - KDMKTONE doesn't put the process to sleep.
+  */
+ 
+-#if defined(__i386__) || defined(__alpha__) || defined(__powerpc__) \
+-    || (defined(__mips__) && defined(CONFIG_ISA)) \
+-    || (defined(__arm__) && defined(CONFIG_HOST_FOOTBRIDGE)) \
+-    || defined(__x86_64__)
++//#if defined(__i386__) || defined(__alpha__) || defined(__powerpc__) \
++//    || (defined(__mips__) && defined(CONFIG_ISA)) \
++//    || (defined(__arm__) && defined(CONFIG_HOST_FOOTBRIDGE)) \
++//    || defined(__x86_64__)
++#if 0
+ 
+ static void
+ kd_nosound(unsigned long ignored)
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/apicdef.h linux-2.4.16-nwa1/include/asm-i386/apicdef.h
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/apicdef.h	Mon Aug 27 05:09:01 2001
++++ linux-2.4.16-nwa1/include/asm-i386/apicdef.h	Sat Dec  8 02:11:06 2001
+@@ -30,7 +30,11 @@
+ #define			APIC_LDR_MASK		(0xFF<<24)
+ #define			GET_APIC_LOGICAL_ID(x)	(((x)>>24)&0xFF)
+ #define			SET_APIC_LOGICAL_ID(x)	(((x)<<24))
++#ifdef CONFIG_APIC_DUAL_DEST
++#define			APIC_ALL_CPUS		0x0F
++#else
+ #define			APIC_ALL_CPUS		0xFF
++#endif
+ #define		APIC_DFR	0xE0
+ #define		APIC_SPIV	0xF0
+ #define			APIC_SPIV_FOCUS_DISABLED	(1<<9)
+@@ -104,6 +108,19 @@
+ #define			APIC_TDR_DIV_32		0x8
+ #define			APIC_TDR_DIV_64		0x9
+ #define			APIC_TDR_DIV_128	0xA
++
++#ifdef CONFIG_APIC_DUAL_DEST
++#define APIC_DEST_ID_FULL(x)	(0x11<<(x))
++#define APIC_DEST_ID(x)		(0x01<<(x))
++#define APIC_DEST_ID_RT(x)	(0x10<<(x))
++#define APIC_LDR_MASK_NONRT	(0x0f<<24)
++#define APIC_LDR_MASK_RT	(0xf0<<24)
++#else
++#define APIC_DEST_ID_FULL(x)	(0x01<<(x))
++#define APIC_DEST_ID(x)		(0x01<<(x))
++#define APIC_LDR_MASK_NONRT	(0xff<<24)
++#define APIC_LDR_MASK_RT	(0x00<<24)
++#endif
+ 
+ #define APIC_BASE (fix_to_virt(FIX_APIC_BASE))
+ 
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/hw_irq.h linux-2.4.16-nwa1/include/asm-i386/hw_irq.h
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/hw_irq.h	Mon Oct  1 10:00:47 2001
++++ linux-2.4.16-nwa1/include/asm-i386/hw_irq.h	Sat Dec  8 02:11:06 2001
+@@ -74,6 +74,7 @@
+ extern void enable_8259A_irq(unsigned int irq);
+ extern int i8259A_irq_pending(unsigned int irq);
+ extern void make_8259A_irq(unsigned int irq);
++extern void set_priority_8259A(unsigned int priority);
+ extern void init_8259A(int aeoi);
+ extern void FASTCALL(send_IPI_self(int vector));
+ extern void init_VISWS_APIC_irqs(void);
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/signal.h linux-2.4.16-nwa1/include/asm-i386/signal.h
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/signal.h	Sun Aug 12 14:32:49 2001
++++ linux-2.4.16-nwa1/include/asm-i386/signal.h	Sat Dec  8 02:11:06 2001
+@@ -115,10 +115,12 @@
+  *
+  * SA_INTERRUPT is also used by the irq handling routines.
+  * SA_SHIRQ is for shared interrupt support on PCI and EISA.
++ * SA_PRIORITY is for real-time interrupts
+  */
+ #define SA_PROBE		SA_ONESHOT
+ #define SA_SAMPLE_RANDOM	SA_RESTART
+ #define SA_SHIRQ		0x04000000
++#define SA_PRIORITY		0x08000000
+ #endif
+ 
+ #define SIG_BLOCK          0	/* for blocking signals */
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/system.h linux-2.4.16-nwa1/include/asm-i386/system.h
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/include/asm-i386/system.h	Sat Dec  1 14:02:56 2001
++++ linux-2.4.16-nwa1/include/asm-i386/system.h	Sat Dec  8 02:11:06 2001
+@@ -309,19 +309,50 @@
+ #define set_mb(var, value) do { xchg(&var, value); } while (0)
+ #define set_wmb(var, value) do { var = value; wmb(); } while (0)
+ 
++/* real interrupt control.. */
++#define __local_irq_save(x)	__asm__ __volatile__("pushfl ; popl %0 ; cli":"=g" (x): /* no input */ :"memory")
++#define __local_save_flags(x)	__asm__ __volatile__("pushfl ; popl %0":"=g" (x): /* no input */)
++#define __local_irq_restore(x) 	__asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory", "cc")
++#define __local_irq_disable()	__asm__ __volatile__("cli": : :"memory")
++#define __local_irq_enable()	__asm__ __volatile__("sti": : :"memory")
++#define __safe_halt()		__asm__ __volatile__("sti; hlt": : :"memory")
++
++#ifndef CONFIG_PRIORITY_IRQ
++
+ /* interrupt control.. */
+-#define __save_flags(x)		__asm__ __volatile__("pushfl ; popl %0":"=g" (x): /* no input */)
+-#define __restore_flags(x) 	__asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory", "cc")
+-#define __cli() 		__asm__ __volatile__("cli": : :"memory")
+-#define __sti()			__asm__ __volatile__("sti": : :"memory")
++#define __save_flags(x)		__local_save_flags(x)
++#define __restore_flags(x) 	__local_irq_restore(x)
++#define __cli() 		__local_irq_disable()
++#define __sti()			__local_irq_enable()
+ /* used in the idle loop; sti takes one instruction cycle to complete */
+-#define safe_halt()		__asm__ __volatile__("sti; hlt": : :"memory")
++#define safe_halt()		__safe_halt()
+ 
+ /* For spinlocks etc */
+-#define local_irq_save(x)	__asm__ __volatile__("pushfl ; popl %0 ; cli":"=g" (x): /* no input */ :"memory")
+-#define local_irq_restore(x)	__restore_flags(x)
+-#define local_irq_disable()	__cli()
+-#define local_irq_enable()	__sti()
++#define local_irq_save(x)	__local_irq_save(x)
++#define local_irq_restore(x)	__local_irq_restore(x)
++#define local_irq_disable()	__local_irq_disable()
++#define local_irq_enable()	__local_irq_enable()
++
++#else
++
++void local_irq_disable(void);
++void local_irq_enable(void);
++unsigned long local_irq_save_ret(void);
++#define local_irq_save(x)	((x)=local_irq_save_ret())
++unsigned long local_save_flags_ret(void);
++#define local_save_flags(x)	((x)=local_save_flags_ret())
++void local_irq_restore(unsigned long flags);
++
++#define __cli()			local_irq_disable()
++#define __sti()			local_irq_enable()
++#define __save_flags(x)		local_save_flags(x)
++#define __restore_flags(x)	local_irq_restore(x)
++
++void prepare_safe_halt(void);
++/* used in the idle loop; sti takes one instruction cycle to complete */
++#define safe_halt()		do{ prepare_safe_halt(); __safe_halt();}while(0)
++
++#endif
+ 
+ #ifdef CONFIG_SMP
+ 
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/include/linux/irq.h linux-2.4.16-nwa1/include/linux/irq.h
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/include/linux/irq.h	Mon Oct  1 10:00:52 2001
++++ linux-2.4.16-nwa1/include/linux/irq.h	Sat Dec  8 02:11:06 2001
+@@ -21,6 +21,8 @@
+ 
+ /*
+  * IRQ line status.
++ *
++ * IRQ_PRIORITY is here because we only need one bit.
+  */
+ #define IRQ_INPROGRESS	1	/* IRQ handler active - do not enter! */
+ #define IRQ_DISABLED	2	/* IRQ disabled - do not enter! */
+@@ -31,14 +33,22 @@
+ #define IRQ_LEVEL	64	/* IRQ level triggered */
+ #define IRQ_MASKED	128	/* IRQ masked - shouldn't be seen again */
+ #define IRQ_PER_CPU	256	/* IRQ is per CPU */
++#define IRQ_PRIORITY	512
+ 
++#ifdef CONFIG_PRIORITY_IRQ
++extern unsigned int current_priority;
++unsigned int set_irq_priority(unsigned int priority);
++extern void (*rt_scheduler)(void);
++#else
++#define current_priority 0
++#endif
+ /*
+  * Interrupt controller descriptor. This is all we need
+  * to describe about the low-level hardware. 
+  */
+ struct hw_interrupt_type {
+ 	const char * typename;
+-	unsigned int (*startup)(unsigned int irq);
++	unsigned int (*startup)(unsigned int irq,unsigned int priority);
+ 	void (*shutdown)(unsigned int irq);
+ 	void (*enable)(unsigned int irq);
+ 	void (*disable)(unsigned int irq);
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/include/linux/spinlock.h linux-2.4.16-nwa1/include/linux/spinlock.h
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/include/linux/spinlock.h	Tue Nov 13 00:38:43 2001
++++ linux-2.4.16-nwa1/include/linux/spinlock.h	Sat Dec  8 02:11:06 2001
+@@ -7,6 +7,11 @@
+  * These are the generic versions of the spinlocks and read-write
+  * locks..
+  */
++#define spin_lock_hard_irqsave(lock, flags)	do { __local_irq_save(flags);     spin_lock(lock); } while (0)
++#define spin_lock_hard_irq(lock)		do { __local_irq_disable();       spin_lock(lock); } while (0)
++#define spin_unlock_hard_irqrestore(lock, flags) do { spin_unlock(lock);  __local_irq_restore(flags); } while (0)
++#define spin_unlock_hard_irq(lock)		do { spin_unlock(lock);  __local_irq_enable();       } while (0)
++
+ #define spin_lock_irqsave(lock, flags)		do { local_irq_save(flags);       spin_lock(lock); } while (0)
+ #define spin_lock_irq(lock)			do { local_irq_disable();         spin_lock(lock); } while (0)
+ #define spin_lock_bh(lock)			do { local_bh_disable();          spin_lock(lock); } while (0)
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/init/main.c linux-2.4.16-nwa1/init/main.c
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/init/main.c	Sat Dec  1 14:02:59 2001
++++ linux-2.4.16-nwa1/init/main.c	Sat Dec  8 02:11:06 2001
+@@ -579,6 +579,9 @@
+ 	}
+ 
+ 	kmem_cache_init();
++#ifdef CONFIG_PRIORITY_IRQ
++	__local_irq_enable();
++#endif
+ 	sti();
+ 	calibrate_delay();
+ #ifdef CONFIG_BLK_DEV_INITRD
+Binary files /home/ds/autobuild/cache/linux/linux-2.4.16/kernel_image-2.4.16-nwa.tgz and linux-2.4.16-nwa1/kernel_image-2.4.16-nwa.tgz differ
+diff -X /home/ds/.dontdiff -urN /home/ds/autobuild/cache/linux/linux-2.4.16/xxx linux-2.4.16-nwa1/xxx
+--- /home/ds/autobuild/cache/linux/linux-2.4.16/xxx	Wed Dec 31 16:00:00 1969
++++ linux-2.4.16-nwa1/xxx	Sat Dec  8 14:00:29 2001
+@@ -0,0 +1,144 @@
++Disassembly of section .text:
++c0100060:	9d                   	popf   
++c0100060:	9d                   	popf   
++c01000b9:	9c                   	pushf  
++c01000b9:	9c                   	pushf  
++c01000c3:	9d                   	popf   
++c01000c3:	9d                   	popf   
++c01000c4:	9c                   	pushf  
++c01000c4:	9c                   	pushf  
++c01000e1:	9d                   	popf   
++c01000e1:	9d                   	popf   
++c01000e2:	9c                   	pushf  
++c01000e2:	9c                   	pushf  
++c01000e7:	9d                   	popf   
++c01000e7:	9d                   	popf   
++c0100149:	9d                   	popf   
++c0100149:	9d                   	popf   
++c010517a:	fb                   	sti    
++c010517a:	fb                   	sti    
++c0106b00:	9c                   	pushf  
++c0106b00:	9c                   	pushf  
++c0106b4c:	9c                   	pushf  
++c0106b4c:	9c                   	pushf  
++c0106bf0:	fa                   	cli    
++c0106bf0:	fa                   	cli    
++c0106c10:	fb                   	sti    
++c0106c10:	fb                   	sti    
++c0107df1:	fb                   	sti    
++c0107df1:	fb                   	sti    
++c0107e2d:	fa                   	cli    
++c0107e2d:	fa                   	cli    
++c0107e47:	9c                   	pushf  
++c0107e47:	9c                   	pushf  
++c0107e49:	fa                   	cli    
++c0107e49:	fa                   	cli    
++c0107e74:	9d                   	popf   
++c0107e74:	9d                   	popf   
++c0107ea2:	9c                   	pushf  
++c0107ea2:	9c                   	pushf  
++c0107ea4:	fa                   	cli    
++c0107ea4:	fa                   	cli    
++c0107ef1:	9d                   	popf   
++c0107ef1:	9d                   	popf   
++c0107f08:	9d                   	popf   
++c0107f08:	9d                   	popf   
++c0107fb5:	fb                   	sti    
++c0107fb5:	fb                   	sti    
++c010807c:	fa                   	cli    
++c010807c:	fa                   	cli    
++c010808f:	9c                   	pushf  
++c010808f:	9c                   	pushf  
++c0108091:	fa                   	cli    
++c0108091:	fa                   	cli    
++c01080b4:	9d                   	popf   
++c01080b4:	9d                   	popf   
++c01081a3:	9c                   	pushf  
++c01081a3:	9c                   	pushf  
++c01081a5:	fa                   	cli    
++c01081a5:	fa                   	cli    
++c01081db:	9d                   	popf   
++c01081db:	9d                   	popf   
++c01081f6:	9d                   	popf   
++c01081f6:	9d                   	popf   
++c0108240:	fa                   	cli    
++c0108240:	fa                   	cli    
++c0108256:	fb                   	sti    
++c0108256:	fb                   	sti    
++c0108290:	fa                   	cli    
++c0108290:	fa                   	cli    
++c01082b0:	fb                   	sti    
++c01082b0:	fb                   	sti    
++c01082d3:	fa                   	cli    
++c01082d3:	fa                   	cli    
++c0108300:	fb                   	sti    
++c0108300:	fb                   	sti    
++c0108330:	fa                   	cli    
++c0108330:	fa                   	cli    
++c0108361:	fb                   	sti    
++c0108361:	fb                   	sti    
++c01083b0:	fa                   	cli    
++c01083b0:	fa                   	cli    
++c01083d1:	fb                   	sti    
++c01083d1:	fb                   	sti    
++c0108442:	9c                   	pushf  
++c0108442:	9c                   	pushf  
++c0108444:	fa                   	cli    
++c0108444:	fa                   	cli    
++c0108461:	9d                   	popf   
++c0108461:	9d                   	popf   
++c010847b:	9d                   	popf   
++c010847b:	9d                   	popf   
++c01084bd:	9d                   	popf   
++c01084bd:	9d                   	popf   
++c010879f:	9c                   	pushf  
++c010879f:	9c                   	pushf  
++c01087a1:	fa                   	cli    
++c01087a1:	fa                   	cli    
++c01087d1:	9d                   	popf   
++c01087d1:	9d                   	popf   
++c010ac4b:	9c                   	pushf  
++c010ac4b:	9c                   	pushf  
++c010ac4d:	fa                   	cli    
++c010ac4d:	fa                   	cli    
++c010ac8b:	9d                   	popf   
++c010ac8b:	9d                   	popf   
++c010ad82:	9c                   	pushf  
++c010ad82:	9c                   	pushf  
++c010ad84:	fa                   	cli    
++c010ad84:	fa                   	cli    
++c010adab:	9d                   	popf   
++c010adab:	9d                   	popf   
++c010adcc:	9d                   	popf   
++c010adcc:	9d                   	popf   
++c010adea:	9d                   	popf   
++c010adea:	9d                   	popf   
++c0111e22:	fb                   	sti    
++c0111e22:	fb                   	sti    
++Disassembly of section .text.init:
++c02747a5:	fb                   	sti    
++c02747a5:	fb                   	sti    
++c0276a34:	9c                   	pushf  
++c0276a34:	9c                   	pushf  
++c0276a35:	9c                   	pushf  
++c0276a35:	9c                   	pushf  
++c0276a40:	9d                   	popf   
++c0276a40:	9d                   	popf   
++c0276a41:	9c                   	pushf  
++c0276a41:	9c                   	pushf  
++c0276a43:	9d                   	popf   
++c0276a43:	9d                   	popf   
++c0276a5a:	9c                   	pushf  
++c0276a5a:	9c                   	pushf  
++c0276a5b:	9c                   	pushf  
++c0276a5b:	9c                   	pushf  
++c0276a65:	9d                   	popf   
++c0276a65:	9d                   	popf   
++c0276a66:	9c                   	pushf  
++c0276a66:	9c                   	pushf  
++c0276a68:	9d                   	popf   
++c0276a68:	9d                   	popf   
++c0276f68:	9c                   	pushf  
++c0276f68:	9c                   	pushf  
++c0276f70:	9d                   	popf   
++c0276f70:	9d                   	popf   

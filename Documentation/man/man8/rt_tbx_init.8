@@ -1,0 +1,32 @@
+.TH RT_TBX_INIT 8 "January 2001" RTAI "Typed Mailbox Functions"
+.SH NAME
+rt_tbx_init \- initializes a typed mailbox
+.SH SYNOPSIS
+.B #include <rtai_sched.h>
+.sp
+.BI "int rt_tbx_init(TBX " *tbx ", int " size ", int " flags ");"
+.SH DESCRIPTION
+.B rt_tbx_init
+initializes a typed mailbox of size 
+.I size.
+.I tbx
+has to point to a statically allocated structure. 
+.I flags 
+it must be set to PRIO_Q for priority order or FIFO_Q for FIFO order.
+
+.PP
+Typed mailboxes are a more powerful (but also heavier) alternative to standard
+mailboxes MBX. Typed mailboxes permits message broadcasting with
+.I rt_tbx_broadcast  
+and urgent messages delivering with
+.I rt_tbx_urgent  
+Moreover it is possible to specify the desired queuing order when creating them.
+While entering TBX sizes please take in count that, when a message is written in a TBX, 
+a 1-byte type field is appended to it.
+.SH RETURN VALUES
+On success 0 is returned. On failure a negative value is returned as described below.
+.SH ERRORS
+.B -EINVAL
+Space could not be allocated for the mailbox buffer.
+.SH SEE ALSO
+.B rt_mbx_init

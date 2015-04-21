@@ -1,0 +1,158 @@
+#!/usr/bin/perl
+# vi: set ts=4:
+
+use Cwd;
+
+$mf_filename = "Makefile";
+if(@ARGV>0){
+	$mf_filename = @ARGV[0];
+}
+
+open(MF,$mf_filename);
+@mf=<MF>;
+
+print "I: $mf_filename\n";
+
+#
+# Find the toplevel directory
+#
+$dir=getcwd() . "/$mf_filename";
+@pathcomponents = split('/', $dir);
+pop @pathcomponents;
+PATH: while($comp = pop @pathcomponents){
+	my $newpath = join('/', @pathcomponents);
+	unshift @newcomponents, $comp;
+	unshift @relcomponents, "..";
+	if( -f "$newpath/Makefile.modbuild"){
+		last PATH;
+	}
+}
+#$topdir = join('/', @pathcomponents);
+$thisdir = join('/', @newcomponents);
+$reldir = join('/', @relcomponents);
+
+#print "thisdir=$thisdir\n";
+#print "reldir=$reldir\n";
+
+
+if( ! grep { m/^ifdef TOPDIR$/ } @mf){
+	if($thisdir eq "." ||
+		$thisdir eq "scripts" ||
+		$thisdir eq "scripts/lxdialog" ||
+		$thisdir eq "scripts/linux_flags"){
+		print "Makefile doesn't have ifdef TOPDIR section, ignoring\n";
+	}else{
+		print "E: Makefile doesn't have ifdef TOPDIR section, bailing\n";
+	}
+	exit 0;
+}
+
+while($line = shift @mf and ! ($line =~ m/^ifdef TOPDIR/) ){
+	push @pre, $line;
+}
+
+push @in, $line;
+while($line = shift @mf and ! ($line =~ m/^endif/) ){
+	push @in, $line;
+}
+push @in, $line;
+
+while($line = shift @mf){
+	push @post, $line;
+}
+
+
+
+#
+# Check for targets in @pre -- there shouldn't be any
+#
+if(grep { m/\:$/ || m/\:[\t ]/ } @pre){
+	print "E: target before 'ifdef TOPDIR'\n";
+}
+
+
+if(grep { m/^clean\:/ } @post){
+	print "E: remove clean target\n";
+}
+
+@xpost = @post;
+while($s = shift @xpost){
+	chomp $s;
+	#print "parsing: $s\n";
+	if($s =~ m/^([\w\.\-\%]+)\:\s*(.*)/ ){
+		my $targ = $1;
+		my $dep = $2;
+		if($targ =~ m/\.c$/ && $dep =~ m/\.c$/){
+			print "target (.c) $targ: $dep\n";
+			$t = shift @xpost;
+			if($t ne "\tln -sf \$< \$@\n"){
+				print "E: .c: .c rule is not \"ln -sf \$< \$@\"\n";
+			}
+		}elsif($targ =~ m/\.S$/ && $dep =~ m/\.S$/){
+			print "target (.S) $targ: $dep\n";
+			$t = shift @xpost;
+			if($t ne "\tln -sf \$< \$@\n"){
+				print "E: .S: .S rule is not \"ln -sf \$< \$@\"\n";
+			}
+		}elsif($targ =~ m/\.o$/){
+			# .o targets are ok for now
+			#print "W: .o target: $targ: $dep\n";
+			print "target (.o) $targ: $dep\n";
+			$t = shift @xpost;
+			if($t ne "\t\$(LD) -r -o \$@ $dep\n"){
+				print "W: .o: .o rule is not \"\$(LD) -r -o \$@ dependencies\"\n";
+			}
+		}else{
+			print "W: strange post target $targ: $dep\n";
+			LINE: while($s = shift @xpost){
+				if( ! ($s =~ /\t/)){
+					unshift @xpost, $s;
+					last LINE;
+				}
+			}
+		}
+	}elsif($s =~ m/^\t/){
+		print "E: found unexpected instructions\n";
+	}elsif($s =~ m/^$/ || $s =~ m/^\s*#/){
+		#print "blank\n";
+	}else{
+		#print "Extra line $s\n";
+	}
+}
+
+if(grep { m/MOD_LIST_NAME/ } @pre){
+	print "E: MOD_LIST_NAME needs to be removed\n";
+}
+
+if(grep { m/^obj-/ } @pre){
+	print "W: Has obj- definitions\n";
+}
+
+if(! grep { m/^clean\:/ } @in){
+	print "W: No clean target in ifdef TOPDIR section\n";
+}
+
+foreach $s (grep { m/make.*SUBDIRS/ } @in){
+	chomp $s;
+	$s =~ m/make -C (.*) (.*) SUBDIRS=(.*)/;
+	if($1 ne $reldir || $3 ne $thisdir){
+		print "E: Directories wrong in 'ifdef TOPDIR' section\n";
+		print "E: $1 should be $reldir\n";
+		print "E: $3 should be $thisdir\n";
+	}
+}
+
+if(grep { m/EXTRA_USER_LDFLAGS.* -l/ } @pre){
+	print "W: -l in EXTRA_USER_LDFLAGS (should be _LIBS)\n";
+}
+
+if(grep { m/EXTRA_CFLAGS_/ } @pre){
+	print "W: CFLAGS_xxx.o typo\n";
+}
+
+if(grep { m/EXTRA_USER_CFLAGS_/ } @pre){
+	print "W: USER_CFLAGS_xxx.o typo\n";
+}
+
+#print @in;
+

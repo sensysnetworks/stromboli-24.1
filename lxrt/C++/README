@@ -1,0 +1,29 @@
+
+//-------------------------------------------------------------------------
+// (C)2000 Pierre Cloutier
+// (C)2000 Poseidon Controls Inc.
+//
+// pcloutier@PoseidonControls.com                                    LGPLv2
+//-------------------------------------------------------------------------
+
+This is a fun example entirely written in C++ (or almost, see file mod.c).
+It features a number of things:
+
+	. A RTAI real time task object class Task,
+	. A fifo server FifoSrv class derived from Task,
+        . A template class RTFifo to manage a single fifo,
+	. A template classe RTBidirectionalFifo composed with two
+          RTFifo objects to implement a simple synchronous IPC scheme,
+	. A module that instantiates a RTFifo object in init_module().          
+	. A trivial user program that reads the output of fortune from a pipe
+	  and sends it to the kernel fifo server to rt_printk the message.
+
+Notice that you will not get C++ exception handling and global constructors 
+in the kernel unless you're prepared to work hard for it - but it can be done.
+
+The makefile also compiles example test_mem to demonstrate how lxrtlib
+can be used to have C++ programs with *huge* stacks and memory heaps.
+Notice that class Hrt encapsulates completely the API steps required to
+enter/leave hard real time in user space. 
+
+Have fun.

@@ -1,0 +1,184 @@
+LXRT
+====
+
+The all stuff here, and shared memory as well, evolved from the laziness of
+some people, myself included, in reading Linux manuals for SYSTEM V
+services as well as from the annoyance of either using timers or select
+artifact to sleep for less than 1 s. 
+
+At some point we decided that it takes less to program it in RTAI than to
+learn it from the manuals. It was not exactly so, but not so bad either.
+Thus this directory contains an implementation of services to make
+available any of the RTAI schedulers functions to Linux processes, so that
+a fully symmetric implementation of real time services is possible.  To
+state it more clearly, that means that you can share memory, send messages,
+use semaphores and timings: Linux<->Linux, Linux<->RTAI and, naturally,
+RTAI<->RTAI.
+
+As already done for the shared memory the function calls for Linux
+processes are inlined in the file "rtai_lxrt.h".  This approach has been
+preferred to a library since it is simpler, more effective, the calls are
+short and simple so that, even if it is likely that there can be more than
+just a few per process, they could never be charged of making codes too
+bigger. 
+
+At this point it is important to remark that a Linux process wanting to
+access "lxrt" services, i.e. the real time RTAI schedulers, must create its
+real time buddy, also called proxy, by using rt_task_init as explained
+below.
+
+Then to exploit it you must just use the function prototypes available in
+rtai_sched.h, and documented in the doc files.
+
+An exception to the previous rule are the calls to init tasks, semaphores
+and mailboxes.
+
+They are, formal arguments names self explain themselves:
+
+- LX_TASK *rt_task_init(unsigned int name, int prio, int stack_size, int max_msg_size),
+
+which has less arguments and returns the pointer to the task that is to be
+used in related calls. The stack and max message size can be zero, in which
+case the default internal values are used. The assignment of a different
+value is required only if you want to use task signal functions. In such a
+case note that these signal functions are intended to catch asyncrounous
+event in kernel space and, as such, must be programmed into a companion
+module and interface to their parent Linux process through the available
+services.
+
+Keep an eye on the default stack (512) and message (256) sizes as they seem
+to be acceptable, but this API has not been used extensively with complex
+interrupt service routines.
+
+Since the latter are served on the task being interrupted, and more than
+one can pile up on the same stack, it can be possible that a larger stack
+is required. In such a case either recompile lxrt.c with macros STACK_SIZE
+and MSG_SIZE set appropriately, or explicitly assign larger values at your
+tasks inits. Note that while the stack size can be critical the message
+size will not.  In fact the module reassigns it, appropriately sized,
+whenever it is needed.  The cost is a kmalloc with GFP_KERNEL that can
+block, but within the Linux environment. Note also that the max message
+size if for a buffer to be used to copy whatever message, either mailbox or
+intertask, from user to kernel space, as messages are not necessarely
+copied immediatly, and has nothing to do directly with what you are doing.
+
+- SEM *rt_sem_init(unsigned long name, int initial_count),
+
+which returns a pointer to the semaphore to be used in related calls.
+
+- MBX *rt_mbx_init(unsigned long name, int buf_size),
+
+which returns a pointer to the mailbox to be used in related calls.
+
+Note that the returned pointers cannot be used directly, they are for kernel
+space data, but just passed as arguments when needed. 
+
+For interfacing to tasks, semaphores and mailboxes created by modules you 
+must use:
+
+- void *rt_get_adr(unsigned long name),
+
+which return the pointer to the object of name "name". Usually you need not
+type the returned value since it must just be used in the related calls;
+
+- unsigned long rt_get_name(void *adr),
+
+to get the name attached to the object at address "adr".
+
+Modules can get to objects created by Linux processes by using the same
+calls above, while to make their semaphores and tasks accessible to Linux
+processes they must use:
+
+- int rt_register(unsigned long name, void *adr),
+
+to register their name and address. The value returned is positive for a 
+succesfull registration and zero if the registration failed. 
+
+It is important that modules deregister any register objects at the end of
+the job or when they are deleted, by using either:
+
+- int rt_drg_on_adr(void *adr)
+
+or
+
+- int rt_drg_on_name(unsigned long name)
+
+Again a return value > 0 means success while a zero failure.
+
+Linux processes buddies, and semaphores and mailboxes as well, need not to
+register/deregister as that is already done at their init and delete
+respectively, so no related function is provided.
+
+The functions rt_get_name and rt_get_adr can be used to verify the
+existence of any object, atomically, making it possible a sinchronized and
+safe beginning/ending of a cooperative work.
+
+It is important to note that the register list is a static one whose size is
+determined by the macro MAX_SLOTS in registry.h.
+
+For a better use of the above features you are strongly recomended to use
+the Linux POSIX soft real time options for locking all of your process in
+memory and for scheduling it in Linux. You should refer to "man mlock" and
+"man sched_setscheduler" to see how it is done. They require root
+permission, but, thank to the extended LXRT version, you can can use:
+rt_allow_nonroot_hrt() to make those Linux POSIX APIs available to any
+user. See README.EXTENDED_LXRT in this directory. 
+
+Another feature worth considering is to use Linux pthreads_create to create
+threads, in fact Linux processes, from functions within a file. It can ease
+prting to task modules in kernel space.
+
+We think that what you can do with this stuff can be very usefull as it
+provides an easy to use unified environment for any real time application.
+
+Such an environment can be of help in the initial development phase of real time
+applications, as it could be carried out in user space, with the advantage that
+system crashes could be reduced drastically, or be less dangerous, for your hard
+disk at least. Once more see also README.EXTENDED_LXRT for the extension of 
+these features to hard real time processes in user space.
+ 
+I'll hope that Steve can do something similar for POSIX soon. It is likely
+that he can just copy what is needed almost as it is. So you'll end with
+"yet another PTHREADS in Linux" that will allow to do POSIX compliant
+soft-firm-hard real time within a unified environment. 
+
+So far we have not measured any performance but we expect results similar
+to those of making system calls. Similar do not mean equals. Take into
+account that here, except for the simplest functions that allow a direct
+call, you have always to switch real time tasks to get to the RTAI
+scheduler services.
+
+There are also two test cases:
+
+- This test runs through most of the available services between two Linux 
+  processes (directory master_buddy);
+
+- This test uses a periodic real time task agent that, after having done
+  its work, actually nothing, relay data sent to him, through shared memory
+  by a sender Linux process, to a receiver Linux processes. The sender is
+  synchronized to the real time agent task by using semaphores, while the
+  receiver uses intertask messages (directory rt_agent).
+
+As shown above all LXRT objects are identified by an unsigned long. To use
+alphanumeric mnemonic terms a couple of very simple functions are available
+to translate a SIX CHARACTERs (or shorter) string into an unsigned long
+and back, both in kernel and user space. They are:
+
+- unsigned long nam2num(char *name);
+
+- void num2nam(unsigned long num, char *name);
+
+So if you like to use them you can do:
+
+adr = rtai_malloc(nam2num("myNAME"), size);
+or
+rtai_free(num2nam("myNAME"), adr);
+
+Allowed characters are:
+
+- English letters (case insensitive);
+- 10 digits;
+- underscore (_) and another character of your choice. The latter will be 
+  always converted back to a $ by num2nam.
+
+

@@ -1,0 +1,22 @@
+#!/bin/sh
+
+sync
+echo " "
+echo "This example does the same thing as the timer example,"
+echo "but using tasks instead."
+echo "Type <return> to install modules"
+read junk
+
+../../scripts/rt_modprobe ex_tasktimer.o
+
+echo " "
+echo "Now start the application"
+echo "To stop the application type Ctrl-C"
+echo "Type <return> to continue"
+read junk
+./check
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_tasktimer
+

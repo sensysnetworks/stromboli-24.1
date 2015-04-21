@@ -1,0 +1,3 @@
+rmmod rtai_pqueue
+rmmod rtai_pthread
+rmmod rtai_utils

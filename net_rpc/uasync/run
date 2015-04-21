@@ -1,0 +1,18 @@
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+export LD_LIBRARY_PATH=../../lxrt/lib
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_shm.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+#insmod ../rtnet/krtnet.o
+insmod ../net_rpc.o ThisNode="127.0.0.1"
+../rtnet/urtnet &
+sync
+./receiver $10 SndNode="127.0.0.1" &
+sync
+./sender RcvNode="127.0.0.1"
+./rem

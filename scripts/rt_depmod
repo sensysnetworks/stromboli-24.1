@@ -1,0 +1,52 @@
+#!/usr/bin/perl -w
+# vi: set ts=4:
+
+$prefix="/lib/modules/";
+
+@argv = @ARGV;
+while($obj=shift @argv){
+	@output=`nm $obj`;
+	$has_ksymtab = `objdump -h $obj|grep kstrtab`;
+
+	$obj =~ s/.*vmlinux.*/vmlinux/;
+
+	if($has_ksymtab){
+		# explicitly exports symbols
+		push @exportedsyms, grep { m/ __ksymtab_/; s/.* __ksymtab_/$obj\:\:/; } @output;
+	}else{
+		# all symbols exported
+		push @exportedsyms, grep { m/ [ABCDGRST] / && s/.* [ABCDGRST] // && s/^/$obj\:\:/; } @output;
+	}
+}
+
+print @exportedsyms ;
+
+exit 0;
+
+@argv = @ARGV;
+while($obj=shift @argv){
+	if($obj =~ /vmlinux/ ){ next; }
+
+	print "$prefix$obj:";
+	@output=`nm $obj`;
+
+	@modules=();
+	@undefinedsyms=grep { m/ U / && s/.* U // && !m/__this_module/; } @output;
+	foreach $s (@undefinedsyms) {
+		chomp $s;
+		($fullsym) = grep { m/\:\:$s$/; } @exportedsyms;
+		if(!$fullsym){
+			#print "undefined symbol $s\n";
+		}else{
+			chomp $fullsym;
+			$mod = $fullsym;
+			$mod =~ s/\:\:.*//;
+			if($mod ne "vmlinux" && !grep { m/^$mod$/; } @modules){
+				push @modules, $mod;
+			}
+		}
+	}
+	foreach $mod (@modules){ print " $prefix$mod"; }
+	print "\n";
+}
+

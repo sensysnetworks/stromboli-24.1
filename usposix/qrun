@@ -1,0 +1,10 @@
+sync
+insmod ../modules/rtai.o
+insmod ../modules/rtai_sched.o
+insmod ../modules/rtai_lxrt.o
+insmod ../tbx/rtai_pqueue.o
+insmod ../tbx/rtai_pqueue_lxrt.o
+sync
+./mqtest
+sync
+./rem

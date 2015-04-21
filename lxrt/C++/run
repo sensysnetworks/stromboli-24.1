@@ -1,0 +1,10 @@
+#!/bin/sh
+
+../../scripts/rt_modprobe ex_cplusplus.o
+
+if [ "$(command -v fortune 2>/dev/null)" != "" ];then
+	fortune | ./test
+else
+	echo "fortune not installed.  Insert witty saying here." | ./test
+fi
+

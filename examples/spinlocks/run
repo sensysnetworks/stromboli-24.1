@@ -1,0 +1,20 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example features NTASKS realtime tasks using spinlocks.
+Each task goes through a sequence of spinlocks locking/releasing
+while other tasks are spinning on the same lock. The printout 
+shows that the lock is held properly. Likely nonsense under UP.
+
+Type <return> to install modules
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_spinlocks.o $*
+
+echo "Program is running"
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_spinlocks

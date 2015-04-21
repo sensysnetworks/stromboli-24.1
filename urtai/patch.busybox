@@ -1,0 +1,15 @@
+#!/bin/sh
+
+buildDir=$1
+
+cd src/busybox
+sed -e "s:^#CC=.*\$:CC=${buildDir}/usr/i386-linux-uclibc/usr/bin/i386-uclibc-gcc:g" Makefile > Makefile.mod
+rm -f Makefile
+mv Makefile.mod Makefile
+sed -e "s:^//#define BB_INSMOD.*\$:#define BB_INSMOD:g" \
+    -e "s:^//#define BB_RMMOD.*\$:#define BB_RMMOD:g" \
+    -e "s:^//#define BB_VI.*\$:#define BB_VI:g" \
+    Config.h > Config.h.mod
+rm -f Config.h
+mv Config.h.mod Config.h
+cd -

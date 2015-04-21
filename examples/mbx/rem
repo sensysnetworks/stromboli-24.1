@@ -1,0 +1,4 @@
+rmmod rt_process
+cd ../../../rtai-core/sched/user
+./remod
+cd -

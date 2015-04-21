@@ -1,0 +1,10 @@
+#!/bin/sh
+
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_shm.o
+insmod ./rt_process.o
+./check
+rmmod rt_process
+rmmod rtai_shm
+rmmod rtai

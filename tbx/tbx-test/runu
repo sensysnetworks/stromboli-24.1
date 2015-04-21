@@ -1,0 +1,32 @@
+sync
+if lsmod | grep "rtai_tbx_lxrt">/dev/null ; then
+    rmmod rtai_tbx_lxrt
+fi
+if lsmod | grep "rtai_tbx">/dev/null ; then
+    rmmod rtai_tbx
+fi
+if lsmod | grep "rtai_lxrt">/dev/null ; then
+    rmmod rtai_lxrt
+fi
+if lsmod | grep "rtai_sched">/dev/null ; then
+    rmmod rtai_sched
+fi
+if lsmod | grep "rt_mem_mgr">/dev/null ; then
+    rmmod rt_mem_mgr
+fi
+if lsmod | grep "rtai">/dev/null ; then
+    rmmod rtai
+fi
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+insmod ../rtai_tbx.o
+insmod ../rtai_tbx_lxrt.o
+./utest
+sync
+rmmod rtai_tbx_lxrt
+rmmod rtai_tbx
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

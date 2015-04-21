@@ -1,0 +1,20 @@
+****** SW EXAMPLE ******
+
+This example features NTASKS realtime tasks running periodically.
+On each period one of them sets a bit on the parallel port, another one
+resets it. By choosing an appropriate timings one can produce a rectangular
+wave on the parallel port which can be watched on an oscilloscope plugged
+into it.
+
+->>>> Be carefull about the macro TICK_PERIOD its value is now set
+      for a 200Mhz PPro, which can be to much for a less powerfull machine.
+
+To run the example type:
+
+make clean
+make
+./run
+
+To stop it type :
+
+./rem

@@ -1,0 +1,87 @@
+RTAI proc Interface.
+====================
+
+The RTAI proc interface provides status and debug information on the
+current operating conditions of the RTAI real time operating system
+through the standard Linux /proc interface.  A series of files under the
+subdirectory /proc/rtai gives information on each of the major active
+subsystems in RTAI.  These files are activated when the associated module
+in inserted into the kernel.  A description of these files and their
+contents is given below.
+
+
+/proc/rtai/rtai
+---------------
+
+This file gives information on the rtai.o module, for example rtai
+version, interrupt state, etc.
+A typical output from this file is shown below:
+
+-------------------------------------------------------------------------
+RTAI Real Time Kernel, Version: 22.2.4
+
+    RTAI mount count: 1
+
+Global irqs used by RTAI: 
+
+Cpu_Own irqs used by RTAI: 
+
+RTAI sysreqs in use: 
+1 
+-------------------------------------------------------------------------
+
+/proc/rtai/scheduler
+--------------------
+
+This file give information on the currently loaded rtai scheduler, for
+example, priority of the currently running real time tasks, state
+information, etc
+A typical output from this file is shown below:
+
+-------------------------------------------------------------------------
+RTAI Uniprocessor Real Time Task Scheduler.
+
+    Calibrated CPU Frequency: 333347000 Hz
+    Calibrated 8254 interrupt to scheduler latency: 9027 ns
+    Calibrated one shot setup time: 1974 ns
+
+    Priority  Period(ns)  FPU  Sig  State  Task
+    -------------------------------------------
+    5         5000000     No   No   0x5    1   
+    6         8000000     No   No   0x5    2   
+-------------------------------------------------------------------------
+
+/proc/rtai/fifos
+----------------
+
+This file gives status information on the real time fifos, how many are in
+use, the buffer size, etc.
+A sample output is shown below:
+
+-------------------------------------------------------------------------
+RTAI Real Time fifos status.
+
+fifo No  Open Cnt  Buff Size  malloc type Name
+---------------------------------------------------------
+0        1         20000      kmalloc     
+-------------------------------------------------------------------------
+
+
+/proc/rtai/memory_manager
+------------------------
+
+Current status of the dynamic memory manager is given by this file, for
+example number of memory blocks, amount of memory available in each block,
+etc.
+A typical output is shown below:
+
+-------------------------------------------------------------------------
+RTAI Dynamic Memory Management Status.
+----------------------------------------
+
+Chunk Size  Address    1st free block  Block size
+-------------------------------------------------
+0     65536 0xc50c0000 0xc50c1798        59484
+1     65536 0xc5170000 0xc5170010        65508
+-------------------------------------------------------------------------
+

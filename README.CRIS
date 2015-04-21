@@ -1,0 +1,180 @@
+CRIS port of RTAI
+=================
+
+
+Introduction
+============
+
+This document describes how to set up the Real Time Application Interface
+(RTAI) on the CRIS architecture (ETRAX 100LX).
+
+
+Installation
+============
+
+This document assumes that you have already installed all tools necessary to
+compile and build your own kernel and upload it to the board. You can find
+some helpful information about how to do this at
+http://www.efd.lth.se/~d98mad/rtai.html or http://www.axis.com
+
+Ensure that the kernel is configured for loadable modules and that busybox is
+configured with module support (insmod/rmmod/lsmod).
+
+The kernel patch is known to work on version 2.4.19 of the kernel. Other
+versions could work as well, but will probably require some handmade patching.
+
+To get RTAI up and running, go through the following steps:
+
+1. Download rtai from http://www.aero.polimi.it/~rtai/
+
+2. Apply the kernel patch. 
+   $RTAIDIR is the directory where you have extracted your RTAI sources.
+   $KERNELDIR is the directory where yoy have extracted your kernel sources.
+
+   e.g.
+   cd $KERNELDIR
+   patch -p1 < $RTAIDIR/rtai-24.1.11/patches/patch-2.4.19-cris-rthal
+
+3. Configure the kernel. Remember to enable CONFIG_RTHAL, the Real-Time
+   Hardware Abstraction Layer.
+
+   e.g.
+   make config
+   or
+   make menuconfig
+   or
+   make xconfig
+
+4. Configure RTAI.
+
+   e.g.
+   cd $RTAIDIR
+   make config
+   or
+   make menuconfig
+
+   Enter the location of your patched kernel source and press enter.
+   A working configuration could for example look like this:
+
+#    [ ] Prompt for experimental code
+#    --- Schedulers
+#    <M> UP scheduler
+#    --- Features
+#    [ ] Enable floating point support
+#    --- Subsystems
+#    <M> POSIX API
+#    <*> RT memory manager
+#    <M> FIFOs
+#    --- Communication
+#    [ ] Real-Time serial driver (rt_com)
+#    --- Tests and Examples 
+#    [*] Compile tests
+#    [*] Compile examples
+
+5. Build the RTAI modules and examples
+
+   e.g.
+   make
+	
+6. Create the real time fifo device nodes.
+   This step is only needed if you intend to use fifo buffers.
+
+   We assume that you have installed the devboard software in a directory
+   called axis/devboard_lx which resides in your home directory. 
+
+   Create a directory called rtai in which you put a Makefile i.e.
+   ~/axis/devboard_lx/packages/devices/rtai/Makefile. The makefile should
+   look like this: 
+
+include $(AXIS_TOP_DIR)/tools/build/Rules.axis
+
+MKNOD     = mknod_elinux
+DEV       = $(prefix)/dev
+
+install:
+        @$(MKNOD) -m 666 $(DEV)/rtf0 c 150 0
+        @$(MKNOD) -m 666 $(DEV)/rtf1 c 150 1
+        @$(MKNOD) -m 666 $(DEV)/rtf2 c 150 2
+        @$(MKNOD) -m 666 $(DEV)/rtf3 c 150 3
+        @$(MKNOD) -m 666 $(DEV)/rtf4 c 150 4
+        @$(MKNOD) -m 666 $(DEV)/rtf5 c 150 5
+        @$(MKNOD) -m 666 $(DEV)/rtf6 c 150 6
+        @$(MKNOD) -m 666 $(DEV)/rtf7 c 150 7
+        @$(MKNOD) -m 666 $(DEV)/rtf8 c 150 8
+        @$(MKNOD) -m 666 $(DEV)/rtf9 c 150 9
+
+   Edit your ~/axis/devboard_lx/Makefile by adding packages/devices/rtai to the
+   SUBDIRS section. Run make install in ~/axis/devboard_lx/ to create the
+   devices.
+
+7. This step is needed because of the stability problem mentioned below.
+   Add a directory named rtai in the linux source tree and copy the rtai module
+   to it.
+
+   e.g.
+   cd $KERNELDIR
+   mkdir rtai
+   cd rtai
+   cp $RTAIDIR/rtaidir/rtai.o .
+
+   There is a section in $KERNELDIR/Makefile that will link the rtai.o module
+   directly into the kernel. If this is for some reason not wanted, then
+   edit the entry looking like this:
+
+ifdef CONFIG_RTHAL
+CORE_FILES      =kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o rtai/rtai.o
+else
+CORE_FILES      =kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o
+endif
+
+   into this:
+
+ifdef CONFIG_RTHAL
+CORE_FILES      =kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o
+else
+CORE_FILES      =kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o
+endif
+
+8. Compile the kernel, make the images and flash the card with the RTAI
+   enabled kernel.
+
+   e.g.
+   cd ~/axis/devboard_lx/
+   make kernel
+   make images
+   . ./init_env
+   ./flashit
+
+9. RTAI will not be enabled if no module using it is loaded. Look at the
+   examples to see how to enable RTAI.
+
+Status
+======
+
+
+Known problems
+==============
+
+There is one known stability problem with the port, it usually makes Linux go
+down although most times the real-time tasks are allowed to continue. The
+problem shows up under heavy network load. It has been seen to occur when
+running a periodic task of 1 ms at the same time as the board is ping-flooded
+from another machine. Besides this problem, the port seems very stable.
+
+It should be noted that as of this writing the rtai.o module is actually
+linked directly into the kernel on the CRIS port. This is not the customary
+way to do it, instead it should be loaded as a module. The approach has been
+taken because it minimized the stability problem mentioned above. As a result,
+the set_pgdir parts is not needed in the patch at the moment.
+
+As to real-time scheduling, the period of a periodic task is not correct when
+the scheduler is set to run in oneshot mode and cascaded timers have been
+disabled in the kernel config. This problem should not affect many users as
+there is no good reason for disabling the cascaded timers in the normal case.
+
+Thanks
+======
+
+This work was funded by AXIS Communications AB. Additional thanks are
+addressed to Paolo Mantegazza, the initiator of RTAI and Bernhard Kuhn for the
+structure of this document.

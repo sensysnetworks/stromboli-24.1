@@ -1,0 +1,81 @@
+Implementation of the POSIX Queues API for Real Time Linux.
+=============================================================
+
+Copyright: Zentropix LLC, 1999
+Author: Trevor Woolven (trevw@zentropix.com)
+
+-----------------------------------------------------------------------------
+
+This is release 0.6 of RTAI pqueues, which implements the Posix
+1003.1c Application Programming Interface (API).
+
+Please note that this release has been tested as much as possible, however
+these tests were not exhaustive, especially for SMP architectures.
+Please report all bugs to the author.
+
+RTAI pqueues provides POSIX queues available from RTAI tasks and/or RTAI
+pThreads.
+
+-----------------------------------------------------------------------------
+
+Supported POSIX Calls.
+----------------------
+
+//Create or open a message queue
+extern mqd_t mq_open(char *mq_name, int oflags, mode_t permissions,
+                                                struct mq_attr *mq_attr);
+
+//Receive a message from a message queue
+extern size_t mq_receive(mqd_t mq, char *msg_buffer,
+                                size_t buflen, unsigned int *msgprio);
+
+//Send a message to a queue
+extern int mq_send(mqd_t mq, const char *msg, size_t msglen,
+                                                unsigned int msgprio);
+
+//Close a message queue (note that the queue remains in existance!)
+extern int mq_close(mqd_t mq);
+
+//Get the attributes of a message queue
+extern int mq_getattr(mqd_t mq, struct mq_attr *attrbuf);
+
+//Set a subset of a message queue's attributes
+extern int mq_setattr(mqd_t mq, const struct mq_attr *new_attrs,
+                                struct mq_attr *old_attrs);
+
+//Register a request to be notified whenever a message arrives on an empty
+// queue
+extern int mq_notify(mqd_t mq, const struct sigevent *notification);
+
+//Destroy a message queue
+extern int mq_unlink(char *mq_name);
+
+-----------------------------------------------------------------------------
+
+Limitations.
+------------
+
+1/  Signal Handling.
+--------------------
+Currently, pqueue 'notification' (of a write into an empty pqueue)
+is not implemented.
+
+2/  Closing/Unlinking
+---------------------
+This must be done while the task(s) is alive as it relies on being able to 
+get the task's queue access data.
+
+3/  Configuration
+-----------------
+There are a number of configuration parameters, such as the maximum number 
+of allowed message queues, #defined in rtai_utils.h You must change these 
+to suit your application.
+
+4/ Raw RTAI Task Interface.
+---------------------------
+
+If the native RTAI tasking interface is used (instead of the pthreads
+interface), then the following rules MUST be followed:
+
+- A call to init_z_apps must be made after every call to rt_task_init.
+- A call to free_z_apps must be made after every call to rt_task_delete.

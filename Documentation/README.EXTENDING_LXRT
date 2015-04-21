@@ -1,0 +1,229 @@
+Extending LXRT
+==============
+
+Author: Guennadi V. Liakhovetski <gvlyakh@ragingbull.com>
+This document is released under the same license as rtai itself.
+
+Please have a look at lxrt/leds/ and rt_com_lxrt/ directories in the
+RTAI source tree for examples of extending LXRT. They might actually
+be sufficient for you to write your own extension. If not, try
+reading on, in this document I'll try to explain what currently
+I myself don't understand:-)
+
+
+1. General concept
+------------------
+
+The general idea behind extending LXRT is that, having a (set of) real-time
+function(s), implemented either as a kernel patch or as (a) module(s), it
+suffices to write a "trivial" module, which will extend LXRT with your
+functions and thus make them available in the user space. For this you
+should:
+
+  - create an array of struct rt_fun_entry structures - one element
+    for each function. This structure has 2 fields: 
+
+struct rt_fun_entry { unsigned long long type; void *fun; };
+
+    where fun is a pointer to the function, type is the type of the
+    function. This type will be by far the main subject of this
+    document.
+
+  - inform LXRT of your addition. For this you allocate a unique
+    (within the current LXRT environment) index in the range from 1 to
+    15 (0 is reserved for LXRT's native functions), e.g., from
+    leds_lxrt.h:
+
+// Every module that extends LXRT needs a unique MYIDX (1-15).
+#define MYIDX					15
+
+    and call
+
+int  set_rt_fun_ext_index(struct rt_fun_entry *fun, int idx);
+
+    with your array of rt_fun_entry functions as the first argument
+    and your index as the second. This function should be called at
+    your package initialization, e.g., in the case of a kernel module,
+    it should be included in the init_module() function. On success
+    this function returns 0, non-zero return code means your index is
+    not unique (or something else is wrong).
+
+  - the actual functions are included in the kernel module / patch,
+    but you also have to provide code for your user space applications
+    to link against. For this you write a set of functions with the
+    same interfaces as the actual kernel-space functions (one for each),
+    which you want to be able to call from the user-space. These
+    functions should call the rtai_lxrt() function:
+
+DECLARE union rtai_lxrt_t rtai_lxrt(short int dynx, short int lsize, int srq, void *arg)
+
+    whose main job is to issue a software interrupt to switch your
+    application to the kernel mode, eventually passing control to the
+    real-time function, indexed by srq, and copying any parameters
+    between the kernel- and the user-spaces. Here dynx is your unique
+    index, srq is the index of the respective entry in your array of
+    rt_fun_entry structures, arg is a pointer to the argument
+    structure and lsize is its size. Another example from leds_lxrt.h:
+
+DECLARE void rt_set_leds(int v)
+{
+	struct { int val; } arg = { v };
+	rtai_lxrt(MYIDX, sizeof(arg), SET_LEDS, &arg);
+}
+
+    You can include these declarations either in a header file, or in
+    a library. Typically, you include both your kernel- and
+    user-specific parts, as well as common declarations in a header
+    file, separating the former two with
+
+#idfed __KERNEL__
+	/* kernel stuff */
+#else
+	/* user stuff */
+#endif
+
+  - if you are putting your functions in a kernel module (generally
+    recommended) in the cleanup_module() function you include a call to
+
+void reset_rt_fun_ext_index( struct rt_fun_entry *fun, int idx)
+
+    As it should become obvious by now, fun is your array of
+    rt_fun_entry structs, idx is your unique index. This way after
+    rmmodding your module another lxrt-extending module will be able
+    to re-use your index.
+
+I think this is it for the general description.
+
+
+2. .type.
+---------
+
+Now, all that above was nice and simple. The next bit is something I
+really don't understand, but hope to learn with your help:-) The idea
+is to code in the type field various properties of your function. I'll
+use code and comments from rtai_lxrt.h, and from emails sent to me in
+reply to my questions (special thanks go to Paolo Mantegazza, and
+Pierre Cloutier). The chart below (copied from include/rtai_lxrt.h)
+shows masks, to be anded with the 64-bit (long long) type field. I
+will call the rows below "type masks" and denote them by their names,
+joined with underscores (e.g. W_ARG1_BF). For example, a function fun
+is of type W_ARG1_BF if W_ARG1_BF & fun.type != 0, where W_ARG1_BF is
+given below by the line "W ARG1 BF", where "|"s stand for 1s and "."s
+for 0s. Functions can be of several types, e.g. of type ( W_ARG1_BF |
+W_ARG1_SZ ).
+
+/*
+These USP (unsigned long long) type fields allow to read and write up to 2 arguments.
+
+RW marker .... .... .... .... .... .... .... ..|| .... .... .... .... .... ....
+.... ....
+
+HIGH unsigned long encodes writes
+W ARG1 BF .... .... .... .... .... ...| |||| ||..
+W ARG1 SZ .... .... .... .... |||| |||. .... ....
+W ARG2 BF .... .... .||| |||| .... .... .... ....
+W ARG2 SZ ..|| |||| |... .... .... .... .... ....
+W 1st  LL .|.. .... .... .... .... .... .... ....
+W 2nd  LL |... .... .... .... .... .... .... ....
+
+LOW unsigned long encodes reads
+R ARG1 BF .... .... .... .... .... ...| |||| ||..
+R ARG1 SZ .... .... .... .... |||| |||. .... ....
+R ARG2 BF .... .... .||| |||| .... .... .... ....
+R ARG2 SZ ..|| |||| |... .... .... .... .... ....
+R 1st  LL .|.. .... .... .... .... .... .... ....
+R 2nd  LL |... .... .... .... .... .... .... ....
+
+LOW unsigned long encodes also
+RT Switch .... .... .... .... .... .... .... ...|
+
+and
+Always 0  .... .... .... .... .... .... .... ..|.
+
+If any LL bit is zero sizeof(int) is copied by default, if it is set sizeof(long long) is copied.
+*/
+
+include/rtai_lxrt.h also defines several macros for calculating some
+typical types:
+
+#define UW1(bf, sz)  ((((unsigned long long)((((bf) & 0x7F) <<  2) | (((sz) & 0x7F) <<  9))) << 32) | 0x300000001LL)
+#define UW2(bf, sz)  ((((unsigned long long)((((bf) & 0x7F) << 16) | (((sz) & 0x7F) << 23))) << 32) | 0x300000001LL)
+
+#define UR1(bf, sz)  ((((bf) & 0x7F) <<  2) | (((sz) & 0x7F) <<  9) | 0x300000001LL)
+#define UR2(bf, sz)  ((((bf) & 0x7F) << 16) | (((sz) & 0x7F) << 23) | 0x300000001LL)
+
+E.g. UW1(bf, sz) produces the following mask:
+
+UW1       .... .... .... .... |||| |||| |||| |||| .... .... .... .... .... .... .... ...|
+        R		      \______/\_______/RR
+        T			 sz       bf   WW
+
+which is: W_ARG1_BF | W_ARG1_SZ | RW | RT_Switch. Let's now consider
+some particular examples of functions from the standard LXRT API. I'll
+list a few function declarations from include/rtai_lxrt.h with their
+respective rt_fun_entry structures from lxrt/lxrt_table.c:
+
+extern int rt_task_yield(void);
+	{ 1, rt_task_yield },			//   0  
+extern int rt_task_suspend(RT_TASK *task);
+	{ 1, rt_task_suspend },			//   1
+
+The above 2 functions are of "RT_Switch" type, i.e. they execute in
+real-time, but they don't block on any to- or from-user IO.
+
+extern RTIME count2nano(RTIME count);
+	{ 0, count2nano },			//  10
+
+No blocking, not real-time.
+
+extern RT_TASK *rt_receive(RT_TASK *task, unsigned int *msg);
+	{ UW1(2, 0), rt_receive },		//  22
+
+This function copies an integer message to a user application. Before
+LXRT real-time was only available in the kernel space, this and other
+similar functions were manipulating the data in a single (kernel)
+address space. Now the message should be copied from the kernel- to
+the user-space. For this we need to tell LXRT which argument(s) point
+to objects, that need to be copied between the kernel and the user
+address spaces. This information is also encoded in the function's
+type. In the above example we want to tell LXRT, that the second
+argument points to an integer variable, that has to be copied from the
+kernel to the user space. This is exactly what the macro UW1(2LL,0LL)
+does. The first parameter of UW1 (and similar macros) is the index of
+the respective parameter in the function declaration; second argument:
+0 - int is copied (see comments under the type-mask chart above), if
+LL bit is set, long long is copied. Otherwise the second parameter is
+equal to the index (starting from one) of the parameter of the
+function, which specifies the length of the first memory area to be
+copied. So, the example above means, that the second (counting from 1)
+parameter of rt_receive will be Written to the user, and that it is
+(pointer to) an int.
+
+extern RT_TASK *rt_rpc(RT_TASK *task, unsigned int to_do, unsigned int *result);
+	{ UW1(3, 0), rt_rpc },			//  26
+
+Third parameter int Written to user.
+
+extern int rt_mbx_send(MBX *mbx, void *msg, int msg_size);
+	{ UR1(2, 3), rt_mbx_send },		//  40
+
+Second parameter of size msg_size read from user.
+
+extern int rt_mbx_receive(MBX *mbx, void *msg, int msg_size);
+	{ UW1(2, 3), rt_mbx_receive },		//  45
+
+msg of size msg_size written to user.
+
+// QNX IPC
+extern int rt_Send(pid_t pid, void *smsg, void *rmsg, size_t ssize, size_t rsize );
+	{ UR1(2, 4) | UW1(3, 5), rt_Send },	//  59
+
+Second parameter of size ssize read from user, and 3rd parameter of
+size rsize written to user.
+
+extern pid_t rt_Receive(pid_t pid, void *msg, size_t maxsize, size_t *msglen);
+	{ UW1(2, 3) | UW2(4, 0), rt_Receive },	//  60
+
+Similar to the above.
+
+

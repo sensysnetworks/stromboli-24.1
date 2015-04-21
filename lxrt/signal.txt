@@ -1,0 +1,51 @@
+
+LXRT Linux Signal handling:
+---------------------------
+
+Users can provide an optional single Linux signal handler of the form void (*handler)(int sig).
+The unique handler can use argument sig to figure out what to do with the signal.
+
+LXRT does nothing if a handler is not provided. This means HRT tasks will
+simply ignore Linux signals. Soft real time task will behave as before.
+However, a soft real time task can have both type of handlers as the signal
+will be chained to the Linux handler. 
+ 
+LXRT will force ready the program if it is blocked in the real time
+kernel when the signal comes in. The handler is called before the program exits
+the kernel. On exit, errno is set to EINTR in RT_TASK and function
+rt_get_errno() will return the error.
+
+A special case occurs if the program was running when the signal came in. The 
+pending signal is stored in linux_signal in RT_TASK and further action is postponed
+until the program enters and tries to block in the kernel again. The reasoning here is
+that real time work needs to be done and has priority over processing a Linux signal.
+
+Fonctions provided to users by the implementation:
+
+extern int rt_set_linux_signal_handler(RT_TASK *task, void (*handler)(int sig));
+
+   Both soft real time and HRT tasks can install a Linux signal handler.
+   If a soft real time task does not provide a handler, Linux will deal with the
+   signal as it usually does once the process is forced ready out of the real time
+   kernel. When a handler is proveded, LXRT never chains with the usual Linux signal
+   processing. 
+
+extern int rt_get_linux_signal(RT_TASK *task);
+
+   This function is usefull if the user does not wish to provide a handler.
+   The function returns the last signal recdeived and clears linux_signal in RT_TASK.
+
+extern int rt_get_errno(RT_TASK *task);
+
+   This function will help dealing with the difficulty of detecting errors
+   on return from LXRT system calls.
+
+extern int rt_lxrt_fork(int is_a_clone);
+
+   This function forks the program and clears this_rt_task[] in the Linux task structure.   
+   The is_a_clone flag will do the same as sys_clone() which should be usefull
+   to instantiate threads. The usage of rt_lxrt_fork() is mandatory if LXRT
+   signal handling is required.
+
+Pierre Cloutier
+(pcloutier@PoseidonControls.com)

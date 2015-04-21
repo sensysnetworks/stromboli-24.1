@@ -1,0 +1,55 @@
+Common files for Real Time Linux Applications.
+==============================================
+
+Copyright: 	Zentropix LLC, 1999
+Authors: 	Steve Papacharalambous (stevep@zentropix.com)
+		Trevor Woolven (trevw@zentropix.com)
+
+-----------------------------------------------------------------------------
+This directory contains files common to some or all, of the RTAI applications
+controlled by the RTAI 'project'.
+
+-----------------------------------------------------------------------------
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
+
+-----------------------------------------------------------------------------
+
+Requirements.
+------------
+
+- RTAI version 1.1 - available from: http://www.zentropix.com
+                                     http://www.realtimelinux.org
+                                     http://www.aero.polimi.it/projects/rtai
+
+-----------------------------------------------------------------------------
+
+The examples directory contains various test programs.
+
+-----------------------------------------------------------------------------
+
+Acknowledgements.
+-----------------
+
+- Paolo Mantegazza (mantegazza@aero.polimi.it) for the RTAI package, and for his
+  assistance and advice with this module.
+
+- Xavier Leroy (Xavier.Leroy@inria.fr) for his Linuxthreads package which has
+  provided a valuable reference.
+
+- Victor Yodaiken (yodaiken@fsmlabs.com) and Michael Baranbanov 
+  (baraban@fsmlabs.com) for the RTLinux project.
+
+-----------------------------------------------------------------------------

@@ -1,0 +1,25 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example tests tasklets with a timer in kernel space
+(kctest.c) and one in user space (uctest.c) synchronizing
+themselves through shared memory.  The kernel timer prepares the
+shared memory with simple doubles that are summed up by the user
+space timer, that prints also the result on the screen for an
+easy direct check.  See the combination kctest/kuctest, run by
+kcrun, i.e., the very same test carried out completly in kernel
+space.
+
+Press <enter> to execute"
+EOF
+read junk
+sync
+
+../../scripts/rt_modprobe ../../modules/rtai_lxrt.o
+../../scripts/rt_modprobe test_kctest.o
+
+./uctest
+
+../../scripts/rt_rmmod test_kctest
+../../scripts/rt_rmmod rtai_lxrt

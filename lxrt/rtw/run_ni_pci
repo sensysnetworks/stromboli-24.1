@@ -1,0 +1,9 @@
+#!/bin/sh
+
+sync
+
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+insmod ./drivers/ni_pci_lxrt.o
+insmod ./sysAuxClk.o

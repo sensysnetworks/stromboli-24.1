@@ -1,0 +1,211 @@
+#This test suite has been written By Lorenzo Dozio (dozio@aero.polimi.it)
+
+#!/bin/sh
+
+rmmod -s lxrt
+rmmod -s rtai_shm
+rmmod -s rtai_fifos
+rmmod -s rtai_sched
+rmmod -s rtai
+
+clear
+
+BOOTUP=color
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** FASTICK EXAMPLE (1) ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd fastick
+./run_1
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** FASTICK EXAMPLE (2) ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+./run_2
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "               *** ROUND ROBIN (RR) SCHEDULING EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd rr
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "             *** EARLY DEADLINE FIRST (EDF) SCHEDULING EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd edf
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** MAILBOX DELETE EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd mbx_del
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** MAILBOX MESSAGING EXAMPLE (SMALL BUFFERS) ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd mbx
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** RESOURCE SEMAPHORE EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd res_sem
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** PRIORITY INHERITANCE EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd prioinher
+./run 0
+./run 1
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** FP EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd fp
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** FRANK EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd frank
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** MSG_CLOCK EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd msg_clock
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** SEM_CLOCK EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd sem_clock
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** PREEMPT EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd preempt
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** RESUMEFROMINTR EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd resumefromintr
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** SYSREQ EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd sysreq
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** STRESS EXAMPLE (1) ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd stress
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** STRESS EXAMPLE (2) ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd stress
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** SWITCHES EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd switches
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** TASKTIMER EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd tasktimer
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+#echo -e "                  *** ZENTR_PREEMPT EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd zentr_preempt
+# Temporarely off because I (Paolo) have problems with perl on my machines.
+# Try it youself as a stand alone test.
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** SOUND EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd sound
+./run
+cd ..
+
+clear
+echo""
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[1;31m"
+echo -e "                  *** CONDTEST EXAMPLE ***"
+[ "$BOOTUP" != "serial" ] && echo -en "\\033[0;39m"
+cd condtest
+./run
+cd ..

@@ -1,0 +1,80 @@
+****** LOCK A CPU SO THAT IT CAN BE USED ONLY BY REAL TIME TASKS ******
+
+This example shows how to reserve a CPU only to real time tasks, on a dual 
+processor. If you are so lucky to have more we leave its expansion to you.
+The default reserved CPU is #1. If you want it to be #0 change the macro
+RT_CPU in lock_task.h accordingly. Check also the macro IRQs in lock_task.h,
+and set the interrupts list found there according to your needs.
+
+Note that nothing happens after installing this example, except that Linux can
+now run only on a single CPU. Check it by typing the commands: ./masks, 
+./counts.
+Note that it might be possible you'll have to change ./masks to suite your 
+configuration.
+
+It is up to you to try it with any of the your applications. In fact once it 
+is installed you can run all RTAI applications as usual. Naturally while the 
+reserved CPU cannot be used by Linux, all your real time tasks can still use 
+the other CPU. 
+
+The idea is simply to install an idle real time task on the reserved CPU, so 
+you'll need to have also an RTAI scheduler installed to use the related module.
+What the module does:
+- Diverts all non real time Linux interrupts to the CPU that has not been 
+  reserved.
+- Installs an idle real time kernel task having Linux RTAI real time priority -
+  1, it does nothing but executing a never ending loop in kernel space, thus 
+  simply and effectively taking away that CPU from Linux. 
+- Installs an idle Linux SCHED_RR POSIX soft real time process with real time
+  priority 1, and forces it to run only on the reserved CPU, a low POSIX real
+  time priority is used to allow LXRT to use the reserved CPU with its soft 
+  POSIX real time processes. Such a process is used just to avoid having the 
+  Linux scheduler sending scheduling IPIs to the reserved CPU he sees as doing
+  nothing.
+
+REMARKS: 
+In fact the do nothing loop can either truly do nothing or keep checking if 
+any interrupt has been processed by Linux on the reserved CPU, according to 
+the macro CHECK being defined or not in lock_task.h.
+By way of example there are 2, farly similar, implementations. One uses an 
+external idle process, communicating on an RTAI proper srq, the other adopts 
+a buddy internal kernel thread as idle process. Just a game, there is no
+efficiency at stake here.
+
+Not used too much by us (DIAPM), but at least it did no harm to our applications
+that tried it. The only advantage it seems to have is likely an enhancement of 
+cache usage. Likely an illusion reserved only to the simplest applications. 
+Complex large real time systems having many tasks will disrupt the cache by 
+themselves anyhow. There is no way out, it is an inherent constraint biasing 
+the use of general purpose CPUs for real time. If you cannot accept it use DSPs.
+
+To play the reservation game type:
+
+make clean
+make
+./usetask (to use a Linux process) or ./usethread (to use a kernel thread)
+./lockcpu
+then toggle the reservation by typing ./switch, as many time as you want.
+A visual way to check it is to use a grafic "top" like the one found in KDE, or
+under KDE tools in GNOME.
+
+To release it type :
+
+./unlockcpu
+
+There is also the possibility of using it dynamically from your application.
+For that call:
+
+int rt_lock_cpu(int cpu, int irqs[], int nirqs)
+to get the lock, where:
+- cpu: the reserved CPU,
+- irqs: the list of the interrupts to be diverted to the other cpu,
+- nirqs: the number of terms of irqsl;
+it can be used to change just the CPU, after at least one complete call has
+been carried out, by setting irqs and nirqs to zero;
+and:
+
+void rt_unlock_cpu(void)
+to release it.
+
+Naturally they can be used also from user space by using LXRT.

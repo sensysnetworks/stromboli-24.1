@@ -1,0 +1,51 @@
+
+Super make script
+=================
+
+On the QNX 2 platform there was a version on make called smake (super make)
+I enjoyed using. If you started smake on a big application like our
+software package NPCS (that's the animal I've been working on since 1984)
+smake would locate all the processors available on the network
+and dispatch jobs (preprocessor, cc1, cc2, assembler and unfortunately 
+the linker as well) _all_ over the network like mad.
+
+Unfortunately the linker jobs could find local (i.e. on a remote node)
+out of date libraries and you ended up with a screwed up collection
+of incompatible executables. Controlling smake's linking behavior was feasible
+but definetly not something for beginners.
+
+One night back in 1990, or something like that, a customer called crying
+he had typed rm * by mistake in /exe/npcs where all the application executables
+were located. The box was still running and controlling a 20 MW electric arc
+furnace. His network consisted of a few 286 boxes clocked at 10-12 MHz.
+
+It was not all the customer's mistake. I had programs logging debug files
+in the same directory and he had tried to execute rm *.log.  
+
+Back then I kept a copy of the source code on every machine. It was easier
+to implement quick fixes that way as NPCS was not as stable as it is today.
+So I figured I would not have to catch a plane in a hurry...
+
+I answered: "Don't worry, just type make and hit return. It will take a while
+but everything will recompile". Happy to get such "prompt service" the
+customer hung up and went back to work.
+
+Half an hour later the phone rings again. The customer is back on the line 
+crying all his computers on the network had slowed down to a dead crawl.
+
+I asked: "What did you do?"
+
+He answered: "I ran smake."
+
+I replied: "Oh shit, you didn't do that, did you?"
+
+I then explained to the customer that for the next half hour or so he would
+have to live with sluggish GUI's but that his furnaces would continue
+to behave adequately because the control programs had a higher priority
+than the shell that had started the infamous smake.
+
+You now understand the origin of my script. And thanks to a reasonably well
+behaved real time OS I did not have to catch a plane in a hurry. These
+days NPCS log files are located in /tmp...
+
+Pierre

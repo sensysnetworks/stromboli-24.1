@@ -1,0 +1,27 @@
+LXRT has 16 extensions slots. See Documentation/README.EXTENDING_LXRT on how
+to use them.
+
+Those already used by modules found in this distributions are:
+0  - lxrt itself (hardwired),
+1  - tasklets    (hardwired),
+2  - net_rtcom   (hardwired),
+3    usi         (hardwired),
+8  - POSIX message queues 
+9  - kcomedi_lxrt,
+10 - fifos_lxrt,
+11 - bits,
+12 - tbx,
+13 - lock_task, NI boards support
+14 - rt_com_lxrt,
+15 - rt_leds.
+
+So you can reuse the above slots only if you are not using the related modules
+found in this distribution. 
+In any case check the value returned by: set_rt_fun_ext_index.
+
+N.B. (hardwired) above means they are assumed as basic RTAI proper extensions.
+Nonetheless extensions 1-2 do check if they can install on their hardwired 
+slots, exiting their installation in error, by using back doors installed in 
+LXRT. So you can use the related slots if neither tasklets nor net_rpc is being
+used by your applications, __NEVER__ use 0. In any case you'd better use the 
+other many free slots to avoid any trouble.

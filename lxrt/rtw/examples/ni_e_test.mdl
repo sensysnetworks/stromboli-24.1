@@ -1,0 +1,661 @@
+Model {
+  Name			  "ni_e_test"
+  Version		  4.00
+  SampleTimeColors	  off
+  LibraryLinkDisplay	  "none"
+  WideLines		  off
+  ShowLineDimensions	  off
+  ShowPortDataTypes	  off
+  RecordCoverage	  off
+  CovPath		  "/"
+  CovSaveName		  "covdata"
+  CovNameIncrementing	  off
+  CovHtmlReporting	  on
+  BlockNameDataTip	  off
+  BlockParametersDataTip  off
+  BlockDescriptionStringDataTip	off
+  ToolBar		  on
+  StatusBar		  on
+  BrowserShowLibraryLinks off
+  BrowserLookUnderMasks	  off
+  Created		  "Fri Feb 15 12:27:19 2002"
+  Creator		  "root"
+  UpdateHistory		  "UpdateHistoryNever"
+  ModifiedByFormat	  "%<Auto>"
+  LastModifiedBy	  "root"
+  ModifiedDateFormat	  "%<Auto>"
+  LastModifiedDate	  "Thu Jun 13 16:03:16 2002"
+  ModelVersionFormat	  "1.%<AutoIncrement:245>"
+  ConfigurationManager	  "none"
+  SimParamPage		  "Solver"
+  StartTime		  "0.0"
+  StopTime		  "10.0"
+  SolverMode		  "SingleTasking"
+  Solver		  "FixedStepDiscrete"
+  RelTol		  "1e-3"
+  AbsTol		  "auto"
+  Refine		  "1"
+  MaxStep		  "auto"
+  MinStep		  "auto"
+  MaxNumMinSteps	  "-1"
+  InitialStep		  "auto"
+  FixedStep		  "auto"
+  MaxOrder		  5
+  OutputOption		  "RefineOutputTimes"
+  OutputTimes		  "[]"
+  LoadExternalInput	  off
+  ExternalInput		  "[t, u]"
+  SaveTime		  off
+  TimeSaveName		  "tout"
+  SaveState		  off
+  StateSaveName		  "xout"
+  SaveOutput		  off
+  OutputSaveName	  "yout"
+  LoadInitialState	  off
+  InitialState		  "xInitial"
+  SaveFinalState	  off
+  FinalStateName	  "xFinal"
+  SaveFormat		  "Array"
+  LimitDataPoints	  on
+  MaxDataPoints		  "20000"
+  Decimation		  "1"
+  AlgebraicLoopMsg	  "warning"
+  MinStepSizeMsg	  "warning"
+  UnconnectedInputMsg	  "warning"
+  UnconnectedOutputMsg	  "warning"
+  UnconnectedLineMsg	  "warning"
+  InheritedTsInSrcMsg	  "warning"
+  SingleTaskRateTransMsg  "none"
+  MultiTaskRateTransMsg	  "error"
+  IntegerOverflowMsg	  "warning"
+  CheckForMatrixSingularity "none"
+  UnnecessaryDatatypeConvMsg "none"
+  Int32ToFloatConvMsg	  "warning"
+  SignalLabelMismatchMsg  "none"
+  LinearizationMsg	  "none"
+  VectorMatrixConversionMsg "none"
+  SfunCompatibilityCheckMsg "none"
+  BlockPriorityViolationMsg "warning"
+  ArrayBoundsChecking	  "none"
+  ConsistencyChecking	  "none"
+  ZeroCross		  on
+  Profile		  off
+  SimulationMode	  "external"
+  RTWSystemTargetFile	  "grt_rtai.tlc"
+  RTWOptions		  " -aBasePriority=30 -aExtMode=1 -aForceParamTrailCom"
+"ments=0 -aInlineInvariantSignals=0 -aInlineParameters=0 -aLocalBlockOutputs=1"
+" -aLogVarNameModifier=\"rt_\" -aMatFileLogging=0 -aRTWVerbose=1 -aRollThresho"
+"ld=5 -aShowEliminatedStatements=1 -aTaskStackSize=16384"
+  RTWInlineParameters	  off
+  RTWRetainRTWFile	  off
+  RTWTemplateMakefile	  "grt_rtai.tmf"
+  RTWMakeCommand	  "make_rtw"
+  RTWGenerateCodeOnly	  off
+  TLCProfiler		  off
+  TLCDebug		  off
+  TLCCoverage		  off
+  AccelSystemTargetFile	  "accel.tlc"
+  AccelTemplateMakefile	  "accel_default_tmf"
+  AccelMakeCommand	  "make_rtw"
+  ExtModeMexFile	  "ext_comm"
+  ExtModeBatchMode	  off
+  ExtModeTrigType	  "manual"
+  ExtModeTrigMode	  "normal"
+  ExtModeTrigPort	  "1"
+  ExtModeTrigElement	  "any"
+  ExtModeTrigDuration	  10000
+  ExtModeTrigHoldOff	  0
+  ExtModeTrigDelay	  0
+  ExtModeTrigDirection	  "rising"
+  ExtModeTrigLevel	  0
+  ExtModeArchiveMode	  "off"
+  ExtModeAutoIncOneShot	  off
+  ExtModeIncDirWhenArm	  off
+  ExtModeAddSuffixToVar	  off
+  ExtModeWriteAllDataToWs off
+  ExtModeArmWhenConnect	  on
+  ExtModeLogAll		  on
+  OptimizeBlockIOStorage  on
+  BufferReuse		  on
+  ParameterPooling	  on
+  BlockReductionOpt	  off
+  BooleanDataType	  off
+  BlockDefaults {
+    Orientation		    "right"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    NamePlacement	    "normal"
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+    ShowName		    on
+  }
+  AnnotationDefaults {
+    HorizontalAlignment	    "center"
+    VerticalAlignment	    "middle"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  LineDefaults {
+    FontName		    "Helvetica"
+    FontSize		    9
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  System {
+    Name		    "ni_e_test"
+    Location		    [333, 72, 1033, 754]
+    Open		    on
+    ModelBrowserVisibility  off
+    ModelBrowserWidth	    200
+    ScreenColor		    "white"
+    PaperOrientation	    "landscape"
+    PaperPositionMode	    "auto"
+    PaperType		    "usletter"
+    PaperUnits		    "inches"
+    ZoomFactor		    "100"
+    AutoZoom		    on
+    ReportName		    "simulink-default.rpt"
+    Block {
+      BlockType		      Reference
+      Name		      "AI"
+      Ports		      [0, 1]
+      Position		      [50, 294, 170, 366]
+      SourceBlock	      "ni_e/AI"
+      SourceType	      "NI_E_AI"
+      nch		      "2"
+      type		      " RSE"
+      gain		      "1"
+      pol		      "bipolar "
+      dither		      off
+      timer		      on
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Reference
+      Name		      "AO"
+      Ports		      [1]
+      Position		      [545, 394, 665, 466]
+      SourceBlock	      "ni_e/AO"
+      SourceType	      "NI_E_AO"
+      chan		      "DAC0 "
+      ref		      "internal "
+      pol		      " bipolar"
+      timer		      on
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Reference
+      Name		      "AO1"
+      Ports		      [1]
+      Position		      [545, 524, 665, 596]
+      SourceBlock	      "ni_e/AO"
+      SourceType	      "NI_E_AO"
+      chan		      " DAC1"
+      ref		      "internal "
+      pol		      " bipolar"
+      timer		      on
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Reference
+      Name		      "DI"
+      Ports		      [0, 1]
+      Position		      [50, 509, 170, 581]
+      SourceBlock	      "ni_e/DI"
+      SourceType	      "NI_E_DI"
+      has_8255		      on
+      port		      "A"
+      nch_8255		      "2"
+      daqstc_dio	      off
+      nch_daqstc	      "1"
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Reference
+      Name		      "DI1"
+      Ports		      [0, 1]
+      Position		      [50, 414, 170, 486]
+      SourceBlock	      "ni_e/DI"
+      SourceType	      "NI_E_DI"
+      has_8255		      off
+      port		      "A"
+      nch_8255		      "2"
+      daqstc_dio	      on
+      nch_daqstc	      "2"
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Reference
+      Name		      "DO"
+      Ports		      [1]
+      Position		      [545, 29, 665, 101]
+      SourceBlock	      "ni_e/DO"
+      SourceType	      "NI_E_DO"
+      has_8255		      off
+      port		      "B"
+      nch_8255		      "4"
+      daqstc_dio	      on
+      nch_daqstc	      "1"
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Reference
+      Name		      "DO1"
+      Ports		      [1]
+      Position		      [545, 139, 665, 211]
+      SourceBlock	      "ni_e/DO"
+      SourceType	      "NI_E_DO"
+      has_8255		      off
+      port		      "B"
+      nch_8255		      "1"
+      daqstc_dio	      on
+      nch_daqstc	      "7"
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Reference
+      Name		      "DO2"
+      Ports		      [1]
+      Position		      [545, 279, 665, 351]
+      SourceBlock	      "ni_e/DO"
+      SourceType	      "NI_E_DO"
+      has_8255		      on
+      port		      "B"
+      nch_8255		      "6"
+      daqstc_dio	      off
+      nch_daqstc	      "7"
+      dt		      "0.0001"
+    }
+    Block {
+      BlockType		      Demux
+      Name		      "Demux"
+      Ports		      [1, 2]
+      Position		      [205, 260, 210, 395]
+      BackgroundColor	      "black"
+      ShowName		      off
+      Outputs		      "2"
+      BusSelectionMode	      off
+    }
+    Block {
+      BlockType		      Demux
+      Name		      "Demux1"
+      Ports		      [1, 2]
+      Position		      [205, 526, 210, 564]
+      BackgroundColor	      "black"
+      ShowName		      off
+      Outputs		      "2"
+      BusSelectionMode	      off
+    }
+    Block {
+      BlockType		      Mux
+      Name		      "Mux"
+      Ports		      [6, 1]
+      Position		      [495, 240, 500, 385]
+      ShowName		      off
+      Inputs		      "6"
+      DisplayOption	      "bar"
+    }
+    Block {
+      BlockType		      DiscretePulseGenerator
+      Name		      "Pulse\nGenerator1"
+      Position		      [410, 48, 455, 82]
+      Amplitude		      "0.5"
+      Period		      "50"
+      PulseWidth	      "10"
+      PhaseDelay	      "0"
+      SampleTime	      "0.0001"
+      VectorParams1D	      on
+    }
+    Block {
+      BlockType		      DiscretePulseGenerator
+      Name		      "Pulse\nGenerator2"
+      Position		      [410, 158, 455, 192]
+      Amplitude		      "0.5"
+      Period		      "50"
+      PulseWidth	      "40"
+      PhaseDelay	      "0"
+      SampleTime	      "0.0001"
+      VectorParams1D	      on
+    }
+    Block {
+      BlockType		      DiscretePulseGenerator
+      Name		      "Pulse\nGenerator3"
+      Position		      [345, 233, 390, 267]
+      Amplitude		      "0.5"
+      Period		      "50"
+      PulseWidth	      "25"
+      PhaseDelay	      "0"
+      SampleTime	      "0.0001"
+      VectorParams1D	      on
+    }
+    Block {
+      BlockType		      Sum
+      Name		      "Sum1"
+      Ports		      [2, 1]
+      Position		      [465, 550, 485, 570]
+      ShowName		      off
+      IconShape		      "round"
+      Inputs		      "|++"
+      SaturateOnIntegerOverflow	on
+    }
+    Block {
+      BlockType		      Sum
+      Name		      "Sum2"
+      Ports		      [2, 1]
+      Position		      [470, 420, 490, 440]
+      ShowName		      off
+      IconShape		      "round"
+      Inputs		      "|++"
+      SaturateOnIntegerOverflow	on
+    }
+    Block {
+      BlockType		      Constant
+      Name		      "offset1"
+      Position		      [380, 620, 410, 650]
+      Value		      "0"
+      VectorParams1D	      on
+    }
+    Block {
+      BlockType		      Constant
+      Name		      "offset2"
+      Position		      [380, 490, 410, 520]
+      Value		      "0"
+      VectorParams1D	      on
+    }
+    Block {
+      BlockType		      Scope
+      Name		      "scope0"
+      Ports		      [1]
+      Position		      [260, 279, 290, 311]
+      Floating		      off
+      Location		      [627, 77, 1230, 423]
+      Open		      off
+      NumInputPorts	      "1"
+      TickLabels	      "OneTimeTick"
+      ZoomMode		      "on"
+      List {
+	ListType		AxesTitles
+	axes1			"%<SignalLabel>"
+      }
+      Grid		      "on"
+      TimeRange		      "1"
+      YMin		      "-10"
+      YMax		      "10"
+      SaveToWorkspace	      off
+      SaveName		      "ScopeData"
+      DataFormat	      "StructureWithTime"
+      LimitDataPoints	      off
+      MaxDataPoints	      "5000"
+      Decimation	      "1"
+      SampleInput	      off
+      SampleTime	      "0.0001"
+    }
+    Block {
+      BlockType		      Scope
+      Name		      "scope1"
+      Ports		      [1]
+      Position		      [260, 344, 290, 376]
+      Floating		      off
+      Location		      [625, 477, 1230, 846]
+      Open		      off
+      NumInputPorts	      "1"
+      TickLabels	      "OneTimeTick"
+      ZoomMode		      "on"
+      List {
+	ListType		AxesTitles
+	axes1			"%<SignalLabel>"
+      }
+      Grid		      "on"
+      TimeRange		      "0.04"
+      YMin		      "-10"
+      YMax		      "10"
+      SaveToWorkspace	      off
+      SaveName		      "ScopeData1"
+      DataFormat	      "StructureWithTime"
+      LimitDataPoints	      on
+      MaxDataPoints	      "200000"
+      Decimation	      "1"
+      SampleInput	      off
+      SampleTime	      "0.00005"
+    }
+    Block {
+      BlockType		      Scope
+      Name		      "scope2"
+      Ports		      [2]
+      Position		      [260, 526, 290, 564]
+      Floating		      off
+      Location		      [627, 77, 1232, 557]
+      Open		      off
+      NumInputPorts	      "2"
+      TickLabels	      "OneTimeTick"
+      ZoomMode		      "on"
+      List {
+	ListType		AxesTitles
+	axes1			"%<SignalLabel>"
+	axes2			"%<SignalLabel>"
+      }
+      Grid		      "on"
+      TimeRange		      "0.01"
+      YMin		      "-1~-1"
+      YMax		      "2~2"
+      SaveToWorkspace	      off
+      SaveName		      "ScopeData2"
+      DataFormat	      "StructureWithTime"
+      LimitDataPoints	      off
+      MaxDataPoints	      "5000"
+      Decimation	      "1"
+      SampleInput	      off
+      SampleTime	      "0.0001"
+    }
+    Block {
+      BlockType		      Scope
+      Name		      "scope3"
+      Ports		      [1]
+      Position		      [260, 434, 290, 466]
+      Floating		      off
+      Location		      [625, 477, 1230, 846]
+      Open		      off
+      NumInputPorts	      "1"
+      TickLabels	      "OneTimeTick"
+      ZoomMode		      "on"
+      List {
+	ListType		AxesTitles
+	axes1			"%<SignalLabel>"
+      }
+      Grid		      "on"
+      TimeRange		      "0.04"
+      YMin		      "-1"
+      YMax		      "2"
+      SaveToWorkspace	      off
+      SaveName		      "ScopeData3"
+      DataFormat	      "StructureWithTime"
+      LimitDataPoints	      on
+      MaxDataPoints	      "200000"
+      Decimation	      "1"
+      SampleInput	      off
+      SampleTime	      "0.00005"
+    }
+    Block {
+      BlockType		      SignalGenerator
+      Name		      "sine"
+      Position		      [380, 545, 410, 575]
+      WaveForm		      "sine"
+      Amplitude		      "5"
+      Frequency		      "50"
+      Units		      "Hertz"
+      VectorParams1D	      on
+    }
+    Block {
+      BlockType		      SignalGenerator
+      Name		      "square"
+      Position		      [380, 415, 410, 445]
+      WaveForm		      "square"
+      Amplitude		      "2"
+      Frequency		      "30"
+      Units		      "Hertz"
+      VectorParams1D	      on
+    }
+    Line {
+      SrcBlock		      "offset1"
+      SrcPort		      1
+      Points		      [60, 0]
+      DstBlock		      "Sum1"
+      DstPort		      2
+    }
+    Line {
+      SrcBlock		      "Sum1"
+      SrcPort		      1
+      DstBlock		      "AO1"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "sine"
+      SrcPort		      1
+      DstBlock		      "Sum1"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Demux"
+      SrcPort		      1
+      DstBlock		      "scope0"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Demux"
+      SrcPort		      2
+      DstBlock		      "scope1"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "AI"
+      SrcPort		      1
+      DstBlock		      "Demux"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "offset2"
+      SrcPort		      1
+      Points		      [65, 0]
+      DstBlock		      "Sum2"
+      DstPort		      2
+    }
+    Line {
+      SrcBlock		      "square"
+      SrcPort		      1
+      DstBlock		      "Sum2"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Sum2"
+      SrcPort		      1
+      DstBlock		      "AO"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Pulse\nGenerator1"
+      SrcPort		      1
+      DstBlock		      "DO"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Pulse\nGenerator2"
+      SrcPort		      1
+      DstBlock		      "DO1"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Pulse\nGenerator3"
+      SrcPort		      1
+      Points		      [0, 0; 15, 0]
+      Branch {
+	Points			[15, 0]
+	Branch {
+	  Points		  [15, 0]
+	  Branch {
+	    Points		    [10, 0]
+	    Branch {
+	      Points		      [10, 0]
+	      Branch {
+		DstBlock		"Mux"
+		DstPort			1
+	      }
+	      Branch {
+		Points			[0, 25]
+		DstBlock		"Mux"
+		DstPort			2
+	      }
+	    }
+	    Branch {
+	      Points		      [0, 50]
+	      DstBlock		      "Mux"
+	      DstPort		      3
+	    }
+	  }
+	  Branch {
+	    Points		    [0, 75]
+	    DstBlock		    "Mux"
+	    DstPort		    4
+	  }
+	}
+	Branch {
+	  Points		  [0, 100]
+	  DstBlock		  "Mux"
+	  DstPort		  5
+	}
+      }
+      Branch {
+	Points			[0, 125]
+	DstBlock		"Mux"
+	DstPort			6
+      }
+    }
+    Line {
+      SrcBlock		      "Mux"
+      SrcPort		      1
+      DstBlock		      "DO2"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "DI"
+      SrcPort		      1
+      DstBlock		      "Demux1"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Demux1"
+      SrcPort		      1
+      DstBlock		      "scope2"
+      DstPort		      1
+    }
+    Line {
+      SrcBlock		      "Demux1"
+      SrcPort		      2
+      DstBlock		      "scope2"
+      DstPort		      2
+    }
+    Line {
+      SrcBlock		      "DI1"
+      SrcPort		      1
+      DstBlock		      "scope3"
+      DstPort		      1
+    }
+    Annotation {
+      Position		      [192, 129]
+      Text		      "This is a simple real time example to test the "
+"\nI/O digital and analog support\nof the National Instruments PCI E Series bo"
+"ards\nunder LXRT/ Matlab Simulink RTW.\nFor further details see README.ni_e."
+"\n\nPlease report any bug to Lorenzo Dozio\n(dozio@aero.polimi.it)"
+      FontName		      "new century schoolbook"
+      FontSize		      14
+      FontAngle		      "italic"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+#!/bin/sh
+
+sync
+echo " "
+echo "MQ demo 1"
+echo "output goes to console"
+echo "Type <return> to install the modules"
+read junk
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../rtai_pqueue.o
+sync
+insmod ./q_test.o
+insmod ./mod_stuff.o
+echo "Now start the application"
+echo "Type <return> to remove modules"
+read junk
+sync
+rmmod mod_stuff
+rmmod q_test
+rmmod rtai_pqueue
+rmmod rtai_sched
+rmmod rtai

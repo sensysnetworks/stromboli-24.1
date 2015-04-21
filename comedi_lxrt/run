@@ -1,0 +1,20 @@
+
+sync
+
+/sbin/insmod ../modules/rtai.o
+/sbin/insmod ../modules/rtai_sched.o
+/sbin/insmod ../modules/rtai_lxrt.o
+/sbin/insmod ../modules/rtai_shm.o
+
+/sbin/insmod /lib/modules/`uname -r`/comedi/comedi/comedi.o
+/sbin/insmod /lib/modules/`uname -r`/comedi/comedi/kcomedilib/kcomedilib.o
+
+/sbin/insmod /lib/modules/`uname -r`/comedi/comedi/drivers/mite.o
+/sbin/insmod /lib/modules/`uname -r`/comedi/comedi/drivers/8255.o
+/sbin/insmod /lib/modules/`uname -r`/comedi/comedi/drivers/ni_pcimio.o
+
+/usr/sbin/comedi_config /dev/comedi0 ni_pcimio
+
+/sbin/insmod ./rtai_comedi_lxrt.o
+
+sync

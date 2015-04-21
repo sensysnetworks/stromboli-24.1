@@ -1,0 +1,116 @@
+diff -X xxx -ruN octave-2.1.34/liboctave/oct-time.h octave-2.1.34-patched/liboctave/oct-time.h
+--- octave-2.1.34/liboctave/oct-time.h	Tue Feb  1 10:07:25 2000
++++ octave-2.1.34-patched/liboctave/oct-time.h	Tue Nov  6 12:09:52 2001
+@@ -68,6 +68,7 @@
+   ~octave_time (void) { }
+ 
+   void stamp (void);
++  void dont_stamp(void) {} // PGGC
+ 
+   operator double () const { return ot_unix_time + ot_usec / 1e6; }
+ 
+diff -X xxx -ruN octave-2.1.34/src/DOCSTRINGS octave-2.1.34-patched/src/DOCSTRINGS
+--- octave-2.1.34/src/DOCSTRINGS	Tue Nov  6 12:57:12 2001
++++ octave-2.1.34-patched/src/DOCSTRINGS	Tue Nov  6 12:29:28 2001
+@@ -5781,6 +5781,12 @@
+ other types of files, you should use some combination of the functions
+ @code{file_in_path} and @code{stat} instead.
+ @end deftypefn
++preload
++-*- texinfo -*-
++@deftypefn {Built-in Function} {} preload (@var{name})
++Returns 0 if the file NAME (.m or .oct) exists and was preloaded.
++
++@end deftypefn
+ document
+ -*- texinfo -*-
+ @deftypefn {Built-in Function} {} document (@var{symbol}, @var{text})
+diff -X xxx -ruN octave-2.1.34/src/builtins.cc octave-2.1.34-patched/src/builtins.cc
+--- octave-2.1.34/src/builtins.cc	Tue Nov  6 12:44:18 2001
++++ octave-2.1.34-patched/src/builtins.cc	Tue Nov  6 12:16:33 2001
+@@ -686,6 +686,8 @@
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} is_global (@var{name})\nReturn 1 if @var{name} is globally visible.  Otherwise, return 0.  For\nexample,\n\n@example\n@group\nglobal x\nis_global (\"x\")\n     @result{} 1\n@end group\n@end example\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  exist  ,     args  ,       ,   false ,    
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} exist (@var{name})\nReturn 1 if the name exists as a variable, 2 if the name (after\nappending @samp{.m}) is a function file in the path, 3 if the name is a\n@samp{.oct} file in the path, 5 if the name is a built-in function, or\n6 is the name is a built-in constant.  Otherwise, return 0.\n\nThis function also returns 2 if a regular file called @var{name}\nexists in Octave's @code{LOADPATH}.  If you want information about\nother types of files, you should use some combination of the functions\n@code{file_in_path} and @code{stat} instead.\n@end deftypefn"  )   
++ XDEFUN_INTERNAL (  preload  ,     args  ,       ,   false ,    
++  "-*- texinfo -*-\n@deftypefn {Built-in Function} {} preload (@var{name})\nReturns 0 if the file NAME (.m or .oct) exists and was preloaded.\n\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  document  ,     args  ,       ,   false ,    
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} document (@var{symbol}, @var{text})\nSet the documentation string for @var{symbol} to @var{text}.\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  who  ,     args  ,       ,   true ,    
+diff -X xxx -ruN octave-2.1.34/src/gendoc.cc octave-2.1.34-patched/src/gendoc.cc
+--- octave-2.1.34/src/gendoc.cc	Tue Nov  6 12:57:10 2001
++++ octave-2.1.34-patched/src/gendoc.cc	Tue Nov  6 12:29:25 2001
+@@ -1198,6 +1198,8 @@
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} is_global (@var{name})\nReturn 1 if @var{name} is globally visible.  Otherwise, return 0.  For\nexample,\n\n@example\n@group\nglobal x\nis_global (\"x\")\n     @result{} 1\n@end group\n@end example\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  exist  ,     args  ,       ,   false ,    
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} exist (@var{name})\nReturn 1 if the name exists as a variable, 2 if the name (after\nappending @samp{.m}) is a function file in the path, 3 if the name is a\n@samp{.oct} file in the path, 5 if the name is a built-in function, or\n6 is the name is a built-in constant.  Otherwise, return 0.\n\nThis function also returns 2 if a regular file called @var{name}\nexists in Octave's @code{LOADPATH}.  If you want information about\nother types of files, you should use some combination of the functions\n@code{file_in_path} and @code{stat} instead.\n@end deftypefn"  )   
++ XDEFUN_INTERNAL (  preload  ,     args  ,       ,   false ,    
++  "-*- texinfo -*-\n@deftypefn {Built-in Function} {} preload (@var{name})\nReturns 0 if the file NAME (.m or .oct) exists and was preloaded.\n\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  document  ,     args  ,       ,   false ,    
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} document (@var{symbol}, @var{text})\nSet the documentation string for @var{symbol} to @var{text}.\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  who  ,     args  ,       ,   true ,    
+diff -X xxx -ruN octave-2.1.34/src/input.cc octave-2.1.34-patched/src/input.cc
+--- octave-2.1.34/src/input.cc	Thu Apr 19 20:42:32 2001
++++ octave-2.1.34-patched/src/input.cc	Tue Nov  6 12:09:16 2001
+@@ -197,7 +197,7 @@
+ {
+   std::string retval;
+ 
+-  Vlast_prompt_time.stamp ();
++  Vlast_prompt_time.dont_stamp(); // PGGC
+ 
+   if ((interactive || forced_interactive)
+       && (! (reading_fcn_file || reading_script_file)))
+diff -X xxx -ruN octave-2.1.34/src/variables.cc octave-2.1.34-patched/src/variables.cc
+--- octave-2.1.34/src/variables.cc	Mon Jun 26 17:47:00 2000
++++ octave-2.1.34-patched/src/variables.cc	Tue Nov  6 12:09:33 2001
+@@ -600,6 +600,37 @@
+   return sym_rec;
+ }
+ 
++//PGGC new builtin function.
++DEFUN (preload, args, ,
++  "-*- texinfo -*-\n\
++@deftypefn {Built-in Function} {} preload (@var{name})\n\
++Returns 0 if the file NAME (.m or .oct) exists and was preloaded.\n\
++\n\
++@end deftypefn")
++{
++  octave_value_list retval=1.0;
++
++  int nargin = args.length ();
++
++  if (nargin != 1 || !args(0).is_string())
++    {
++      print_usage ("preload");
++      return retval;
++    }
++
++  std::string name = args(0).string_value ();
++  {
++  // Remove .oct or .m extension if any
++  int idx = (int) name.find_first_of('.'); 	
++  if (idx > 0) name.erase(idx);
++  symbol_record *sym_rec;
++  sym_rec = lookup_by_name (name, false);
++  sym_rec->make_eternal();
++  }
++
++  return retval = 0.0;
++}
++
+ octave_value
+ get_global_value (const std::string& nm)
+ {
+diff -X xxx -ruN octave-2.1.34/src/variables.df octave-2.1.34-patched/src/variables.df
+--- octave-2.1.34/src/variables.df	Tue Nov  6 12:44:06 2001
++++ octave-2.1.34-patched/src/variables.df	Tue Nov  6 12:16:21 2001
+@@ -2,6 +2,8 @@
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} is_global (@var{name})\nReturn 1 if @var{name} is globally visible.  Otherwise, return 0.  For\nexample,\n\n@example\n@group\nglobal x\nis_global (\"x\")\n     @result{} 1\n@end group\n@end example\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  exist  ,     args  ,       ,   false ,    
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} exist (@var{name})\nReturn 1 if the name exists as a variable, 2 if the name (after\nappending @samp{.m}) is a function file in the path, 3 if the name is a\n@samp{.oct} file in the path, 5 if the name is a built-in function, or\n6 is the name is a built-in constant.  Otherwise, return 0.\n\nThis function also returns 2 if a regular file called @var{name}\nexists in Octave's @code{LOADPATH}.  If you want information about\nother types of files, you should use some combination of the functions\n@code{file_in_path} and @code{stat} instead.\n@end deftypefn"  )   
++ XDEFUN_INTERNAL (  preload  ,     args  ,       ,   false ,    
++  "-*- texinfo -*-\n@deftypefn {Built-in Function} {} preload (@var{name})\nReturns 0 if the file NAME (.m or .oct) exists and was preloaded.\n\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  document  ,     args  ,       ,   false ,    
+   "-*- texinfo -*-\n@deftypefn {Built-in Function} {} document (@var{symbol}, @var{text})\nSet the documentation string for @var{symbol} to @var{text}.\n@end deftypefn"  )   
+  XDEFUN_INTERNAL (  who  ,     args  ,       ,   true ,    

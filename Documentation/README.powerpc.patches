@@ -1,0 +1,74 @@
+RTAI Kernel Patches for PowerPC/Linux
+=====================================
+
+In the /patches directory you will find kernel patches for a few
+PowerPC/Linux kernel trees and reference systems. They are listed at the
+end.
+
+Note: The patches might not be appropriate as they are for your system 
+      or kernel tree but it is usually not a big deal to adapt them.
+
+As explained at "http://penguinppc.org/dev/kernel.shtml", there are up to 3
+somehow different kernel trees. Since recently, there are also patches to
+make 32-bit PowerPC/Linux work with the official Linux tree at
+ftp://ftp.kernel.org/pub/linux/kernel/ports/ppc. You can install it the
+following way:
+
+  $ wget ftp://ftp.kernel.org/pub/linux/kernel/v2.4/linux-2.4.18.tar.gz
+  $ wget ftp://ftp.kernel.org/pub/linux/kernel/ports/ppc/ppc-patch-2.4.18.gz
+
+  $ tar xzf linux-2.4.18.tar.gz
+  $ mv linux linux-2.4.18-ppc
+  $ gzip -d ppc-patch-2.4.18.gz
+  $ cd linux-2.4.18-ppc
+  $ patch -p1 < ../ppc-patch-2.4.18
+
+RTAI kernel patches for such patched trees are named:
+
+  patch-linux-2.4.18-ppc-rthal5g
+
+Sometimes there are no patches to make PowerPC/Linux work with the official
+Linux tree or the linuxppc_2_4_devel is preferred like on most embedded
+systems, then you may need to take the tree directly from Bitkeeper's
+repository as shown:
+
+  # Clone the BK repository of linuxppc_2_4_devel:
+  bk clone bk://ppc.bkserver.net/linuxppc_2_4_devel <path>
+
+  # Export a defined version via the change set number, here 1.851.
+  cd <path>/linuxppc_2_4_devel
+  bk export -r1.851 <path>/linuxppc_2_4_devel-r1.851
+
+You can find more help at http://penguinppc.org/dev/kernel.shtml.
+
+RTAI kernel patches for such trees are named:
+
+ patch-linuxppc_2_4_devel-r1.851-rthal5g
+
+
+Reference Kernel Trees and Systems:
+----------------------------------
+
+o patch-linux-2.4.18-ppc-rthal5g:
+
+	Tested on a Macintosh iBook2 (MPC750CX, 500MHz) running 
+	Yellow Dog Linux 2.1.
+
+o patch-linuxppc_2_4_devel-r1.851-rthal5g:
+
+	Tested on a CPCI 405 board (IBM 405GP, 200MHz) with HardHat 
+	Linux 2.0 from MontaVista.
+
+
+Other useful Tips and Tricks:
+----------------------------
+
+o On slow systems the run parameters of RTAI kernel modules like timer 
+  period or task stack size might not be appropriate. Thus, if you see 
+  wierd system crashes and hang-ups try to increase the task stack size 
+  first. If it does not help you should increase the period time.
+
+o A PowerPC Linux tree of another RTAI/Linux bundle is likely to work 
+  with the RTAI from the CVS repository as well e.g. the DENX Linux 
+  2.4.4 tree with the up-to-date RTAI kernel patch.
+

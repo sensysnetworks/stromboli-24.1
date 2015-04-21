@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+#smake (C) Pierre Cloutier <pcloutier@PoseidonControls.com> LGPLv2
+#
+echo Make in progress. Logging everything in make.log...
+VAR="$(cat /proc/cpuinfo | grep 'processor' | wc -l)"
+#echo [$VAR]
+if [ $VAR = 2 ]; then
+# Time to recompile 24.1.2 on DELL Precision 210 with twin PIII500's.
+# jobs = 1  ~122 sec
+# jobs = 2   ~69 sec  
+# jobs = 4   ~73 sec
+# jobs = 16  ~74 sec Compiling the kernel with 16 jobs a good test for LXRT ?
+	echo "SMP boxes can crunch faster"
+	export MAKECMDLOPTS=--jobs=2
+	make --jobs=2 $* &> make.log
+else
+        echo "Plain UP box"
+	make $* &> make.log
+fi
+if [ $? -eq 0 ] ; then
+	echo -e "Done.\a"
+else
+	echo -e "There were errors...\a"
+fi

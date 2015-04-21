@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# warning, embedded tab
+objdump -dr $1| grep -e ' 	f' -e ' 	lfd' -e ' 	stfd'

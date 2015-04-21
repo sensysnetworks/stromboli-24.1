@@ -1,0 +1,229 @@
+#!/bin/sh
+
+#
+# Some eye candy for status messages
+#
+
+STATUS_COL=75
+
+esc=`echo -en "\033"`
+warn="${esc}[1;31m"
+done="${esc}[1;32m"
+attn="${esc}[1;33m"
+stat=`echo -en "\015${esc}[${STATUS_COL}C${esc}[10D"`
+norm=`echo -en "${esc}[m\017"`
+
+rc_done="${stat}${done}done${norm}"
+rc_failed="${stat}${warn}failed${norm}"
+rc_skipped="${stat}${attn}skipped${norm}"
+
+SUDO=`which sudo`
+MODPROBE=/sbin/modprobe
+INSMOD=/sbin/insmod
+RMMOD=/sbin/rmmod
+LSMOD=/sbin/lsmod
+
+
+# -----------------------------------------------------------------------------
+# Helper functions
+# -----------------------------------------------------------------------------
+
+modprobe_module() {
+
+	module_name=`basename $1`
+
+	$SUDO $MODPROBE $module_name
+
+	result=`$SUDO $LSMOD | grep ^$module_name`
+	if [ "$result" == "" ]; then
+		echo $rc_failed; echo
+		echo $rc_failed; echo;
+		echo "$module_name.o could not be loaded! Exiting.";
+		echo
+		exit;
+	fi
+}
+
+insmod_module() {
+
+	module_name=`basename $1`
+	if [ "`$SUDO $LSMOD | grep ^$module_name`" != "" ]; then
+		$SUDO $RMMOD $module_name
+	fi
+
+	$SUDO $INSMOD $1.o $2 $3 $4 $5 $6 $7 $8 $9
+
+        result=`$SUDO $LSMOD | grep ^$module_name`
+        if [ "$result" == "" ]; then
+                echo $rc_failed; echo
+                echo $rc_failed; echo;
+                echo "$1.o could not be loaded! Exiting.";
+                echo
+                exit;
+        fi
+}
+
+rmmod_module() {
+
+	module_name=`basename $1`
+	$SUDO $RMMOD $module_name
+
+        result=`$SUDO $LSMOD | grep ^$module_name`
+        if [ "$result" != "" ]; then
+                echo $rc_failed; echo
+                echo $rc_failed; echo;
+                echo "$module_name could not be removed! Exiting.";
+                echo
+                exit;
+        fi
+}
+
+
+# -----------------------------------------------------------------------------
+# Definition of the tests
+# -----------------------------------------------------------------------------
+
+#
+# LXRT msg clock test
+#
+
+TEST_LXRT_MSGCLOCK_PID=0;
+test_lxrt_msgclock() {
+
+	echo -n "starting 'lxrt msg clock ' test:"
+
+	echo $rc_done
+}
+
+
+#
+# LXRT latency calibration test
+#
+
+TEST_LXRT_LATENCY_PID=0;
+test_lxrt_latency() {
+
+        echo -n "starting 'lxrt latency  ' test:"
+
+        echo $rc_done
+}
+
+
+#
+# Normal latency calibration test
+#
+
+TEST_LATENCY_PID=0;
+test_latency() {
+	case $1 in 
+	 start) 
+		echo -n "   starting 'latency       ' test.";
+		if [ ! -e "../../latency_calibration/latency_calibrate.o" ]; then
+			echo $rc_failed; echo; 
+			echo "../../latency_calibration/latency_calibrate.o not found! Exiting.";
+			echo 
+			exit;
+		fi
+
+		# prepare everything we need for the test
+		modprobe_module rtai
+		modprobe_module rt_mem_mgr
+		modprobe_module rtai_fifos
+		modprobe_module rtai_sched
+
+		insmod_module ../../latency_calibration/latency_calibrate overall=0
+
+		# now start the userspace application
+		../../latency_calibration/check > $RESULTPATH/latency_calibrate.log &
+		echo $! > $RESULTPATH/latency_calibrate.pid
+
+		echo $rc_done
+		;;
+	 stop)
+		echo -n "   stoping  'latency       ' test.";
+		# remove the module 
+		rmmod_module latency_calibrate
+		# remove the userspace application
+		(kill `cat $RESULTPATH/latency_calibrate.pid` 2>&1 > /dev/null) 2>&1 > /dev/null	
+		
+		echo $rc_done
+		;;
+	esac
+}
+
+start_tests() {
+
+	# test_lxrt_msgclock_start;
+	# test_lxrt_latency_start;
+	test_latency start;
+	echo 
+}
+
+stop_tests() {
+
+	test_latency stop;
+	# test_lxrt_latency stop;
+	# test_lxrt_msgclock stop;
+
+}
+
+break_tests() {
+
+	echo "CTRL-C detected, stoping tests"
+	echo 
+	stop_tests
+	echo
+	echo "----------------------------------------------------------------------------"
+	echo 
+	exit
+}
+
+
+trap break_tests INT
+
+clear
+echo 
+echo "----------------------------------------------------------------------------"
+echo "| RTAI Test Suite                                                          |"
+echo "----------------------------------------------------------------------------"
+echo 
+
+
+# find out where to store the results of the tests
+TODAY=`date +%Y%m%d`
+echo -n "Write results to [/tmp/rtai-"$TODAY"]: "
+read RESULTPATH
+
+if [ "$RESULTPATH" == "" ]; then 
+	RESULTPATH="/tmp/rtai-$TODAY"	
+fi
+if [ ! -d $RESULTPATH ]; then
+	mkdir $RESULTPATH
+fi
+
+
+# find out test duration
+echo -n "For how many hours do you want to run the test: [6] "
+read TESTTIME
+
+if [ "$TESTTIME" == "" ]; then
+	TESTTIME=6
+fi
+
+TESTTIME=$TESTTIME"h"
+
+
+# start tests
+
+echo 
+echo "Starting tests at `date`" 
+echo 
+
+start_tests
+#sleep $TESTTIME
+sleep 10
+stop_tests
+
+echo
+echo "----------------------------------------------------------------------------"
+echo 

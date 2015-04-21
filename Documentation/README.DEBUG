@@ -1,0 +1,121 @@
+RTAI Debugging
+==============
+
+
+Introduction
+------------
+
+Recent advances in RTAI's general handling of traps and exceptions
+have opened the door to an improved debugging interface for both LXRT
+applications and realtime kernel modules. Previously you had to resort
+to printk()'s and the like and hope your computer survived any
+crashes. Now you can step and trace from the comfort of your favourite
+debugger... gdb based of course :-)
+
+Debugging LXRT Applications
+---------------------------
+
+To debug an LXRT application all you need do is compile using suitable
+flags (see the Makefile in the lxrt/traps directory for lots of
+examples), and run the application from within ddd, gdb, etc. You'll
+be able to do all the usual debug things, in fact this much hasn't
+changed. What has changed is what happens if the application causes an
+exception (eg. divide by zero) and gets itself killed.  Previously the
+application would have been summarily disposed of and the debug
+session left wondering what happened. Now the offending application is
+sent a signal appropriate to the exception (eg. SIGFPE for a divide by
+zero). This signal is intercepted by the debug session and allows the
+offending line of code to be located.
+
+Even if an LXRT application's RT buddy causes an exception while doing
+something on behalf of the application, the application will still be
+sent the signal. Then by examining the call stack with the debugger
+you will be able to see which SRQ (system request) the application had
+just made and from this infer what the RT buddy was been asked to do
+when it crashed. Of course you won't be able to examine the buddy's
+data because that is in the RTAI modules that are part of the kernel
+and not accessible to this debug session. But that doesn't stop you
+from separately debugging the Linux kernel and the modules that it
+loads, read on...
+
+
+Debugging Realtime Kernel Modules
+---------------------------------
+
+To debug the Linux kernel and any modules (realtime or otherwise) it
+loads you need to use a kernel gdbstubs package. Using such a package
+it is possible to build a debugging kernel that can be deployed on a
+target linked to a development host by a serial line. When the target
+runs using the new kernel the debugging hooks within that kernel can
+be activated and control of the target system given to a remote debug
+session over the serial line. From this point on the target system
+behaves (almost) as if it were a local application under the control
+of a debug session. The kernel gdbstubs package will have placed hooks
+in the kernel's trap handlers so that if any exceptions occur in the
+kernel code, the debug session is informed.
+
+Recent improvements to gdb and the kgdb kernel gdbstubs package have
+made it possible to dynamically load, and more importantly bring into
+debugging scope kernel loadable modules. Now from within gdb (or ddd
+etc) you can issue a 'loadmodule' command that will simultaneously do
+a 'modprobe' of the required module on the target and an
+'add-symbol-file' command in the debug session. Now it becomes
+possible to debug the module code as well as the kernel code. It
+doesn't matter if the target kernel already has a module loaded that
+the debug session doesn't yet know about, the 'loadmodule' command
+will still work and bring the two into sync. The only requirements are
+that both the host and target need a copy of the module symbol file
+(.o) and on the target it needs to be located in a well known location
+accessible to modprobe.
+
+The current version of a suitable kernel gdbstubs package (and more
+complete instructions) can be obtained from kgdb.sourceforge.com .
+The download page is <http://kgdb.sourceforge.net/downloads.html>
+and you should get a patch for your kernel; documentation is in
+Documentation/i386/gdb-serial.txt after applying the patch.
+
+What's described so far is not specific to just realtime modules, it
+works for any kernel modules. RTAI's default trap handlers will
+normally kill a realtime task that causes an exception that would
+otherwise crash the system. However they have been integrated with the
+above kernel gdbstubs package so that control is given to any host
+debugging session on an exception, allowing it to be located. In this
+way it is also possible to use breakpoints to step and trace your way
+through your (not quite realtime anymore) RT module code.
+
+
+Infinite Loops and Watchdog
+---------------------------
+
+In addition the serial interrupt handler used by the gdbstubs package
+has been wrapped in a global interrupt handler that RTAI will act on
+immediately. This means that it is always possible to break into an
+infinite loop in RT code that would otherwise lock up the system. This
+might allow you to determine which RT task is to blame and examine its
+data in order to find out why. You won't be able to kill the offending
+task though, so the system will remain locked out to everything except
+the infinite loop and the debug session. Alternatively you could use
+the new RTAI watchdog module that will kill any such tasks
+automatically.
+
+If you want to step and trace RT code that uses the RT timer in
+oneshot mode, then you need to use the watchdog to stop possible
+system hangs or crashes when you resume exececution after a
+breakpoint. README.WATCHDOG gives full details.
+
+
+Known Bugs and Issues
+---------------------
+
+- Oneshot tasks must be debugged with the help of the watchdog (see above).
+
+- Single stepping occasionally hangs an SMP machine.
+
+- It's not advisable to repeatedly issue loadmodule commands of the
+  same module (perhaps after you've recompiled it), gdb can get
+  confused and in fact this may be the cause of the above problem on
+  SMP. It's safer to exit gdb and start another session.
+
+Initially written on 8th March 2001. Last update $Date: 2004/06/06 14:01:12 $
+Ian Soanes
+ians@lineo.com

@@ -1,0 +1,8 @@
+
+sync
+
+#../scripts/rt_rmmod rtai_comedi_lxt
+../scripts/rt_rmmod net_rpc
+#/sbin/modprobe -r ni_pcimio
+
+sync

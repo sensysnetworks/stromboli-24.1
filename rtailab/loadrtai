@@ -1,0 +1,10 @@
+
+sync
+
+#/sbin/modprobe ni_pcimio
+#../scripts/rt_modprobe ../modules/rtai_comedi_lxrt.o
+../scripts/rt_modprobe ../modules/net_rpc.o
+../net_rpc/rtnet/urtnet &
+#/usr/sbin/comedi_config /dev/comedi0 ni_pcimio
+
+sync

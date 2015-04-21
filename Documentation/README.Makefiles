@@ -1,0 +1,126 @@
+Makefiles
+=========
+
+The Makefiles used in RTAI have a very similar structure to those used in
+the Linux kernel. This is on purpose, as it is possible (with a little bit
+of encouragement) to compile RTAI into the kernel. Here are a few rules to
+follow when writing and editing Makefiles.
+
+
+Subdirectories
+--------------
+
+Makefiles in directories that have subdirectories (like examples/) should
+define the variables ALL_SUB_DIRS as the list of all the subdirectories.
+SUB_DIRS and MOD_SUBDIRS should be the list of the subdirectories that you
+want compiled. That is, if some of the subdirectories are not relevant on
+a particular architecture, they should be disabled.  (See
+examples/Makefile.)
+
+
+General
+-------
+
+Individual Makefiles should contain the fragment
+
+    ifdef TOPDIR
+    include $(TOPDIR)/Rules.make
+    else
+    all:
+            make -C ../ modules SUBDIRS=lxrt
+    endif
+
+This allows developers to run 'make' in a local directory and
+have only the local directory be made.  Of course, SUBDIRS=lxrt
+should be changed to the path to the directory the Makefile is in.
+
+
+Kernel Modules
+--------------
+
+There are two ways to compile kernel modules in a directory.  One is where
+one source file is compiled into one module file -- this is a "single
+source module".  If multiple source files are linked into one kernel
+module, this is a "composite module".  M_OBJS should be defined to be the
+list of composite modules and single source modules, but not the individual
+parts of a composite module.  See lxrt/Makefile for an example of a
+composite module, and many of the example/*/Makefile for an example of a
+single source module.
+
+Also, composite modules need rules to build the composite .o file.  These
+should be appended to the Makefile, as in lxrt/Makefile, as something
+like:
+
+  composite_module.o: part1.o part2.o
+  	$(LD) -r -o $@ part1.o part2.o
+
+In general, if the module provides features that required by other modules
+it should be installed as part of the install process.  However, most of
+the examples and tests do not need to be installed, and this can be done by
+using MI_OBJS instead of M_OBJS.
+
+If the module exports symbols, you should use MX_OBJS or MIX_OBJS.
+
+
+User-space programs
+-------------------
+
+Single source applications (one source file "app.c" that creates "app") are
+created by defining 'A_TARG := app'.
+
+To create one application from multiple source files, use the following:
+
+  U_TARG += app
+  app-objs := app1.o app2.o
+
+You can specify additional CFLAGS, LDFLAGS, or LIBS by defining
+EXTRA_CFLAGS_app, etc.  Alternatively, to set extra CFLAGS for all
+user-space targets in a directory, define EXTRA_USER_CFLAGS.  The
+difference between *_LDFLAGS and *_LIBS is that LDFLAGS go first in the
+compilation line, whereas LIBS go last.
+
+User-space C++ applications can be created using:
+
+  U_TARG += app
+  app-cxxobjs := app1.o app2.o
+
+B_TARG should no longer be used.
+
+
+Floating Point CFLAGS
+---------------------
+
+Using floating point code in kernel modules needs additional CFLAGS.  If
+you want to compile module.o with the CFLAGS for floating point, add the
+definition:
+
+  CFLAGS_module.o += $(CFLAGS_FP_ADD)
+
+
+Kernel modules linked with libraries
+------------------------------------
+
+Kernel modules should not be linked with libraries.  Use a separate module
+for the library code.
+
+
+Things _NOT_ to do
+------------------
+
+Don't use commands directly. It may be called gcc on your system, but it's
+called powerpc-linux-gcc on mine.
+
+Don't add random rules to Makefiles. If you find that you want a
+particular rule in a Makefile, or several Makefiles, it is probably more
+appropriate to put in the toplevel Rules.make.
+
+
+Various Hacks
+-------------
+
+Some Makefiles create symlinks from the canonical name of a module to the
+old name.  After a transition period, the old .c files will be renamed.
+
+Some Makefiles have not been converted to the new system. Please fix them.
+
+

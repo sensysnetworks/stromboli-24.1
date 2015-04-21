@@ -1,0 +1,69 @@
+You can this example in user or in kernel space:
+
+First step:
+
+Create the test_io.c file using "gen_io test config" command. The file
+"config" contains the I/O description:
+
+rtai_scope 1 2 IO
+inp_square 1 1.0 10.0 5.0 0.0 0.0
+rtai_scope 2 1 U
+end
+
+output port 1 has a rtai_scope with 2 signals named IO
+input port 1 has a square signal with Amplitude 1, period 10s,
+   semiperiod 5s, bias 0 end time delay 0s
+output port 2 has a rtai_scope with 1 signal name U
+
+User space
+==========
+
+make -f test_Makefile test_standalone
+insmod rtai
+insmod rtai_shm
+insmod rtai_sched
+insmod rtai_lxrt
+insmod rtai_fifos
+insmod net_rpc
+/usr/local/bin/urtnet &
+./test -v
+
+open xrtailab in another shell
+
+When finished:
+
+rmmod net_rpc
+rmmod rtai_fifos
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai_shm
+rmmod rtai
+
+Kernel space
+============
+
+make -f test_Makefile krt
+ 
+insmod rtai
+insmod rtai_shm
+insmod rtai_sched
+insmod rtai_sched_ext
+insmod rtai_lxrt
+insmod rtai_fifos
+insmod net_rpc
+/usr/local/bin/urtnet &
+
+insmod ./rt_process.o
+
+xrtailab
+
+When finished:
+rmmod rt_process
+rmmod net_rpc
+rmmod rtai_fifos
+rmmod rtai_lxrt
+rmmod rtai_sched_ext
+rmmod rtai_sched
+rmmod rtai_shm
+rmmod rtai
+

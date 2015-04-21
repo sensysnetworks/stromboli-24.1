@@ -1,0 +1,23 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example tests tasklets with the firing of timers whose
+handler do different things in user space.  There is a periodic
+timer that does some floating point operations and a sequencer
+handler that does other things By reading what appears on the
+screen against stest.c you should figure out it all. The all
+stuff is in user space. 
+
+Press <enter> to execute
+EOF
+read junk
+
+../../scripts/rt_modprobe ../../modules/rtai_lxrt.o
+../../scripts/rt_modprobe ../rtai_tasklets.o
+
+./stest
+
+../../scripts/rt_rmmod rtai_tasklets
+../../scripts/rt_rmmod rtai_lxrt
+

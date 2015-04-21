@@ -1,0 +1,5 @@
+lsmod
+rmmod rtai_sched
+rmmod rtai_fifos
+rmmod rtai
+lsmod

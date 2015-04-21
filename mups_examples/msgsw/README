@@ -1,0 +1,19 @@
+****** MSGSW EXAMPLE ******
+
+This example features NTASKS real-time tasks running periodically.
+On each period a server task is messaged to set/reset a bit on the parallel 
+port. By choosing an appropriate timing one can produce a rectangular wave
+which can be watched on an oscilloscope plugged into it.
+
+->>>> Be carefull about the macro TICK_PERIOD its value is now set for a
+      200 MHz PPro, which can be to much for a less powerfull machine.
+
+To run the example type:
+
+make clean
+make
+./run
+
+To stop it type:
+
+./rem

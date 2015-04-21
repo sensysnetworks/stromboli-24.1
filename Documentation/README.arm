@@ -1,0 +1,132 @@
+Linux and RTAI on ARM Processors
+================================
+
+
+Maintainers
+-----------
+
+The ARM-port of RTAI is maintained by
+
+  Thomas Gleixner,  (tglx@linutronix.de) 
+  Guennadi Liakhovetski, DSA GmbH (gl@dsa-ac.de)
+  Wolfgang Müller, DSA GmbH (wolfgang.mueller@dsa-ac.de)
+  Alex Züpke, SYSGO RTS GmbH (azu@sysgo.de)
+
+The base port was started by Alexander Züpke (azu@sysgo.de), SYSGO RTS
+GmbH, and Wolfgang Müller (wm@dsa-ac.de), DSA Daten- und Systemtechnik
+GmbH, independently, based on ideas from Paolo Mantegazza
+(mantegazza@aero.polimi.it), DIAPM. Later, as Guennadi Liakhovetski
+(gl@dsa-ac.de) and Thomas Gleixner, joined them, the two ports were merged.
+
+Due to disagreements the port is now split up again. 
+Thomas Gleixner has overhauled the code and maintains rtainew.c.
+Guennadi Liakhovetski is maintaining the rtai.c, which was there since we started.
+
+You have to select a version during configure. Current default is the new version, 
+as it is tested on more archs.
+
+Supported architectures
+-----------------------
+		rtai.c			rtainew.c
+clps711x	no support		stable on 2.4.17/18/19/21
+h720x		no support		stable on 2.4.19/21
+epxa		no support		stable on 2.4.19
+sa11x0		stable on 2.4.18/19	stable on 2.4.17/18/19
+pxa25x		stable on 2.4.19	?
+
+If your CPU isn't supported right yet, feel free to add the necessary code
+to RTAI. See Documentation/armporting.txt for more information.
+
+Stability 
+---------
+
+The current state is prerelease. As the port is still in the state of
+improvement, there might be some points, where the functionality is not as
+expected. If it doesn't work for you, feel free to fix it, or report it to
+the maintainers or on the rtai mailinglist (rtai@rtai.org).
+
+The port is already working in industrial usage with real life
+applications.  There are no known stability issues at the moment.
+
+
+What do you need?
+-----------------
+
+- GCC (cross) toolchain (version 2.95.3 or 3.0.4)
+- If you want to use RTAI's softfloat support, your toolchain must
+  be compiled to support softfloat !
+- binutils, version >= 2.11.2
+- Kernel version >= 2.4.13 (ftp://ftp.kernel.org/pub/linux/kernel/v2.4/)
+- RMK patch for this kernel (http://www.arm.linux.org.uk)
+- Maybe some board specific patches
+- A snapshot from rtai-CVS
+
+
+Bring up RTAI to life ...
+-------------------------
+
+First, extract the kernel and apply the RMK-patch and a eventually
+necessary board specific patch. You should now compile your kernel to test
+if it's working properly. Any oopses and lockups here are not RTAI's fault
+...
+
+If your kernel runs fine, apply the RTHAL patch. 
+
+You will find patches for rtainew.c in arch/arm/patches directory of
+RTAI. Consult README to select the appropriate patch for your kernel version.
+
+You will find patches for rtai.c in patches directory of RTAI.
+Do not apply any other patch from this directory. They are for different
+cpu-families like x86 and PPC. Consult README to select the appropriate 
+patch for your kernel version.
+
+Next, use your favourite kernel configuration tool and enable in "General setup"
+the new option "RTAI Realtime Hardware abstraction Layer".
+
+Start compiling your patched kernel now, fetch a cup of coffee and prepare for
+the following.
+
+cd into the RTAI-directory, and type "make menuconfig". It will ask you for a
+kernel-directory, enter your RTHAL-patched kernel location. It will analyse
+your kernel's .config and Makefile to get the architecture (ARM, of course)
+and the cross toolchain prefix.
+
+Please disable "Enable floating point support", "SMP scheduler", "MUP
+scheduler" and "Real-Time serial driver" in the menu, because we didn't
+program SMP or MUP support now, rt_com is for x86-stylish hardware and most
+ARM-processors usually don't have a FPU ...
+
+Save this configuration and leave menuconfig now.
+
+Now you should do 'make dep' and 'make'.
+
+You will find a set of compiled modules in modules directory, copy these to
+your arm filesystem. If you want to try the examples, just copy the binaries
+from the examples directory to your ARM filesystem or mount your PC filesystem
+via NFS.
+
+Be careful with the examples. They have default TICK_PERIODS, which fit almost
+for 400MHZ and above Pentium machines. Adjust this values before using it.
+Start with 1ms or something like that. You can speed it up later.
+If the TICK_PERIOD is too fast, your machine will block the standard Linux due
+to realtime overload.
+
+Install the new kernel, reboot and try to load the modules. 
+1st is rtai.o
+2nd is rtai_sched.o
+You should see some information about rtai and scheduler on your console output.
+If your system still runs, try to load one of the examples.
+
+
+Missing points
+--------------
+
+- FIQ interrupts are not implemented yet and will not be implemented, as the ARM
+  architecture has a braindamaged register set for fiq. You can call c-code, but
+  you cannot restore the previous state of the machine afterwards.
+- There as a little-tested port of NEWLXRT to ARM.
+- FPU-Support is missing.
+- Multiprocessor support - if you own an ARM multiprocessor, please,
+  let us know. Please, do let us know, if you run Linux on it:-)
+- Something like rt_com support.
+- Exception handling is implemented only for undefined opcodes.

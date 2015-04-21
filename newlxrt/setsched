@@ -1,0 +1,47 @@
+#!/bin/sh
+
+case $1 in
+up)
+	SUFX=up;
+	;;
+smp)
+	SUFX=smp;
+	;;
+smpapic)
+	SUFX=smp;
+	;;
+smp8254)
+	SUFX=smp_8254;
+	;;
+mup)
+	SUFX=mup;
+	;;
+newlxrt)
+	SUFX=newlxrt;
+	;;
+*)
+	SUFX=up;
+	;;
+esac
+SCHED=rtai_sched_$SUFX.o
+echo
+echo -n "Attempting to set scheduler to '$SCHED'..."
+
+if [ ! -e modules/rtai_sched_$SUFX.o ]; then
+	echo
+	echo
+	echo "Couldn't link 'rtai_sched_$SUFX.o' to 'rtai_sched.o'."
+	echo "Seems like the scheduler you are chosing was not compiled."
+	echo "Are you trying to make an UP scheduler for an SMP kernel?" 
+	echo
+	exit
+fi  
+
+echo rtai_sched rtai_sched_$SUFX.o >modules/rtaipref
+
+rm -f modules/rtai_sched.o
+
+ln -sf rtai_sched_$SUFX.o modules/rtai_sched.o
+
+echo "done."
+echo

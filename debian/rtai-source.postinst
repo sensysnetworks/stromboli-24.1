@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if [ "$1" = "configure" ]; then
+	if [ -d /usr/doc -a ! -e /usr/doc/rtai-source -a -d /usr/share/doc/rtai-source ]; then
+		ln -sf ../share/doc/rtai-source /usr/doc/rtai-source
+	fi
+fi

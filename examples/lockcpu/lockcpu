@@ -1,0 +1,5 @@
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ./lock_module.o
+./lock_proc &

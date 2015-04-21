@@ -1,0 +1,85 @@
+#!/usr/bin/perl 
+################################################################################
+##
+## Copyright © 1998-99 Zentropic Computing, All rights reserved
+##
+## Permission is hereby granted, free of charge, to any person obtaining a
+## copy of this software and associated documentation files (the "Software"),
+## to deal in the Software without restriction, including without limitation
+## the rights to use, copy, modify, merge, publish, distribute, sublicense,
+## and/or sell copies of the Software, and to permit persons to whom the
+## Software is furnished to do so, subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in
+## all copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+## ZENTROPIC COMPUTING LLC BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+## DEALINGS IN THE SOFTWARE.
+##
+## Except as contained in this notice, the name of the Zentropic Computing LLC
+## shall not be used in advertising or otherwise to promote the sale, use or
+## other dealings in this Software without prior written authorization from the
+## Zentropic Computing LLC
+##
+## Authors:		Stuart Hughes
+## Original date:	Mon 10 May 1999
+## Id:			@(#)$Id: peconv,v 1.1.1.1 2004/06/06 14:01:45 rpm Exp $
+## Description:		This code parses the output of the preempt
+##			user process and turns it into an easy to understand
+##			bit pattern so that you can tell quickly if the
+##			preemption is working properly in RTL/RTAI
+##
+################################################################################
+
+##################################
+# user configurable parameters
+##################################
+$debug = 0;
+$limit = 25;				# number of samples to process
+
+while(<>)
+{
+    chop;
+    ($task, $mode, $time) = split /\s+/;
+    die("task id is not numeric") if ($task + 0) != $task;
+    
+    print "t = $task, m = $mode, tm = $time\n" if $debug;
+    if( defined(@{$ta->[0]}) || $mode eq "r") {
+            push @{$ta->[$task]}, $time;
+    }
+    warn "n = ",  scalar @{$ta->[0]} if $debug;
+    last if @{$ta->[0]} > $limit;
+}
+$start = $ta->[0][0];
+print "\nResults, in millisecond intervals\n", "0123456789" x 7, "\n";
+foreach $a (@$ta) {
+    $trace = "";
+    for($i = 0; $i < @$a-1; $i+=2) { 
+	$dur = ($a->[$i+1] - $a->[$i]) || 1;
+	$dur = rint($dur/10) || 1;
+	$os = rint(($a->[$i]-$start)/10);
+	warn "$task: os = $os, dur = $dur\n" if $debug;
+        for(0..$dur-1) {
+            vec($trace, ( $os + $_ ), 1) |=  1;
+        }
+    }
+    print unpack("b*", $trace),"\n";
+}
+print "\n";
+
+
+#floating point interger rounding
+sub rint
+{
+    my $v = shift;   
+    $frac = $v - int($v);
+    if($frac >= 0.5 ) {
+	return int($v) + 1;
+    }
+    return int($v);
+}

@@ -1,0 +1,145 @@
+RoundRobin (RR) Scheduling
+==========================
+
+Beginning from release 24.1.6 RTAI schedulers offers the possibility of chosing
+between FirstInFirstOut (FIFO) and time slicing RoundRobin (RR) scheduling 
+policies, on a per task basis, the default being FIFO.
+
+The implementation of RR scheduling can be taken away by simply commenting out 
+the macro ALLOW_RR in RTAI schedulers. Since if it was not used RR causes a
+(very) small scheduling overhead, 3 do nothing "if"s at most, RTAI is 
+distributed with that macro defined and working. 
+So if it is too much for your, likely old and very very slow, CPU just comment
+out ALLOW_RR.
+
+The desired policy can be assigned on a per task basis and with a per task
+quantum time by calling:
+
+  rt_set_sched_policy(RT_TASK *task, int policy, int rr_quantum_ns), where :
+
+policy can be:
+
+  - RT_SCHED_FIFO (0) or  
+  - RT_SCHED_RR   (1).
+
+The above macros are defined in rtai_sched.h and, for use with LXRT, also
+in rtai_lxrt_user.h.
+
+rr_quantum_ns, the task proper RR quantum time in nanosecs, is not used if
+policy is RT_SCHED_FIFO, while for RT_SCHED_RR can be:
+
+- any value between 0 and 0x0FFFFFFF, i.e. up to 1/4th a second; naturally it 
+  makes no sense to use too low a value, it could crash your system; anyhow 
+  note that no action is taken to avoid any low a value, except when zero is 
+  used in which case the LINUX tick time is assigned by default.
+
+To frame why RR has been introduced it could be of interest to tell that
+the RR implementation in RTAI schedulers has been carried out because of
+the need to achieve fairness in a specific application in which a few hard
+real time equal (medium) priority tasks could, now and then, find
+themselves in the need of bursts of relatively long lasting calculations,
+during which any other peer was unfairly starving because of the FIFO
+policy. 
+
+Acceptable results were at first achieved in a cooperative way, i.e. by
+scattering voluntary yields within each task. Such a technique worked but
+was found to be annoying, since it required a relatively good extimation of
+the execution times of specific code phases, that could change either
+because of the current task status or because of the need of updating the
+code.
+
+Since implementing RR the way we have done solved the problem very well,
+simply and quickly, the related code has been made available in case it
+could help other RTAI users in similar situations.
+
+An example, rr, is available to test and experiment it. Please note that
+while the rr test has been verified with all the RTAI schedulers the
+production application that has actually used RR has been UP based.
+
+
+Rate Monotonic Scheduling (RMS)
+-------------------------------
+
+RTAI supports also, with your help, Rate Monotonic Scheduling (RMS).  Rate
+Monotonic Scheduling is a simple scheduling policy for real time periodic
+tasks that ends in assigning task priorities in the order of the highest
+task frequencies, i.e. the shortest periodic task gets the highest
+priority, then the next with the shortest period get the second highest
+priority, and so on.  So RMS could be easily implemented by yourself simply
+by assigning appropriate priorities, and nothing more should be required
+but the standard prioritized preemptive First In First Out (FIFO)
+schedulers found in RTAI.
+
+However there are instances, e.g. dynamic task creation of periodic tasks,
+that can make it annoying to book keep the required infos. Thus a trivial
+minimal support could be of help.
+
+As found in any textbook on OSes, if Ci is the time of execution of the ith
+task having period Ti, naturally it must be Ci <= Ti, all the deadlines of
+n periodic tasks can be satisfied if:
+
+  sum_over_n_of(Ci/Ti) <= n*(pow(2, 1/n) - 1)
+
+Note that the above equation gives just a sufficient condition so it is
+generally somewhat conservative. Morever it is also an upper bound
+condition for meeting deadlines according to the Earliest Deadline First
+(EDF) policy.  Then RMS can often be profitably used in place of EDF, as it
+affords very similar performances but is much more simple to implement.
+
+RTAI allows you to be sure to stay RMS by simply calling rt_spv_RMS(cpu)
+after you have made all of your tasks periodic at the beginning of your
+application, or after you create a periodic task dynamically, or after
+changing their period, freeing you from the burden of any book keeping.
+
+Since only Ti is available to an RTAI scheduler the check of the bound
+given by the above formula is left to you. In fact another advantage of RMS
+is that you need not to carry out any deep analysis of your tasks behavior
+as Ti is enough to enforce it, if possible. If it is not for sporadic cases
+it will go unoticed, otherwise it is likely you'll have to find a more
+powerful computer anyhow.  Note that the argument cpu in rt_spv_RMS is used
+only with the MUP scheduler.  The function does nothing but making sure
+priorities of periodic tasks are assigned accordingly to their periods.
+
+
+Earliest Deadline First (EDF)
+-----------------------------
+
+Another scheduling policy supported is Earliest Deadline First (EDF).  Such
+a policy schedules first the task that ends at the earliest time.
+Guarantees for meeting tasks objectives is in a form similar to the above,
+i.e.:
+
+  sum_over_n_of(Ci/Ti) <= 1
+
+With this policy there is the need to know both the time at which the task
+must be resumed and the time at which it must end, clearly:
+
+  Ci = end_time.i - resume_time.i
+
+So more per task informations must be given. To use EDF a task must call
+the function:
+
+  void rt_task_set_resume_end(RTIME resume_time, RTIME end_time);
+
+at the end of each timed execution.
+
+Args are selfexplained by the related names, no specific periodicity is
+assumed.Nonetheless if the resume_time is negative it is assumed as being
+relative to its previous resume_time and, if negative, also end_time is
+taken as relative to the new resume_time, i.e.:
+
+  rt_task.resume_time -= resume_time;
+  rt_task.end_time = rt_task.resume_time - end_time;
+
+Thus a periodic EDF task should be easy to program anyhow.
+
+It is possible to mix up all the scheduling policies. SCHED_FIFO and RR
+tasks have no problems. It is up to the user to insure RMS behaves
+correctly by assigning lower priorities (higher numbers) to non periodic
+tasks.  Clearly there can be nonperiodic tasks of utmost importance that
+can have a priority higher than any periodic one. When EDF tasks come into
+the game a design choice has to be made for the case they mix up with tasks
+based on other policies. Ours has been to run EDF tasks as the highest
+priority ones, i.e. any EDF task will run ahead of any other non EDF task
+when its resume time expires.
+

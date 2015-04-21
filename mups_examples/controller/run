@@ -1,0 +1,6 @@
+sync
+insmod ../../rtai
+insmod ../../modules/rtai_fifos
+insmod ../../shmem/rtai_shm
+insmod ./controller
+./spvs

@@ -1,0 +1,405 @@
+#!/bin/sh
+
+prefix=/usr/realtime
+
+version=0.0.0
+
+#use_installed=yes
+
+usage()
+{
+	cat <<EOF
+Usage: realtime-config [OPTIONS] [LIBRARIES]
+Options:
+	[--prefix]
+	[--linuxdir=DIR]
+	[--version]
+	[--uts-version]
+	[--arch]
+	[--cross-compile]
+	[--cflags]
+	[--cflags-fp]
+	[--c++flags]
+	[--c++flags-fp]
+Libraries:
+EOF
+	exit $1
+}
+
+get_arch()
+{
+#	echo realtime-config: get_arch\(\): >&2
+	# get ARCH from kernel file tree (include/asm)
+	echo $(/bin/ls -l $linuxdir/include/asm | \
+	       sed -ne 's/.*asm-\(.*\)/\1/p')
+#	       awk '{sub(/^asm-/,"",$NF); print $NF}')      
+}
+
+gcc_cross_compile()
+{
+	# I don't understand awk well enough to know why the following
+	# doesn't work, so I replaced it. --ds
+	#echo $(awk -F "=" '/[[:space:]]*CROSS_COMPILE[[:space:]]*=[[:space:]]*/ \
+        #       {gsub(/[[:space:]]*/,"",$2); print $2}' $linuxdir/Makefile)
+	if [ "$CROSS_COMPILE" ];then
+		echo "$CROSS_COMPILE"
+	else
+		grep '^CROSS_COMPILE[[:space:]]*=' ${linuxdir}/Makefile| \
+			sed 's/^CROSS_COMPILE[[:space:]]*=[[:space:]]*//'
+	fi
+    }
+
+gcc_test_opt()
+{
+	if ${GCC} $1 -S -o /dev/null -xc /dev/null >/dev/null 2>&1 ; then
+		echo $1
+	fi
+}
+
+kernel_cflags_i386()
+{
+	arch_cflags="-pipe"
+
+	# wacky test for strength reduction bug
+	if [ ! "$(gcc_test_opt -march=i486 )" ];then
+		arch_cflags="${arch_cflags} -fno-strength-reduce"
+	fi
+
+	if [ "$CONFIG_M386" ];then
+		if [ "$(gcc_test_opt -march=i386 )" ];then
+			arch_cflags="${arch_cflags} -march=i386"
+		else
+			arch_cflags="${arch_cflags} -m386"
+		fi
+	fi
+	if [ "$CONFIG_M486" ];then
+		if [ "$(gcc_test_opt -march=i486 )" ];then
+			arch_cflags="${arch_cflags} -march=i486"
+		else
+			arch_cflags="${arch_cflags} -m486"
+		fi
+	fi
+	if [ "$CONFIG_M586" -o "$CONFIG_M586TSC" -o "$CONFIG_M586MMX" -o "$CONFIG_MCRUSOE" ];then
+		arch_cflags="${arch_cflags} $(gcc_test_opt -march=i586 )"
+	fi
+	if [ "$CONFIG_M686" -o "$CONFIG_M686FXSR" -o "$CONFIG_MWINCHIPC6" -o "$CONFIG_MWINCHIP2" -o "$CONFIG_MWINCHIP3D" ];then
+		arch_cflags="${arch_cflags} $(gcc_test_opt -march=i686 )"
+	fi
+	if [ "$CONFIG_MK6" ];then
+		arch_cflags="${arch_cflags} $(gcc_test_opt -march=k6 )"
+	fi
+	if [ "$CONFIG_MK7" ];then
+		if [ "$(gcc_test_opt -march=athlon )" ];then
+			arch_cflags="${arch_cflags} -march=athlon"
+		elif [ "$(gcc_test_opt -march=i686 )" ];then
+			arch_cflags="${arch_cflags} -march=i686 -malign-functions=4"
+		fi
+	fi
+	arch_cflags_fp=
+	arch_cflags_nfp=
+}
+
+kernel_cflags_ppc()
+{
+	x="-D__powerpc__ -fsigned-char -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring"
+	if [ "$CONFIG_4xx" ];then
+		x="${x} -mcpu=403"
+	fi
+	if [ "$CONFIG_8xx" ];then
+		x="${x} -mcpu=860"
+	fi
+	if [ "$CONFIG_PPC64BRIDGE" ];then
+		x="${x} -Wa,-mppc64bridge"
+	fi
+	arch_cflags=$x
+	arch_cflags_fp="-mhard-float"
+	arch_cflags_nfp="-msoft-float"
+}
+
+kernel_cflags_mips()
+{
+	x="-EL -I ${linuxdir}/include/asm/gcc -G 0 -mno-abicalls -fno-pic -mcpu=r4600 -mips2 -Wa,--trap -pipe"
+	arch_cflags=$x
+	arch_cflags_fp="-mhard-float"
+}
+
+kernel_cflags_arm()
+{
+# Select CPU dependent flags.  Note that order of declaration is important;
+# the options further down the list override previous items.
+#
+# Note!  For APCS-26 YOU MUST HAVE AN APCS-26 LIBGCC.A
+#
+    export apcs_y="-mapcs-32"
+    export apcs_$CONFIG_CPU_26="-mapcs-26 -mcpu=arm3 -Os"
+
+# This selects which instruction set is used.
+    export arch_y=
+    export arch_$CONFIG_CPU_32v3='-march=armv3'
+    export arch_$CONFIG_CPU_32v4='-march=armv4'
+    export arch_$CONFIG_CPU_32v5='-march=armv5'
+
+# This selects how we optimise for the processor.
+    export tune_y=
+    export tune_$CONFIG_CPU_ARM610='-mtune=arm610'
+    export tune_$CONFIG_CPU_ARM710='-mtune=arm710'
+    export tune_$CONFIG_CPU_ARM720T='-mtune=arm7tdmi'
+    export tune_$CONFIG_CPU_ARM920T='-mtune=arm9tdmi'
+    export tune_$CONFIG_CPU_SA110='-mtune=strongarm110'
+    export tune_$CONFIG_CPU_SA1100='-mtune=strongarm1100'
+
+    x="${apcs_y} ${arch_y} ${tune_y} -mshort-load-bytes -msoft-float"
+    y="${apcs_y} ${arch_y} -mno-fpu"
+
+	x="$x -fno-common -pipe"
+	arch_cflags=$x
+	arch_cflags_fp=
+	arch_cflags_nfp=
+}
+
+kernel_cflags_cris()
+{
+	arch_cflags="-pipe"
+	arch_cflags_fp=
+	arch_cflags_nfp=
+}
+
+get_rt_extension()
+{
+	# figure out which rt extension is applied
+
+	if [ -f "$linuxdir/include/asm/rt_irq.h" ];then
+		rt_type=rtl_v1
+	elif [ "$CONFIG_RTLINUX" = "y" -o "$CONFIG_RTL" = "y" ];then
+		rt_type=rtl
+	elif [ "$CONFIG_RTHAL" = "y" -o "$CONFIG_ADEOS" != "n" ];then
+		rt_type=rtai
+	else
+		rt_type=none
+	fi
+}
+
+
+
+if test $# -eq 0; then
+	usage 1 1>&2
+fi
+
+while test $# -gt 0; do
+	case "$1" in
+	-*=*) optarg=$(echo "$1" |sed 's/[-_a-zA-Z0-9]*=//' ) ;;
+	*) optarg= ;;
+	esac
+
+	case $1 in
+		--prefix)
+			echo_prefix=yes
+			;;
+		--arch)
+			echo_arch=yes
+			;;
+		--cross-compile)
+			echo_cross_compile=yes
+			;;
+		--cflags)
+			echo_cflags=yes
+			;;
+		--cflags-fp)
+			echo_cflags_fp=yes
+			;;
+		--c++flags)
+			echo_cplusplusflags=yes
+			;;
+		--c++flags-fp)
+			echo_cplusplusflags_fp=yes
+			;;
+		--version)
+			echo $version
+			;;
+		--linuxdir=*)
+			linuxdir=$optarg
+			;;
+		--uts-version)
+			echo_uts_version=yes
+			;;
+		--dump)
+			echo_dump=yes
+			;;
+		--use-installed)
+			use_installed=yes
+			;;
+		--no-use-installed)
+			use_installed=
+			;;
+		--cache=*)
+			cachefile=$optarg
+			;;
+		--arch=*)
+			arch=$optarg
+			;;
+		*)
+			usage 1 1>&2
+			;;
+	esac
+	shift
+done
+
+if [ ! "$cachefile" -o ! -f "$cachefile" ];then
+
+# do some linux dep things
+
+: ${linuxdir:=$LINUXDIR}
+: ${linuxdir:=/usr/src/linux}
+
+if [ ! -f ${linuxdir}/.config ];then
+	echo Kernel source tree $LINUXDIR not configured! >&2
+	exit 1
+fi
+
+. ${linuxdir}/.config
+
+# find cross compile prefix
+
+cross_compile="$(gcc_cross_compile)"
+
+# find gcc
+
+: ${GCC:=${cross_compile}gcc}
+gccincdir="$(${GCC} -print-search-dirs|grep ^install|sed 's/install..//')include"
+
+# find arch
+
+if [ ! "$arch" ];then
+	arch="$(get_arch)"
+#	echo getting arch $arch >&2
+fi
+
+read dummy dummy dummy2 <$linuxdir/include/linux/version.h
+uts_version=`echo $dummy2|sed 's/"//g'`
+
+kernel_cflags="-Wall -Wstrict-prototypes -O2 -fomit-frame-pointer"
+kernel_cflags="${kernel_cflags} $(gcc_test_opt -fnostrict-aliasing)"
+
+if [ "$CONFIG_MODVERSIONS" ];then
+	kernel_cflags="${kernel_cflags} -DMODVERSIONS -include $linuxdir/include/linux/modversions.h"
+fi
+
+# generate arch flags
+case "$arch" in
+  i386)
+	kernel_cflags_i386
+	;;
+  ppc)
+	kernel_cflags_ppc
+	;;
+  mips)
+  	kernel_cflags_mips
+	;;
+  arm)
+  	kernel_cflags_arm
+	;;
+  cris)
+  	kernel_cflags_cris
+	;;
+  *)
+  	echo "Fix realtime_config!"
+	exit 1
+	;;
+esac
+
+get_rt_extension
+
+# create CFLAGS
+
+cflags="-D__KERNEL__ -DMODULE"
+cflags="${cflags} -I${linuxdir}/include $kernel_cflags $arch_cflags"
+
+cplusplusflags="-fno-rtti $(gcc_test_opt -fnoexceptions)"
+
+cflags_nfp="$cflags $arch_cflags_nfp"
+cflags_fp="$cflags $arch_cflags_fp"
+
+cplusplusflags_nfp="$cflags_nfp $cplusplusflags"
+cplusplusflags_fp="$cflags_fp $cplusplusflags"
+
+fi
+
+if [ "$cachefile" ];then
+	if [ -f $cachefile ];then
+		. $cachefile
+	else
+		write_cache=yes;
+	fi
+fi
+
+
+if [ "$use_installed" ];then
+	cflags="${cflags} -I${prefix}/include"
+fi
+
+if [ "$use_nostdinc" ];then
+	cflags="${cflags} -nostdinc -I${gccincdir}"
+fi
+
+if [ "$echo_prefix" = "yes" ];then
+	echo $prefix
+fi
+
+if test "$echo_arch" = "yes";then
+	echo $arch
+fi
+
+if test "$echo_cross_compile" = "yes";then
+	echo $cross_compile
+fi
+
+if test "$echo_cflags" = "yes";then
+	echo $cflags_nfp
+fi
+
+if test "$echo_cflags_fp" = "yes";then
+	echo $cflags_fp
+fi
+
+if test "$echo_cplusplusflags" = "yes";then
+	echo $cplusplusflags_nfp
+fi
+
+if test "$echo_cflags_fp" = "yes";then
+	echo $cplusplusflags_fp
+fi
+
+if test "$echo_uts_version" = "yes";then
+	echo $uts_version
+fi
+
+if test "$echo_rt_type" = "yes";then
+	echo $rt_type
+fi
+
+if [ "$echo_dump" = "yes" ];then
+	echo prefix=\"$prefix\"
+	echo linuxdir=\"$linuxdir\"
+	echo uts_version=\"$uts_version\"
+	echo arch=\"$arch\"
+	echo cross_compile=\"$cross_compile\"
+	echo rt_type=\"$rt_type\"
+	echo cflags_nfp=\"$cflags_nfp\"
+	echo cflags_fp=\"$cflags_fp\"
+	echo cplusplusflags_nfp=\"$cplusplusflags_nfp\"
+	echo cplusplusflags_fp=\"$cplusplusflags_fp\"
+fi
+
+if [ "$write_cache" = yes  ];then
+	( echo prefix=\"$prefix\"
+	echo linuxdir=\"$linuxdir\"
+	echo uts_version=\"$uts_version\"
+	echo arch=\"$arch\"
+	echo cross_compile=\"$cross_compile\"
+	echo rt_type=\"$rt_type\"
+	echo cflags_nfp=\"$cflags_nfp\"
+	echo cflags_fp=\"$cflags_fp\"
+	echo cplusplusflags_nfp=\"$cplusplusflags_nfp\"
+	echo cplusplusflags_fp=\"$cplusplusflags_fp\" ) >$cachefile
+fi
+

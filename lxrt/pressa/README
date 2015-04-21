@@ -1,0 +1,28 @@
+Example contributed by Andrew Hooper (andrew@best.net.nz)
+
+The running of this test is self contained. Nonetheless you need to have 
+compiled and installed: rtai.c and a scheduler appropriate to your PC.
+To have them all available just follow the usual RTAI installation procedure, 
+do "make all" and then install the needed scheduler.
+Note that "make clean"s are repeated just to make it safe, please do them at 
+least once after installing. There is the possibility of doing it all at once
+from within directory "lxrt" by: "making cleanall", just to be sure, followed
+by "make all".
+
+This test uses a timer interrupt to emulate interrupts caused by an encoder that
+is measuring something. When the encoder count reaches a certain value, 
+indicating the end of the work to be done on a certain item, it is reset and a 
+new item is worked upon, till a user assigned number of items, or Ctrl-C.
+The emulated encoder interrupts are catched by a kernel handler that signals
+a semaphore to wake up a hard real time user space pthread that does all the
+interrupt handling, while a standard supervisor Linux process manages the user 
+interface.
+Note that the only meaningfull thing the handler does is an rt_sem_signal.
+Emulated encoder interrupts are flooded at 20 khz to user space and you can
+check that none is lost, even under heavy forground Linux load, by watching
+the encoder max count displayed against the its max allowed value.
+
+To run it do:
+make clean
+make
+./run

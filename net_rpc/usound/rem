@@ -1,0 +1,16 @@
+sync
+TASKPID=`ps -a | grep player | awk '{ print $1 }'`
+kill $TASKPID
+sync
+TASKPID=`ps -a | grep speaker | awk '{ print $1 }'`
+kill $TASKPID
+sync
+rmmod net_rpc
+sync
+rmmod krtnet
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai_shm
+rmmod rtai
+sync

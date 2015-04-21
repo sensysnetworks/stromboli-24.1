@@ -1,0 +1,34 @@
+CPU Frequency Calibration
+=========================
+
+The module rt_cal, allows you to check the calibration of the cpu clock.
+Just type 'make cal s="SECS=<x>"' to get it and "make stop" to stop and
+remove it. <x> is the pacing, in seconds, at which messages are issued. If
+"s" is omitted the default (5 s) is used.  Note that on the alphanumeric
+screen they appear directly onto it, under X they do not, unless you have
+an xconsole installed, but can be seen by typing "dmesg".
+
+In about twenty seconds the frequency value displayed on the console should
+converge to at least one part in ten million.  If you keep it running
+longer you can verify that more and more digits remain stable. In about a
+quarter of an hour you should get a precision to the least significant
+digit. For a very precise and safe calibration let it run for an hour or so
+with SECS set to a relatively high value to avoid annoying messages.
+
+Such a high precision is not strictly required for RTAI to work
+appropriately, in fact RTAI is enough with iLinux calibration values it
+uses as defaults.
+
+Note that this modules is also an example of how you can trap a Linux
+interrupt and then chain your handler back to Linux by using
+"rt_pend_linux_irq(irq)".
+
+To use it:
+
+  make clean
+  make
+  make cal
+
+Wait till you are happy with the converging value, then do
+
+  make stop

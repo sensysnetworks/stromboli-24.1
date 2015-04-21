@@ -1,0 +1,16 @@
+Finding the Right GCC for Compiling RTAI and the Kernel
+=======================================================
+
+Currently the recommended compiler for RTAI and the Linux kernel is
+
+                          gcc-2.95.3 
+
+It is possible that gcc-3.x.x works for the kernel, in fact later tests 
+compiling Linux 2.4.xx with gcc-3.2 do seem to produce a working kernel, 
+despite some warning floods. So RTAI now works with gcc-3.2, at least as 
+well as Linux does.
+Nonetheless gcc-3.x.x is not yet the official accepted compiler for Linux, 
+so if you use anything else besides 2.95.3 you are partly on your own.
+
+Nevertheless, you are welcome to send patches/infos to the RTAI mailing list
+which help in improving compiling RTAI with non-supported compilers. 

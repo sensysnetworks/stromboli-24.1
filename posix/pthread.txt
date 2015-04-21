@@ -1,0 +1,83 @@
+
+RTAI pthread module.
+====================
+
+The RTAI pthread module implements a thread package to the POSIX 1003.1c
+standard.  The module includes calls for thread creation and destruction,
+mutual exclusion, and condition variables.  This gives the real time  
+programmer the ability to program the application using a standard threads
+API.
+
+
+pthreads.
+---------
+
+The module provdes for the dynamic creation and destruction of threads, so
+the number of threads does not have to be known until runtime.  POSIX
+threads use attribute objects to represent the properties of threads.  
+Properties such as stack size and scheduling policy are set for a thread
+attribute object.  A thread has an id of type pthread_t, a stack, an
+execution priority, and a starting address for for execution.  In POSIX
+threads are created dynamically with the pthread_create function which
+creates a thread and puts it in a ready queue.
+
+During its life a pthread can be in any one of four states; Ready,
+Running, Blocked, and Terminated.
+
+A pthread is in the ready state when it is able to run, but is waiting for
+a processor to become available.  Usually it is in the ready state on
+creation, when it has been blocked or preempted by another pthread or
+task.
+
+A pthread is in the running state when it is executing on a processor.
+
+A pthread is blocked when it is unable to run because it is waiting for an
+event, typical examples of this include waiting to lock a mutex,
+suspending execution for a time period, or waiting for an I/O operation to
+complete.
+
+A pthread is terminated when it returns from its start function or by
+calling pthread_exit.  Under real time Linux this state is very short as
+the concepts of pthread joining and detaching are not currently
+implemented, hence when pthreads are terminated they are recycled
+immediately.
+
+
+
+Synchronization.
+----------------
+
+In the majority of cases, applications that are written using pthreads
+will have a requirement to share data between pthreads and ensure that
+certain actions are performed in a coherent sequence.  This requires that
+the activity of the pthreads is synchronized when accessing the data in
+question to avoid incorrect operation and undesired effects.  Under RTAI
+the synchronization functions that are available for applications are
+mutexes and conditional variables.
+
+Mutexes.
+--------
+
+The most common method of synchronizing access to a resource that is
+shared between multiple pthreads is to use a mutual exclusion, abbreviated
+to mutex.  A mutex is used to serve as a mutually exclusive lock which
+permit pthreads to control access to sections of data and code requiring 
+atomic access.  In these circumstances only one pthread can hold the lock
+and hence access the resource that the mutex is protecting.  Mutexes can
+also be used to ensure exclusive access to sections of code or routines;
+these are known as critical sections of code.
+
+
+
+Condition Variables.
+--------------------
+
+One of the main differences between a mutex and a condition variable is
+that a mutex allows threads to synchronize by controlling access to data,
+and a condition variable allows threads to synchronize on the value of the
+data.  A condition variable provides a method of communicating information
+regarding the state of shared data.  For example this information could be
+a counter reaching a certain value, or a queue becoming empty.
+
+From: Steve Papacharalambous <stevep@lineo.com>
+Organization: Lineo Inc

@@ -1,0 +1,3 @@
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

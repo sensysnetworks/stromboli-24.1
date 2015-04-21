@@ -1,0 +1,130 @@
+An Overview to Port RTAI to Your ARM Processor
+==============================================
+
+
+Why you read this
+-----------------
+
+I guess, you didn't get RTAI running on your ARM processor so far.
+Then you should see this document as a porting guide.
+Otherwise feel free to learn what we have done so far.
+
+
+The problem on ARM
+------------------
+
+The ARM processor consists of a core and peripherals.  The core is the
+calculating heart of this piece of silicon.  There are many ARM cores
+available, see http://www.arm.com.  The core supplies the ISA (Instruction
+Set Architecture) of this processor, maybe it has support for 16-bit
+instructions called Thumb. It can also have support for 64-bit
+multiplication etc. A MMU and some caches are also included.
+
+Around this peripherals like UARTS, timers, Interrupt controllers etc are
+placed - this is the problem on designing one RTAI-version for all ARM
+processors.
+
+Each chip can have completely different hardware designed around the core.
+Interrupt-handling is abstracted for all ARMs through a structure called
+irqdesc found in include/asm-arm/mach/irq.h. So you only have to implement
+you own timer code.
+
+
+The linux kernel
+----------------
+
+Have a deeper look into the kernel, especially into arch/arm/kernel.  The
+entry-*.S files provide a common support for IRQs, FIQs, SWIs etc.  This is
+independent on the ARM core. But there is also arch/arm/mach-<cpu>, where
+platform dependent stuff resides. Here is the code for timers, DMA support
+(if any) ...
+
+So we split the rtai.c core module for ARM into platform dependent and
+independent pieces. We could have done this via #ifdef, but this looks
+ugly.
+
+
+ARM files
+---------
+
+You should see some mach-<cpu> in your RTAI arch/arm directory. The one
+that fits to your processor is symlinked to "mach". In the mach-directory
+you find a timer.c file. It contains the platform dependent code to program
+the timers - rt_request_timer() and some timer_interrupt() handlers.
+
+We used for compatibility reasons macros like TIMER_8254_IRQ for the
+timer interrupt. These macros are defined in
+include/asm-arm/arch-<cpu>/rtai_arch.h and additional timer stuff is in
+include/asm-arm/arch-<cpu>/rtai_timer.h.
+
+If you need to add a new architecture for your processor, use the name the
+linux-kernel provides for your architecture.
+
+
+Porting
+-------
+
+Porting itself should be easy. Be tricky and have a look into kernel
+sources.  Useful code can be found usually in arch/arm/mach-<cpu>/irq.c,
+include/asm-arm/arch-<cpu>/time.h and related.
+
+You should decide next, what kind of timer you have: is it a decrementer, a
+counter with match-registers (like on SA11x0). Look into the source of x86
+and ppc, how they did it. Implement the functions in timer.c and the
+headers.
+
+
+Lockups
+-------
+
+Lockups may happen. Try to ping your machine. If ping does work, you just freeze
+the console. This looks like a bug in rt_set_timer_delay(), so the linux timer
+handler isn't called periodically anymore. You also can add some code
+for debugging the irq dispatcher in rtai.c. This sometimes helps a lot.
+
+If ping doesn't work, try to def CONFIG_RTAI_MOUNT_ON_LOAD in rtai.c.
+If you load the rtai.o module now, RTAI tries to mount directly and
+steals interrupt handling from linux kernel.
+A lockup here points to bugs in the platform independent part of RTAI ...
+
+
+Big tarpits you can step into
+-----------------------------
+
+- Including of linux/irq.h
+  This file has a different definition of irqdesc than ARM uses.
+  No file in arch/arm/ includes this file, they use asm/irq.h instead.
+
+- Adding too much debugging code into timer code.
+  If you communicate over serial line with your board, linux just tries
+  to send all characters and may a) never show the bug or b) complete lockup.
+
+- Avoid setting OSMR0 below OSCR on SA11x0 based machines.
+  This causes a lockup of about 18 minutes.
+
+- Setting up too small a stack causes oopses like the following one
+  | Bad mode in prefetch abort handler detected: mode UK12_26
+  | ...
+  | Flags: NZcv  IRQs on  FIQs off  Mode UK12_26  Segment user
+  The PSR is destroyed when popped off the stack - and so causes a mode-change.
+  Be glad that ARMs behave like this, so you have a big chance to discover
+  bugs caused by a broken stack.
+
+
+Technical notes on RTHAL and ARM-Linux
+--------------------------------------
+
+RTAI/ARM is comparable to RTAI/PPC. Most technical aspects are
+comparable, so just read section "Some technical notes on the port" from
+Documentation/rtai-ppc.txt.
+
+We also replace Interrupt blocking functions like save_flags_and_cli() or
+restore_flags() by function pointers. They are stored in rthal.  The
+irq-dispatcher is handled the same way.  We can now easily switch to
+RT-mode by manipulation the entries in rthal.
+
+SRQ-dispatching is similar to PPC. We emulate the x86 Interrupts by syscall
+0x404404.  A handler in the SWI-dispatcher (SoftWare Interrupt) in kernel
+passes calls to the RTAI srq-dispatcher. There are not 256 possible
+handlers on ARM architecture like x86 provides, and something comparable
+to the trap-mechanism on PPC is missing, too. 

@@ -1,0 +1,69 @@
+%% SYSTLC: Real-Time Target for Linux RTAI (kernel space)\
+%%    TMF: krtai.tmf MAKE: make_rtw EXTMODE: ext_comm 
+%%
+%% $RCSfile: krtai.tlc,v $
+%%
+
+%selectfile NULL_FILE
+
+%assign MatFileLogging = 1
+%assign ParameterTuning = 1
+%assign BlockIOSignals = 1
+
+%assign TargetType = "RT"
+%assign Language   = "C"
+
+%include "codegenentry.tlc"
+
+
+%% The contents between 'BEGIN_RTW_OPTIONS' and 'END_RTW_OPTIONS' are strictly 
+%% written by the standard format. We need to use this structure in RTW 
+%% options GUI function rtwoptionsdlg.m file.
+%%
+/%
+  BEGIN_RTW_OPTIONS
+
+  % second page of category item
+  rtwoptions(1).prompt         = 'RTAI code generation options';
+  rtwoptions(1).type           = 'Category';
+  rtwoptions(1).enable         = 'on';  
+  rtwoptions(1).default        = 2;   % number of items under this category
+                                      % excluding this one.
+  rtwoptions(1).popupstrings  = '';
+  rtwoptions(1).tlcvariable   = '';
+  rtwoptions(1).tooltip       = '';
+  rtwoptions(1).callback      = '';
+  rtwoptions(1).opencallback  = '';
+  rtwoptions(1).closecallback = '';
+  rtwoptions(1).makevariable  = '';
+
+  rtwoptions(2).prompt         = 'MAT-file variable name modifier';
+  rtwoptions(2).type           = 'Popup';
+  rtwoptions(2).default        = 'rt_';
+  rtwoptions(2).popupstrings   = 'rt_|_rt|none';
+  rtwoptions(2).tlcvariable    = 'LogVarNameModifier';
+  rtwoptions(2).tooltip        = ...
+    ['prefix rt_ to variable name,', sprintf('\n'), ...
+    'append _rt to variable name,', sprintf('\n'), ...
+    'or no modification'];
+
+  rtwoptions(3).prompt         = 'External mode';
+  rtwoptions(3).type           = 'Checkbox';
+  rtwoptions(3).default        = 'off';
+  rtwoptions(3).tlcvariable    = 'ExtMode';
+  rtwoptions(3).makevariable   = 'EXT_MODE';
+  rtwoptions(3).tooltip        = ...
+    ['Adds TCP/IP communication support',sprintf('\n'), ...
+    'for use with Simulink external mode'];
+
+
+  %----------------------------------------%
+  % Configure RTW code generation settings %
+  %----------------------------------------%
+  
+  rtwgensettings.BuildDirSuffix = '_krtai';
+  
+  END_RTW_OPTIONS 
+ %/
+
+

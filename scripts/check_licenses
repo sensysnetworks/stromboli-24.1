@@ -1,0 +1,16 @@
+#!/usr/bin/perl -w 
+
+open FIND, "find . -name \"*.[ch]*\" -print|";
+
+while (<FIND>) {
+	chomp;
+	if (`grep \"Lesser General Public License\" $_`) {
+		print "LGPL";
+	} elsif (`grep \"General Public License\" $_`) {
+		print "GPL ";
+	} else {
+		print "????";
+	}
+	
+	print " $_\n";
+}

@@ -1,0 +1,322 @@
+
+Installation Instructions for RTAI on Motorola MCF5272C3 Evaluation Board
+
+
+Intoduction
+===========
+
+This document describes how to set up the Real Time Application
+Interface (RTAI) on the Motorola MCF5272C3 Evaluation Board
+also known as "Tarifa".
+
+RTAI is an linux kernel extension that allows to preempt
+the linux kernel at any time to perform hard real time
+operations with interrupt latencies in the microseconds
+range. Remember: even with special efforts, the standard
+linux kernel can have latencies of several milliseconds.
+So for creating linux based machine control or data aquisition
+systems, RTAI is mandatory.
+
+Unlike the implementations of RTAI for x86, PPC and MIPS, the
+Coldfire version is not based in the "deferred interrupt mechanism"
+but uses the 25 year old capability of the MC68000 architecture
+to priorities interrupts in hardware by the interrupt
+controller. In the current implementation, Linux interrupts
+are assigned up to interrupt priority level 4 while RTAI interrupts
+can have interrupt priority levels 5 and 6 (7 is an NMI and shouldn't
+be used for normal operation). When Linux is doing cli(), then
+all interrupts up the priority level 4 are disabled - means:
+all standard linux interrupts are disabled while real time
+interrupts may preempt the kernel at any time, even in the
+early stages of standard linux interrupt processing
+(or even during processing hard real time interrupts
+of lower priority).
+
+The usual jitter measured on a 66 MHz MCF5272 processor
+is about 5 Microseconds. The maximum jitter is about 15 microconds.
+The tarifa can stand a 20 KHz periodic task and a 5 KHz
+task in oneshot mode without any problems.
+
+
+
+Installation
+============
+
+This document assumes that you already have installed
+the necessary m68k-elf-toolchain and that you have uClinux
+up and running on the MCF5272C3 using uClinux-dist-20020220
+from www.uclinux.org. Ensure that the kernel is configured
+for loadable modules and that busybox is configured
+with module support (insmod/rmmod/lsmod).
+
+To get RTAI up and running, perform the following commands:
+
+
+# Define the path to your uClinux-distro and RTAI CVS tree:
+
+UC_DIST=$HOME/uClinux-dist 
+RTAI_DIST=$HOME/rtai4
+
+
+# Patch the kernel and recompile it:
+
+cd $UC_DIST/linux-2.4.x
+cat $RTAI_DIR/patches/patch-rthal-2.4.17-uc0-m68knommu | patch -p1
+cd ..
+make clean && make
+
+
+# configure RTAI
+
+cd $RTAI_DIST
+make ARCH=m68knommu CROSS_COMPILE=m68k-elf- \
+  LINUXDIR="$UC_DIST/linux-2.4.x" menuconfig
+
+
+# Now just press <enter> when being asked for the location of the
+# Linux source tree and make the configuration look like this:
+#
+#    [ ] Enable floating point support
+#    < > SMP scheduler
+#    <M> UP scheduler
+#    < > MUP scheduler
+#    <M> POSIX API support
+#    --- Select yes to link memory manager into schedulers
+#    <*> RT memory manager
+#    <M> Fifos
+#    < > Real-Time serial driver (rt_com)
+#    <M> Compile tests
+#    [*] Compile Examples
+#    [ ] True Periodic Timer (NEW)
+
+
+# Save the configuration and exit. Now build the rtai modules
+# and examples by simply typing:
+
+make
+
+
+# Copy the basic RTAI modules to the target filesystem:
+
+install -d $UC_DIST/romfs/lib/modules/rtai
+cp modules/*.o $UC_DIST/romfs/lib/modules/rtai
+m68k-elf-strip -g $UC_DIST/romfs/lib/modules/rtai/*.o
+rm $UC_DIST/romfs/lib/modules/rtai/rtai_sched_up.o # doubled because of link
+
+
+# Copy the preemption example to the target filesystem:
+
+
+cp examples/preempt/ex_preempt.o $UC_DIST/romfs/lib/modules/rtai
+m68k-elf-strip -g $UC_DIST/romfs/lib/modules/rtai/*.o
+cp examples/preempt/check $UC_DIST/romfs/bin
+
+
+# Create the real time fifo device nodes:
+
+cd $UC_DIST/romfs/dev
+for i in 0 1 2 3 4 5 6 7; do touch "@rtf$i,c,150,$i"; done
+
+
+# Create the new image:
+
+cd $UC_DIST
+make image
+
+
+
+Execution of the Demo Application
+=================================
+
+Now reset the MCF5272C3, download the new image
+("dn" and "go 20000") and perform the following commands
+on the target system:
+
+/> insmod rtai
+/> insmod rtai_sched
+/> insmod rtai_fifos
+/> insmod ex_preempt
+/> check
+
+
+You should now get a screen dump like this:
+
+> F r 0 23818
+> F s 0 23820
+> F r 0 23822
+> F s 0 23824
+> F r 0 23826
+> F s 0 23828
+> S s 0 23829
+> F r 0 23830
+> F s 0 23832
+> F r 0 23834
+> F s 0 23836
+> F r 0 23838
+> F s 0 23840
+> S r 0 23841
+> F r 0 23842
+> F s 0 23844
+> F r 0 23846
+> F s 0 23848
+> F r 0 23850
+> F s 0 23852
+> S s 0 23853
+
+Congratulations, you are done!
+
+
+Some more outputs from /proc/rtai:
+
+
+/> cat /proc/rtai/rtai
+
+RTAI Real Time Kernel, Version: 2.3.xx
+
+    RTAI mount count: 1 
+
+RTAI IRQs
+72
+RTAI sysreqs in use:
+1 2 3 4 5
+
+
+/> cat /proc/rtai/scheduler
+                                           
+RTAI Uniprocessor Real Time Task Scheduler.
+
+    Calibrated CPU Frequency: 1000000 Hz
+    Calibrated 8254 interrupt to scheduler latency: 27000 ns
+    Calibrated one shot setup time: 0 ns
+                                   
+Number of RT CPUs in system: 1
+
+Priority  Period(ns)  FPU  Sig  State  Task  RT_TASK *
+------------------------------------------------------
+0         4000000     No   No   0x5    1     002dd640
+1         24000000    No   No   0x5    2     002dd3a0
+TIMED 
+> 002dd640 > 002dd3a0
+READY
+
+
+/> cat /proc/rtai/fifos
+RTAI Real Time fifos status.
+
+fifo No  Open Cnt  Buff Size  handler  malloc type
+-----------------------------------------
+0        1         14000      308060     kmalloc
+
+
+
+More Demo Applications
+======================
+
+There are two MCF5272C3 specific demos (rtaidemos.tgz) where you
+can check the jitter with i.e. an osciloscope. Install them
+with the following commands:
+
+cd $DL_PATH
+wget -c $MCF_RTAI/rtaidemos.tgz
+
+cd $UC_DIST
+tar -xzf $DL_PATH/rtaidemos.tgz
+cd rtaidemos
+make install
+cd ..
+make image
+
+The 1 KHz (oneshot) an 10 KHz (periodic) signal respectivly
+can be captured from J5/B31.
+
+
+Status
+======
+
+This latest version of the RTAI port to Coldfire
+has not been vastly tested. However, there is
+a good chance that this rtai-24.1.8/uClinux-2.4.17-uc0
+based version may be rather stable since it is
+derived from the very well tested rtai-24.1.6a/uClinux-2.4.10-uc0
+version delivered with Lineo's BSP for its Embedix/SDK.
+
+Tested features:
+o Scheduler
+o Fifos
+o Shared Memory
+o preempt example
+o stress example
+
+Most examples included in the RTAI distribution are
+compiling, but only few of them have been tested.
+
+Missing features:
+o LXRT
+o RT_COM
+o Trapped exceptions
+
+
+
+Dragonballs and other Coldfires
+===============================
+
+The support for Coldfire 5307 is basically included
+in the current patch for rtai, but was not tested
+at all, but just copyied over from the older 24.1.6a
+version - YMMV.
+
+There are experimental versions of RTAI for Dragonball
+(68EZ328 and 68VZ328). These will be published once i
+find the time to put the files together in usable packages ...
+
+
+
+RTAI Shared Memory Module for uClinux
+=====================================
+
+uClinux doesn't support Memory Management Units. So
+the Shared Memory Support for RTAI had be rewritten
+from scratch - but as life is much easier without MMU
+on that level, the basic implementation was done in
+less than two hours.
+
+
+
+Know problems
+=============
+
+Probably there are two files in your m68k-elf-toolchain missing
+or don't provide the correct content in order to compile rtai/uclinux.
+Grap and install 'em (as root):
+
+cd $DL_PATH
+wget -c $MCF_RTAI/specs
+wget -c $MCF_RTAI/sched.h
+cp specs /opt/uClinux/lib/gcc-lib/m68k-elf/2.95.3
+cp sched.h /opt/uClinux/m68k-elf/sys-include
+
+
+
+Warranty
+========
+
+As allways, there are no guaranties and the author
+cannot be held responsible for any damage that may
+be caused when using this software ...
+
+
+
+Thanks
+======
+
+This work was a 100% funded by Lineo Inc. Additional
+thanks are addressed to Paolo Mantegazza, the initiator
+of RTAI. Also, i want to thank the most active uClinux
+maintainers, David McCullough and Greg Ungerer, for
+their work on the base uClinux distribution.
+
+
+Best regards
+
+Bernhard Kuhn, Software Engineer, Lineo Inc.
+

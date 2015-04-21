@@ -1,0 +1,23 @@
+sync
+echo " "
+echo "This is a test that shows how to use some peculiar new services made"
+echo " available by the fifo implementation available here."
+echo "Type <return> to install modules (rtai, rtai_sched, rtai_fifos)"
+read junk
+sync
+insmod ../../../modules/rtai.o
+insmod ../../../modules/rtai_sched.o
+insmod ../../../modules/rtai_fifos.o
+insmod ./task.o
+echo "Now start the check of the application"
+echo "To stop the application type Ctrl-C"
+echo "Type <return> to continue"
+read junk
+./check
+echo " "
+echo "Type <return> to remove modules"
+read junk
+rmmod task
+rmmod rtai_fifos
+rmmod rtai_sched
+rmmod rtai

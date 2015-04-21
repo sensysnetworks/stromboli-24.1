@@ -1,0 +1,15 @@
+****** PREEMPT EXAMPLE ******
+
+This is a simple test to verify that a fast high priority task preempts a long
+lasting lower priority one.
+By setting the macro SCHED_LOCK in rt_process.c you can also check the use of 
+the functions rt_sched_lock()/rt_sched_unlock in blocking the preemption of a 
+lower priority task.
+
+To use it type:
+
+make clean
+make
+./run
+
+Alternatively use your own insmod/rmmod after make.

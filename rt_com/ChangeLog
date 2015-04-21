@@ -1,0 +1,213 @@
+2000-11-15  Jochen Küpper  <Jochen@Jochen-Kuepper.de>
+
+	* rt_com.c (rt_com_isr): bug-fix submitted by Giuseppe Renoldi: 
+	I'm using rt_com 0.5.3 with RTAI, and analyzing the code I think to
+ 	have found a bug and a "not optimal behaviour". The bug is that at the
+ 	end of the interrupt routine there is a wrong check to see if there are
+ 	other interrupts pending.  In fact the original code checks if the low
+ 	nibble of IIR is zero, but when there are no interrupts pending, the
+ 	low nibble of IIR is 0x01 and not zero!!!. And if there are no
+ 	interrupt, the default is to execute the "disable Transmitter Holding
+ 	Register Empty Interrupt" and you can see that it can be executed 4
+ 	times (4 useless and expensive IOs).
+	The "not optimal behaviour" is that the rt_com use implicitly only 4
+ 	characters of the TX FIFO. So you have a TX interrupt every 4
+ 	characters instead of 16. I think that the "magical" number 4 that
+ 	initialize the loop variable is related to the "4 characters time" of
+ 	the RX timeout (or the 4 possible interrupt sources ??) but anyway I
+ 	think that it is not correct to do so.  The right way should be to put
+ 	characters in the FIFO only when you are sure that it's empty so you
+ 	can put in 16 characters.
+
+
+2000-05-05  Jochen Küpper  <Jochen@Jochen-Kuepper.de>
+
+	* release 0.5.3
+
+	* README: Updated ml info, removed note regarding setserial, it wasn´t
+	correct any more and should be in the docs.
+
+	* rt_com.c (rt_com_setup): Assure correct parity flags by bitwise and
+ 	with the parity bitmask ( 0x38 ) instead of the wrong if-clause.
+
+2000-05-03  Jochen Küpper  <Jochen@Jochen-Kuepper.de>
+
+	* rt_com.c (rt_com_set_param): If port is negative, deinitialize
+ 	hardware setup. If used-meber is changed, request or release the memory
+ 	region and the IRQ line accordingly.
+
+2000-04-12  Jochen Küpper  <Jochen@Jochen-Kuepper.de>
+
+	* release: 0.5.2
+
+	* rt_com.h (RT_COM_BUF_SIZ): Typo - set to 0x0100 !
+
+2000-03-10  Jochen Küpper  <Jochen@Jochen-Kuepper.de>
+
+	* release: 0.5.1
+
+	* Makefile (rt_com.tar.gz): 
+
+	* PROBLEMS: Add this file.
+
+	* rt_com.c, rt_com.h, rt_comP.h: Cleanup.
+
+	* Makefile: Modified to match the packaging changes: Different
+	documentation, licensing files. Preserve relative paths when creating
+	distribution. 
+
+1999-11-16  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c (rt_com_enable_fifo): Put "namespace prefix" to enable_fifo.
+
+1999-11-11  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c, rt_com.h, rt_comP.h:
+ 	Put in modifications by Roberto	Finazzi <finaz@tin.it>:
+	- Setting port and irq addresses for a com from user space. In this
+	  case the port region request isn't performed by init_module but at
+	  the end of this function.
+	- You can set many functioning mode of the hand shake signals. It is
+	  possible to make a communication without any hand shake signals
+ 	  ( only RXD, TXD and GND connected ) or you can also have an
+	  automatic hardware flow control by RTS-CTS signals. 
+	- It is possible to clear input and output buffer
+ 	  ( the characters stored in the fifos also ).
+	- You can read the remaining free space in the output buffer.
+	- You can read or write all the hand-shake signals 
+	  ( DTR, RTS, CTS, DSR, RI and DCD ).
+	- You can have the last error detected by UART ( Receive data overrun,
+	  Parity error, Framing error, Break detected) and by software ( input
+ 	  buffer full ).
+
+1999-11-04  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* release: 0.4
+
+	* test/: Created this directory and put examples in here.
+
+1999-10-28  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_comP.h (rt_com_request_irq): On RTAI enable the irq after
+	requesting it.
+
+1999-10-27  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_comP.h: Use spinlock to mark critical sections in RT-Linux v2.
+
+1999-10-22  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* Makefile.standalone: Updated for the new files.
+	Provide dist target.
+
+	* rt_com_posix.c, testing.c: Added.
+
+	* TODO: Created this file. Put in Michael's suggestions.
+
+	* README: Merged with Michael's README.RTL.
+
+1999-10-21  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* Makefile.standalone: Include rtl.mk. Provide target clean.
+
+	* rt_com.c: Change include statements to support RTLinux 2.0pre1.
+	Do not define MODULE, __KERNEL__, __RT__ twice.
+
+1999-10-01  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c: Make this module RTAI aware. It should work for NMT
+	RT-Linux v1 and v2 and for RTAI ( v0.6 ).
+
+	* rt_comP.h: Generate defines to hide the differnt interrupt handling
+	of different NMT major versions and RTAI.
+
+1999-07-28  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* Makefile.am (package): Added this rule to package up the stuff.
+
+	* License: Moved our old COPYING file here.
+	
+	* COPYING: Changed this to the GPL file.
+
+	* rt_com.c (init_module): Put rt_com_setup out of ifdefs, its needed in 
+	any case.
+
+1999-07-27  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* README: Added. This file shall contain some information on the
+	purpose and use of the package.
+
+	* Makefile.standalone: Created this file to allow simple compilation
+	without use of automake/autoconf.
+
+	* rt_comP.h: ifdef'ed declaration of interrupt handlers for RT-Linux
+	version.
+
+	* rt_com.h, rt_comP.h: Put Hua Mao into Copyright notice.
+
+1999-07-26  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c (rt_com0_isr): Return the value we get from rt_com_isr, not
+	just "0" all time.
+
+	* rtlinux-2 conformity: Incorporate changes by Hua Mao from Victor
+	Yodaikens group to make the module RT-Linux v2 conform.
+	To get a RT-Linux v1 conforming version, define RTLINUX_V1. The small
+	differences regarding the interrupt handler stuff are ifdef'ed betweend
+	the two versions.
+
+1999-07-23  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c: Changed back to the old static-field approach.
+	Use rtl_sync functions instead of r_cli/r_sti.
+	( This is copied from rt_com in the the khidaq-1_1 branch. )
+
+1999-05-07  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c: Changed all functions to use the buffersize field, esp.
+	rt_com_setup needs to allocate and free the buffer memory.
+
+	* rt_com.h: Change rt_com_setup interface to take an additional parameter
+	for the buffersize of the FISOs.
+
+1999-03-30  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_comP.h: Remove define R_COM_BUF_SIZ and add a size-field to
+	rt_buf_struct.
+
+1999-03-29  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c: Determine the number of rt_com_table entries automatically.
+	(rt_com_read), (rt_com_write), (rt_com_irq_get), (rt_com_irq_put):
+ 	Wrap FIFO head/tail by explicit check for the maximum element instead
+ 	of the tricky binary and. So we can use any size now.
+	(init_module): On failure really free all allocated resources, not just
+	the last one several times.
+
+1998-11-11  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.h: Take out all unneeded stuff and put it into rt_comP.h.
+
+	* rt_comP.h: Put module name into define RT_COM_NAME and use it
+	wherever approbiate.
+
+1998-10-09  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* rt_com.c (cleanup_module): Unregister ISRs before cleaning up the
+	line settings.
+
+	* general: Use priority descriptors with all printk statements.
+	Document all functions using javadoc / kdoc style documents. For each
+ 	function a short description and the meaning of all parameter and the
+ 	return value is given.
+
+1998-03-25  Jochen Küpper  <jochen@uni-duesseldorf.de>
+
+	* general: Started this ChangeLog file.
+
+
+	
+	* Local Variables:
+	* mode: auto-fill
+	* fill-column: 79
+	* End:

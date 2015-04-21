@@ -1,0 +1,157 @@
+	   <*> LINUX MADE FULLY PREEMPTIVE AND HARD REAL NATIVELY <*>
+
+Apparently there is nothing here much different from what you find elsewhere 
+in RTAI. If you browse the content of this directory you'll see nothing but a 
+lot of code found in the MUPS scheduler and lxrt.c. Nonetheless there is also
+a lot of changes scattared around that makes the all NEWLXRT stuff something 
+remarkably different from the rest.
+
+In fact it is an important shift for RTAI as NEWLXRT gives you something
+completely new: a Linux hard real time application interface that is totally 
+based on the scheduling of Linux tasks and kernel threads only, but full 
+compatibility with any existing RTAI application should be safeguarded. So you 
+can run all of RTAI examples/tests unchanged, it should be so also for any 
+application of yours. It works both U/MP.
+
+You can see it as a new and comprehensive LXRT version, its usage rules being 
+the same. However, as it has been said, this NEWLXRT needs no RTAI proper task 
+to support it. In fact it is completely the other way around as now also kernel 
+space only applications can rely on Linux kernel threads, instead of RTAI 
+proper tasks.
+
+There is however a point to be cared by RTAI applications that rely on a fast 
+dynamic real time task creation in kernel space. Since NEWLXRT runs Linux 
+schedulable objects it depends completely on it for their creation and 
+initialisation. Clearly such operations cannot be done in realtime anymore. 
+Being aware of such a need, we use it ourselves quite often, it has been 
+decided to make available a form of dynamic tasks creation in real time anyhow.
+The chosen solution is a "reservoir" scheme of ready to use real time kernel 
+threads. Their number is set by the macro RESERVOIR in rtai_sched.c but can be 
+changed dynamically at insmod by doing "insmod ./rtai_sched.o Reservoir=xx".
+Notice that the scheduler will force a minimal resorvoir of one kernel thread 
+per cpu, even if Reservoir is set to zero.
+The scheduler maintains its task reservoir at the desired level, i.e. at each
+dynamic task creation a new suspended kernel thread is generated. Nonetheless 
+one must be aware that such a fill up operation is done using standard Linux 
+tools, so it takes time and there can be no immediate safe dynamic creation but 
+keeping the reservoir at a safe level, i.e. use an adequate Reservoir number. 
+
+In any case rt_task_init will be a synchronous operation, i.e. will return
+either with a task or in error but it waits for a possible task creation always,
+be it successfull or not. If you do not need dynamic task creation what 
+mentioned above will cause no concern.
+
+Another point to be noticed is that NEWLXRT has no support for Pierre's 
+(Cloutier) virtual circuits and qblks. That is not because they are not 
+important but because I've ported just what I knew and is being used at DIAPM. 
+Also Pierre's LXRT IDs management has been dismissed. Contrary to qblk and vc, 
+that could be fitted back to NEWLXRT if one wants to take the related burden, 
+LXRT specific IDs have no place in NEWLXRT anymore. In fact since NEWLXRT 
+schedules just Linux created tasks they have a PID already and the inlines 
+"pid2rttask" and "rttask2pid", found in msgnewlxrt.h, can assist you if you 
+want to use Linux PIDs for your RTAI APIs, mostly as an alternative 
+identification of RT_TASK pointers. 
+
+Even if there is space for further improvements and cleanups it should be 
+completed already. Of particular notice is the scheduling of both hard and soft 
+real time tasks in user space, kernel threads being kept hard anyhow, in a 
+wholly integrated way, i.e. without using a buddy hard real time kernel thread
+for soft real time Linux tasks accessing RTAI. 
+
+Such a scheme is already available and can be found in scheduler/rtai_sched.c.nobuddy. Even if it has not sustained yet as long a stress testing as the one 
+using a support buddy, just for soft real time tasks, seems to work as well and
+is the one in use.
+
+The buddy support working scheme, found in scheduler/rtai_sched.c.buddy,
+still uses a kernel thread hard real time buddy to allow standard, i.e. non
+real time, Linux processes to access RTAI services and has been verified rather 
+at length on different U/MP machines. Notice again that what just said does not 
+imply that NEWLXRT works like his step father LXRT since only standard plain 
+Linux tasks accessing RTAI services needs a buddy. Tasks that have gone hard 
+real time, by calling rt_make_hard_real_time, do not need a buddy anymore and 
+are switched directly always.
+
+The choice between the buddy/nobuddy versions is made at menuconfig, the 
+default being nobuddy.
+
+Thus NEWLXRT should improve LXRT performances whatever version you'll work 
+with and the buddy/nobuddy versions will be kept till no definite evidence 
+is gathered to estabilish which one is better.
+
+It should be remarked again that rt_task_init must be called in user space
+applications that want to access RTAI services always, either in soft or hard 
+real time. Contrary to LXRT, such an operation just extends the Linux task 
+structure to connect it to RTAI APIs. It can be seen as something like the 
+arch dependent thread pointer found in Linux task_struct.
+All kernel space threads work in hard real time and do not require any special 
+call to do their job, as for any already existing RTAI kernel space application.
+
+NEWLXRT should be backportable to previous releases of RTAI, tested back to
+24.1.7, and to any reasonably recent kernel, however patched. It requires just 
+that you copy this directory in the same place of the RTAI release you have and 
+make it by hand, i.e. kust type "make" from within it.
+If it works as expected it should allow you to operate without changing anything
+of what you have already. In case you want to try it with existing LXRT examples
+you should also remove rtai_lxrt.o from directory "lxrt" and do 
+"ln -s ../modules/rtai_lxrt.o rtai_lxrt.o". That avoids that run scripts 
+referring to the wrong rtai_lxrt.o install the wrong module. You should also 
+copy "setsched" found here in the RTAI root directory you are using to allow 
+using your NEWLXRT scheduler of choice, by typing "./setsched newlxrt".
+
+I'm aware that bugs are always there and any help in further verifying any of 
+the two available schemes is welcomed.
+
+
+SOMETHING NEW
+
+As time passes the NEWLXRT_NOBUDDY version appears more and more bound to 
+become the final version. So a further step ahead has been taken and now it is 
+able to schedule any schedulable object under RTAI. That means:
+- Linux processes and pthreads in user space;
+- Linux kernel threads;
+- RTAI proper tasks, i.e. what is scheduled by standard non NEWLXRT schedulers.
+Thus NEWLXRT_NOBUDDY integrates all of RTAI in user/kernel space in a single
+module that can substitute any of the RTAI U/MP schedulers.
+
+At the moment, for testing purposes, the scheduling of RTAI proper tasks is 
+controlled by the macro USE_RTAIS_TASK in "rtai_sched.c.nobuddy" being defined
+or not. When it is defined you have both kernel threads and RTAI tasks, kernel
+threads only otherwise. 
+When USE_RTAI_TASKS is defined "rt_task_init_cpuid" and "rt_task_init" create 
+RTAI proper tasks, while "rt_kthread_init_cpuid" and "rt_kthread_init" create 
+Linux kernel threads in hard real time mode directly. In such a way it is easy 
+to use all of the available examples/tests to check this new extension. After 
+the testing phase is completed "rt_kthread_init_cpuid" and "rt_kthread_init" 
+will become simple support wrappers to schedule Linux kthreads with the RTAI 
+scheduling extension attached to them by default, but the user will have the 
+possibility of working either in soft or hard real time, depending on 
+"rt_make_hard_real_time" being called or not. In such a way one more execution 
+mode will be available and the user will use kernel threads along the very same 
+lines of pthreads.
+
+It must be remarked that this does changes nothing previously explained in 
+this README, but simply extends NEWLXRT capabilities making its scheduler a
+comprehensive tools to support anything schedulable under RTAI in an efficient
+and unified way. Such a possibility must be seen as a new and valuable assets 
+for NEWLXRT beyond any doubts. However the use of RTAI proper tasks has not 
+been demanded by the need of adding any, totally negligible, increase of 
+efficiency, with respect to Linux kernel threads used in hard real time mode.
+In fact the only important drawback of kthreads is related to the fact that 
+they are heavily constrained by their limited stack size of 8K. Such a 
+constraint has been felt unacceptable by some RTAI users willing to use NEWLXRT 
+for their applications freely mixing kernel and user space usage. Their point 
+of view has been that, even if taking away large data chunks from the stack is 
+a not too difficult possibility, RTAI practice has never impeded the usage of 
+large stacks so it is too late to impose such a constraint to RTAI users. 
+That is true especially in relation to well estabilished and tested existing 
+programs. So to make NEWLXRT easier, thus fostering its usage, it has been 
+decided to allow using RTAI proper tasks with it also. Users should pay due 
+care in evaluating the possibility of crafting new applications in such a way 
+to avoid using large data chunks in the stack, dynamically assigning them with 
+kmalloc, before startup, or rt_malloc during real time execution, thus allowing 
+the use of kthreads without any further problem. That said we do not want to 
+impose anything so, once more, this new NEWLXRT feature has just improved and 
+expanded RTAI mechanimsms to allow a larger freedom to users in implementing 
+their policies.
+
+Paolo Mantegazza.

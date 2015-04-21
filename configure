@@ -1,0 +1,102 @@
+#!/bin/sh
+
+
+topdir=$(pwd)
+
+interactive=y
+menu=n
+
+while [ "$1" != "" ];do
+	case $1 in
+		--linuxdir)
+			shift
+			LINUXDIR=$1
+			;;
+		--reconf*)
+			old=-d
+			interactive=n
+			;;
+		--non-interactive)
+			interactive=n
+			;;
+		--menu)
+			menu=y
+			;;
+	esac
+	shift
+done
+
+export LINUXDIR
+
+. scripts/dep.linux
+
+
+if [ "$menu" = "y" ];then
+	make -C scripts/lxdialog all
+	if [ ! -f .config ];then
+		cp scripts/config.dist .config
+	fi
+	scripts/Menuconfig scripts/config.in
+else
+	scripts/Configure ${old}
+fi
+
+
+for each in $(find . -name Makefile.in)
+do
+	scripts/generate_makefile ${each} >$(dirname $each)/$(basename $each .in)
+done
+
+# ARM version selector
+if grep -q CONFIG_ARM=y $LINUXDIR/.config; then	
+  	if grep -q CONFIG_RTAI_ARM_OLD=y .config; then
+  		ln -sf rtai.c arch/arm/rtaisel.c
+	else
+  		ln -sf rtainew.c arch/arm/rtaisel.c
+	fi
+fi
+
+# set default scheduler to UP
+( 
+  cd modules; 
+  if [ ! -f schedpref ]; then
+	cat <<EOF
+Scheduler will default to UP scheduler.
+
+EOF
+	ln -sf rtai_sched_up.o rtai_sched.o; 
+ 	echo rtai_sched rtai_sched_up.o > schedpref
+  fi
+  if grep -q CONFIG_RTAI_LXRT=m ../.config; then
+  	if [ "$CONFIG_X86" = y -a ! -f lxrtpref ]; then
+		cat <<EOF
+Lxrt module will default to old LXRT.
+
+EOF
+		ln -sf rtai_lxrt_old.o rtai_lxrt.o;
+		echo rtai_lxrt rtai_lxrt_old.o > lxrtpref
+  	fi
+  else
+	rm -f rtai_lxrt.o
+  fi
+  
+
+) 
+
+cat <<EOF
+NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE
+NOTICE                                                                NOTICE
+NOTICE  Run:                                                          NOTICE
+NOTICE     ./setsched [up | mup | smp | smpapic | smp8254 | newlxrt]  NOTICE
+NOTICE  to set your scheduler of choice, after you have done 'make'.  NOTICE
+NOTICE                                                                NOTICE
+NOTICE  It is compulsory to do it always as now it mates the chosen   NOTICE
+NOTICE  scheduler to the appropriate user space support,              NOTICE
+NOTICE  i.e. LXRT/NEWLXRT.                                            NOTICE
+NOTICE                                                                NOTICE
+NOTICE  If nothing is done you will have the combination of the UP    NOTICE
+NOTICE  scheduler and LXRT set for you.                               NOTICE
+NOTICE                                                                NOTICE
+NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE_NOTICE
+
+EOF

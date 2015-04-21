@@ -1,0 +1,5 @@
+rmmod leds_lxrt
+rmmod rtai_shm
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

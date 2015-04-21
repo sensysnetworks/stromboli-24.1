@@ -1,0 +1,222 @@
+***** SUPPORT FOR MATHWORKS SIMULINK-REAL_TIME_WORKSHOP IN RTAI USER SPACE *****
+
+This directory contains the support files required to run the Real Time Workshop
+API for vxWorks as distributed in Matlab 6.0 Relese 12. It is just a beginning 
+and it is promptly distributed to have it tested by other users. 
+We have choosen to use this release of Matlab because it implements the upload 
+mechanism that allows to print the output on screen while the simulation is 
+running.
+
+The few tests we've carried out so far are both for single rate execution 
+and for multi tasking in external mode, run both locally and remotely. 
+Data logging on file has been also tested.
+Comments and suggestions are welcomed.
+
+The base choice made has been to use what found in Matlab as it is. In order
+to avoid duplicating Roberto Bucher work on the same stuff for RTAI in kernel 
+space (see http://A.die.supsi.ch/~bucher), we have decided to develop a 
+user space porting based on hard real time under LXRT.
+
+To this end the easiest choice has been to use the vxWorks support distributed
+with Matlab unchanged, with the added benefit of showing how RTAI can easily 
+do also what such an OS does.
+The only change has been the adaption of the related template makefile to 
+RTAI, and you'll find it in this directory. All the rest are support c and h
+files required to have RTAI APIs mimicking vxWorks.
+
+Further on it is likely we will make an RTAI proper adaption of all the
+support code for the real time workshop. Before doing that we'd like to see
+how this simpler compatibility port works and be sure that we can freely
+distribute such a port along the line of RTAI OSS policy, i.e. LGPL.
+It is possible that we will live with it for ever.
+For the moment, if you have Simulink-RealTimeWorkshop, what found here should 
+allow you to freely use it without any problem. For an easier use we have 
+inserted our template makefile in this directory, along with our Simulink DAQ
+drivers and a fixed rt_main for Tornado/vxWorks.
+
+Here you'll find also the drivers for a couple of DAQ boards, i.e. 
+Intelligent_Instrumentation_tested and Quanser_not_tested. The style adopted,
+i.e. simple inlines and defines to be used directly in the related Matlab 
+drivers, suites our needs. You can adapt or change it for your boards at hand. 
+
+It should be noticed that our LXRT implementation enables any user to freely
+access hard IO. So you need not to be a super user to develop and use your 
+applications, but root permission is still required to install the needed RTAI 
+support modules. The script to install the necessary support modules is runrtw. 
+Obviously stoprtw makes the opposite job.
+
+05/31/2002 Added some patched files from Gopal Santhanam <gopal@nerur.com>
+See the notes at the end of this file for a report of the the bugfixes.
+Unfortunately it has been necessary to modify other files related to the 
+MATLAB/RTW interface.
+
+
+To run the application use the following command line:
+
+ ./prog_to_run nohrt p=23 o=5 "optStr", whatever order;
+
+  nohrt to run soft realtime (for dubugging?),
+  p=priority(1-99) no spaces,
+  o=overuns_check_intervali(seconds) no spaces
+  optStr string of matlab commands like "-tf inf -w" that means
+         run until a stop signal is sent and wait for a signal to start.
+  If not given defaults are: hard real time, p=1, o=5.
+ 
+In the subdirectory /matlab you will find:
+
+      grt_rtai.tlc is Target Language Compiler file to be used
+		   for RTAI. 
+                   This file must be moved to the directory:
+
+                   $(MATLAB_ROOT)/rtw/c/grt
+
+      grt_rtai.tmf is the template Makefile to be used in Matlab 
+                   RealTimeWorkshop.
+                   This file must be moved to the directory:
+
+                   $(MATLAB_ROOT)/rtw/c/grt
+
+                   In this file you should check and eventually modify only the 
+                   following list of directories, in order to be compatible with
+                   your personal PC configuration:
+		   
+                   LINUX_HOME = /usr/src/linux
+                   RTAI_HOME  = /home/rtai4
+                   
+                   In the make file you will find the following line:
+                   
+                   DEB_OPT = # -DDBGPRT
+                   
+                   If you activate the flag  -DDBGPRT you will see a lot of info
+                   messages regarding all the creation and deleting of the 
+                   different RTAI support tasks.
+
+     rt_main.c    is the patched tornado/vxWorks main that must go in the 
+                  directory $(MATLAB_ROOT)/rtw/c/tornado. The correction 
+		  relates to an error in the parsing of the option string. 
+                  You should also comment the line 128 of rt_main.c:
+
+                  #define STOPONVERRUN
+
+                  In this way the execution won't stop at the starting when 
+                  several overrun could happen under very fast timing. 
+                  In any case you will get the messages on screen and there is 
+                  an overrun counter that shows you what happened (see also 
+                  the log file rtw_log).
+    
+    ext_transport_share.h is a patched file that must replace the correspondig file in
+                  the directory $(MATLAB_ROOT)/rtw/c/src. For further information
+                  see the notes at the end of this file. 
+    
+    ext_svr.c     is a patched file that must replace the correspondig file in 
+                  the directory $(MATLAB_ROOT)/rtw/c/src. For further information 
+                  see the notes at the end of this file.
+ 
+    setup.m       is a matlab script that simply adds the drivers directory to 
+                  the matlab path.
+
+In the subdirectory /drivers you will find the drivers  and  the librarys of 
+blocks (*.mdl) for Simulink.
+
+In /example there are finally a couple of simple tests:
+  
+     upldl.mdl   does't need the support of any board. Is composed of two sine 
+                 waves that are plotted in output. You can test the 
+                 possibility to change the parameters and the uploading 
+                 mechanism for plotting the outputs.
+    
+  simpleio.mdl   is a simple example of I/O with the Intelligent 
+                 Instrumentation card. A sine signal is sent to the D/A card 
+                 and is acquired back by the A/D converter. 
+
+  multirate.mdl  6 tasks generating sine waves. They can be run either in single
+		 tasking or multitasking mode, according to how you compile them
+		 in Matlab. 
+
+As said comments/bug reports are welcomed, refer to quaranta@aero.polimi.it.
+
+Giuseppe Quaranta
+
+****************************************************************************
+Bug Fix:
+
+05/03/2002 Patched the file rtai_main.c
+
+Bug:
+If the code is starded in External mode with no matlab RTW arguments (like -tf 
+-w and so on) the code crashes. 
+
+Solution:
+If there are no matlab RTW arguments rtai_main passes an empty string 
+(i.e. "/0") to rt_main. A small change must be done also in rt_main to make it 
+able to handle correctly this string. 
+See the files rtai_main.c and matlab/rt_main.c
+ 
+05/31/2002 Added some patched files from Gopal Santhanam <gopal@nerur.com>
+
+Bug:
+The machine locks up when the Simulink model checksum doesn't match with the 
+external mode checksum. This is particularly bad since it is common to forget 
+to re-compile the model after a change.  Obviously having the machine freeze 
+up in this scenario is terribly inconvenient.  
+
+Solution: 
+The bug was due to the fact that the Simulink host would simply  
+terminate the connection if the checksum did not match.  The socket
+would be closed abruptly.  On the target side, the calls to
+SocketGetData (in ext_transport_share.h) do not detect whether the
+socket is disconnected.  [Recall that in TCP/IP that a select call on a
+disconnected socket will reveal that there is pending data, but a recv
+call will immediately return with 0 bytes received.]  Hence, the calls
+to SocketGetData would not block, and the tExternMsg thread would be in
+an infinite loop.  Since that thread has higher priority than most other
+processes running on the system, the machine would hang.  The fix
+involved adding a couple lines to SocketGetData that error out if there
+is data pending on the socket but no bytes are received.  Then there
+needed to be a patch in ext_svr.c at the end of rt_MsgServerWork.  See
+my comment there for more details.
+
+See the patched file matlab/ext_transport_share.h. 
+This file must replace the corresponding MATLAB file in the directory  
+$(MATLAB_ROOT)/rtw/c/src.
+
+
+Bug:
+There seems to be a bug where it is not possible to disconnect from 
+the target in Simulink and then reconnect.  To reproduce: 
+  a) Start Simulink 
+  b) Start the target (with the -w) option 
+  c) Connect to target with Simulink's external mode control panel 
+  d) Disconnect 
+  e) Try to connect again. 
+
+Solution:
+This bug was a result of a semaphore synchronization problem.  When the
+Simulink host disconnects from the target, the target calls
+DisconnectFromHost in ext_svr.c.  In this function there is a call to
+UploadPrepareForFinalFlush in which the sempahore uploadSem is signaled.
+Since we are running the tExternUpload thread which is blocked on
+uploadSem (see rt_UploadServerWork), that thread immediately picks up
+the signaled semaphore.  However, DisconnectFromHost tries to call
+rt_UploadServerWork also and there is no signal sitting on the
+uploadSem.  The fix I made is a hack, but it simply signals uploadSem
+once more in DisconnectFromHost.  This ensures that the thread that is
+running DisconnectFromHost will not block. 
+ 
+See matlab/ext_svr.c for the fix and the comment.
+This file must replace the corresponding MATLAB file in the directory  
+$(MATLAB_ROOT)/rtw/c/src.
+
+Bug:
+The target was configured for MAT_FILE logging (the option where scope 
+data is saved to a mat file at the end of a simulation);  
+if Control-C was pressed in the middle of the
+simulation, the MAT_FILE would not be saved at all, as opposed to it
+being saved with the data up until the interrupted time step.  
+
+Solution:
+The macro "MODEL()" was being used in the "endme"
+signal handler (see rtai_main.c).  This function actually does much more
+than simply return a pointer to the model.  The function totally
+re-initializes the model structure!  Instead, you can use the pointer
+"rtS" which is a handle to the model structure.

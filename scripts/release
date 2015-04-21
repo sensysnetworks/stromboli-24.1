@@ -1,0 +1,36 @@
+#!/bin/bash
+
+topdir=$(pwd)
+
+#export CVSROOT='ds@cvs.rtai.org:/opt/cvsroot/rtai'
+export CVSROOT=':pserver:paolom@cvs.rtai.org:/opt/cvsroot/rtai'
+
+if [ ! "$1" ]
+then
+	echo -n "enter minor version: 24.1."
+	read minor
+else
+	minor=$1
+fi
+
+tag=r24_1_$minor
+version=24.1.$minor
+
+echo "deleting tag $tag"
+cvs rtag -d $tag stromboli
+
+echo "tagging $tag"
+cvs rtag $tag stromboli
+
+echo "exporting"
+cvs export -r $tag -d rtai-${version} stromboli
+
+# files that aren't distributed
+echo "cleaning files"
+cd ${topdir}/rtai-${version}
+
+rm todo
+
+cd ${topdir}
+echo "creating tar file"
+tar -czf rtai-${version}.tgz rtai-${version}

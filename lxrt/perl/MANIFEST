@@ -1,0 +1,10 @@
+Changes
+LXRT.pm
+LXRT.xs
+MANIFEST
+Makefile.PL
+version.PL
+test.pl
+typemap
+README
+COPYING

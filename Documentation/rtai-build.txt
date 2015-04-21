@@ -1,0 +1,69 @@
+RTAI Source tree
+================
+
+In the last year, RTAI has had a complete makeover of it's build system.
+Using the Linux kernel source tree as a guideline many improvements have
+been made.
+
+All Makefiles files now use the toplevel Rules.make file to deduce their
+build rules.  This has led to a more consistent (and brief) mechanism for
+developers when writing Makefiles within RTAI.  
+
+The first build of RTAI uses the header file dependency utility from the
+Linux kernel to build up a comprehensive set of dependency files for RTAI.
+This ensures that rebuilds are conducted correctly in response to changes
+within the system, or anything the system depends on.
+
+The internal numbering system was changed (e.g 22.2.5), this was done for a 
+number of reasons.
+
+	. It is easy to recognize which kernel series the RTAI variant will
+	  run on (the first digits, e.g 22 == for the 2.2 kernels).  While
+	  this is a good idea, we hope to decouple RTAI from being restricted
+	  to a particular kernel variant.
+
+	. The second number, as in Linux, indicates a stable or development
+	  version.  Even numbers are stable, odd are development.
+
+	. The make system auto-generates an include/version.h file, using
+	  this numbering scheme allows simple comparison of version numbers
+	  which may be used for feature detection.
+
+RTAI now uses kernel patches rather than file copies to upgrade the kernel,
+this has helped to keep the system small, and more familiar to most
+developers.  As part of this change, at make time a check is made to see
+that the patch has been applied, and also that the kernel has been
+configured for the RTHAL.  One very important feature for embedded
+developers is that ifdefs have been added to the patch so that if
+CONFIG_RTHAL is not selected, all RTAI code is removed from the kernel
+build.
+
+The build system now has an install target that puts the RTAI modules into
+the appropriate /lib/modules/<ver>/misc directory.  This means that once
+installed, the RTAI module stack can be loaded/unloaded with modprobe,
+without having to reference a specific version.  Note also that the
+convention of having .o extension for modules in now observed.  Another
+feature in common with Linux is that it is possible to install in an
+alternate directory base (e.g for embedded systems) by using the
+INSTALL_MOD_PATH assignment to the make install command.
+
+In addition to the changes in the build structure, RTAI has added a number
+of utilities aimed at making things simpler for the user.
+
+To try to provide for compatibility with RTLinux, RTAI include a header
+file include/rt_compat.h, this uses a series of wrappers to make it
+possible to write most applications using the RTLV1/RTAI API and have them
+build and run on RTL V2 or RTAI.  The main benefit is that the application
+code itself looks much cleaner and so is easier to maintain.  
+
+To make it simple for a newcomer to get the flavor of RTAI, there are Perl
+bindings to LXRT, using these bindings, you can write a script using the
+RTAI API and immediately see your results with no compilation or Makefile
+woes.
+
+Finally, we have seen the start of regression tests in RTAI (see newfifos)
+the idea is to give a simple go/no go test so that it is easy to for the
+user (and developer) to determine whether a feature is functioning as
+expected.
+
+

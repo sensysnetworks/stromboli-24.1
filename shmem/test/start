@@ -1,0 +1,4 @@
+insmod ../../modules/rtai.o
+insmod ./rtai_shm.o
+insmod ./kalloc.o
+./itest &

@@ -1,0 +1,102 @@
+%% SYSTLC: Generic Real-Time Target \
+%%    TMF: grt_default_tmf MAKE: make_rtw EXTMODE: ext_comm 
+%% SYSTLC: Makefile for the "RTAI" target \
+%%    TMF: grt_rtai.tmf MAKE: make_rtw EXTMODE: ext_comm  
+%%
+%% $RCSfile: grt_rtai.tlc,v $
+%% $Revision: 1.1.1.1 $
+%% $Date: 2004/06/06 14:02:42 $
+%%
+%% Copyright 1994-2000 The MathWorks, Inc.
+%% Abstract: Generic real-time system target file.
+%%
+%selectfile NULL_FILE
+
+%assign MatFileLogging = 1
+
+%assign TargetType = "RT"
+%assign Language   = "C"
+
+%include "codegenentry.tlc"
+
+
+%% The contents between 'BEGIN_RTW_OPTIONS' and 'END_RTW_OPTIONS' are strictly 
+%% written by the standard format. We need to use this structure in RTW 
+%% options GUI function rtwoptionsdlg.m file.
+%%
+/%
+  BEGIN_RTW_OPTIONS
+
+  % second page of category item
+  rtwoptions(1).prompt         = 'GRT code generation options';
+  rtwoptions(1).type           = 'Category';
+  rtwoptions(1).enable         = 'on';  
+  rtwoptions(1).default        = 3;   % number of items under this category
+                                      % excluding this one.
+  rtwoptions(1).popupstrings  = '';
+  rtwoptions(1).tlcvariable   = '';
+  rtwoptions(1).tooltip       = '';
+  rtwoptions(1).callback      = '';
+  rtwoptions(1).opencallback  = '';
+  rtwoptions(1).closecallback = '';
+  rtwoptions(1).makevariable  = '';
+
+   rtwoptions(2).prompt         = 'MAT-file logging';
+  rtwoptions(2).type           = 'Checkbox';
+  rtwoptions(2).default        = 'off';
+  rtwoptions(2).tlcvariable    = 'MatFileLogging';
+  rtwoptions(2).makevariable   = 'MAT_FILE';
+  rtwoptions(2).tooltip        = ...
+    ['Instrument code to log data to a MATLAB .mat file'];
+
+  rtwoptions(3).prompt         = 'Mat-file variable name modifier';
+  rtwoptions(3).type           = 'Popup';
+  rtwoptions(3).default        = 'rt_';
+  rtwoptions(3).popupstrings   = 'rt_|_rt|none';
+  rtwoptions(3).tlcvariable    = 'LogVarNameModifier';
+  rtwoptions(3).tooltip        = ...
+    ['prefix rt_ to variable name,', sprintf('\n'), ...
+    'append _rt to variable name,', sprintf('\n'), ...
+    'or no modification'];
+  
+  rtwoptions(4).prompt         = 'External mode';
+  rtwoptions(4).type           = 'Checkbox';
+  rtwoptions(4).default        = 'off';
+  rtwoptions(4).tlcvariable    = 'ExtMode';
+  rtwoptions(4).makevariable   = 'EXT_MODE';
+  rtwoptions(4).tooltip        = ...
+    ['Adds TCP/IP communication support',sprintf('\n'), ...
+    'for use with Simulink external mode'];
+ 
+  rtwoptions(5).prompt         = 'RTAI advanced options';
+  rtwoptions(5).type           = 'Category';
+  rtwoptions(5).enable         = 'on';
+  rtwoptions(5).default        = 2;   % number of items under this category
+
+
+  rtwoptions(6).prompt       = 'Base task priority';
+  rtwoptions(6).type         = 'Edit';
+  rtwoptions(6).default      = '30';
+  rtwoptions(6).tlcvariable  = 'BasePriority';
+  rtwoptions(6).makevariable = 'BASE_PRIORITY';
+  rtwoptions(6).tooltip      = ['The base rate task priority, sub rate tasks will use an incremented ', ...
+                                sprintf('\n'), ...
+                                '(lower priority) value. The range is 0-255, 0 being highest.'];
+  rtwoptions(7).prompt       = 'Task stack size';
+  rtwoptions(7).type         = 'Edit';
+  rtwoptions(7).default      = '16384';
+  rtwoptions(7).tlcvariable  = 'TaskStackSize';
+  rtwoptions(7).makevariable = 'STACK_SIZE';
+  rtwoptions(7).tooltip      = ['The stack size in bytes for each task that executes the model.'];
+
+
+  %----------------------------------------%
+  % Configure RTW code generation settings %
+  %----------------------------------------%
+  
+  rtwgensettings.BuildDirSuffix = '_rtai_rtw';
+  
+  END_RTW_OPTIONS 
+ %/
+
+

@@ -1,0 +1,17 @@
+Latency Calibration
+===================
+
+This directory contains a calibration module to tune the scheduling latency
+of oneshot timers in RTAI schedulers. Note that the tuning is against the
+scheduler you have installed in mosules.
+
+To use it:
+
+  make clean
+  make
+  make cal
+
+Wait for the final message giving you the define to be used in rtai.h, then
+do: 
+
+  make stop

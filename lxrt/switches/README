@@ -1,0 +1,16 @@
+****** SWITCHES EXAMPLES ******
+
+This directory checks task switching time for hard real time processes (user
+space) environment, by repeated use of suspend/resumes and sem_wait/sem_signal.
+There are two implementations that do the same basic thing, but use different
+ways to setup and close the application. See the code in rt_process1 and 
+rt_process2
+
+To use it type:
+make clean
+make
+followed by
+./run1
+or
+./run2
+then follow the instructions.

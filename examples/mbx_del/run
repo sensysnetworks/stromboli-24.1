@@ -1,0 +1,16 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example demonstrates the release of tasks blocked on RTAI mailboxes.
+
+Type <return> to continue
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_mbx_del.o
+
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_mbx_del

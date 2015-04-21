@@ -1,0 +1,36 @@
+.TH RT_TBX_RECEIVE_UNTIL 8 "January 2001" RTAI "Typed Mailbox Functions"
+.SH NAME
+rt_tbx_receive_until, rt_tbx_receive_timed \- receive a message with timeout
+.SH SYNOPSIS
+.B #include <rtai_sched.h>
+.sp
+.BI "int rt_tbx_receive_until(TBX " *tbx ", void " *msg ", int " msg_size ", RTIME " time ");"
+.BI "int rt_tbx_receive_timed(TBX " *tbx ", void " *msg ", int " msg_size ", RTIME " delay ");"
+.SH DESCRIPTION
+.B rt_tbx_receive_until 
+and 
+.B rt_tbx_receive_timed 
+receive a message of 
+.I msg_size 
+bytes from the typed mailbox 
+.I tbx. 
+The caller will be blocked until
+all bytes of the message arrive, timeout expires or an error occurs. 
+.I time 
+is an absolute value. 
+.I delay 
+is relative to the current time. 
+.I msg 
+points to a buffer provided by the caller.
+.SH RETURN VALUES
+0 is returned in case of message regularly received, otherwise 
+.I msg_size
+is returned in case of timeout. On failure a negative value is returned as described below.
+.SH ERRORS
+.B -EINVAL
+.I tbx
+points to an invalid typed mailbox.
+.B -EMSGSIZE
+.I msg_size
+is bigger than the size of the entire mailbox.
+

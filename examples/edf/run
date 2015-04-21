@@ -1,0 +1,22 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example features NTASKS realtime tasks running periodically in EDF mode.
+The task are given a priority ordered in such a way that low numbered tasks
+have the lowest priority. However the tasks execute for a duration proportional 
+to their number so that, under EDF, the lowest priority tasks run first.
+So if they appear increasingly ordered on the screen EDF should be working.
+
+Type <return> to install modules, then <return> again when you want to stop it
+EOF
+
+read junk
+
+../../scripts/rt_modprobe ex_edf.o
+
+echo "Program is running"
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_edf

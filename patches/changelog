@@ -1,0 +1,71 @@
+2.4.19-rthal5g:
+2.4.19-allsoft:
+
+ - version bump, added a change of NR_IRQS in linux from 16 to 32
+ - minor aesthetic changes to asm and rthal declaration
+
+2.4.18-rthal5g:
+
+2.4.17-rthal5g:
+
+ - MMU fix for ppc
+ - make rthal a EXPORT_SYBMOL_NOVERS()
+ - unknown MMU fixes by Paolo
+
+2.4.16-rthal5f:
+ 
+ - fixes for PPC
+
+2.4.10-rthal5e:
+
+ - i386: better IO-APIC handling [paolo]
+ - i386: uncommented hard sti in entry.S [paolo]
+ - changed mm switch handling [paolo]
+
+2.4.10-rthal5d:
+
+ - simple port of 2.4.9-rthal5d patch to .10
+
+2.4.9-rthal5d:
+ 
+ - version bump
+
+2.4.8-rthal5d:
+ 
+ - version bump
+
+2.4.7-rthal5d:
+
+ - i386: fix in do_page_fault(), wasn't reenabling hard interrupts
+ - powerpc: full merge, no need anymore for separate ppc and i386 patches
+ - powerpc: remove patch to mouse driver
+ - i386: irq_vector[] shouldn't be extern, it should be #ifdef
+ 	CONFIG_X86_IO_APIC
+
+2.4.7-rthal5c:
+
+ - fix a cli that popped up in arch/i386/kernel/entry.S
+ - fix a spin_unlock_irqrestore()
+ - irq_vector[] should be extern
+
+2.4.7-pre5-ppc-rthal5a:
+
+ - same
+
+2.4.6-pre3-ppc-rthal5a:
+
+ - slightly out-of-sync version for ppc.
+
+2.4.6-pre3-rthal5b:
+
+ - fixed conflict in arch/i386/kernel/io_apic.c.  This could cause
+   problems on SMP machines, if I did the fix incorrectly.
+
+2.4.5-rthal5b:
+
+ - removed led functions from arch/i386/kernel/i386_ksyms.c
+
+2.4.5-rthal5a:
+
+ - started a changelog
+

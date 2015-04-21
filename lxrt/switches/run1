@@ -1,0 +1,15 @@
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+sync
+export LD_LIBRARY_PATH=../lib
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+sync
+echo " "
+echo "This test checks the time required for switching tasks"
+echo "Type <return> to install modules (rtai, rtai_sched)"
+read junk
+./rt_process1

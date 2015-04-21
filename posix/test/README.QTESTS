@@ -1,0 +1,54 @@
+RTAI POSIX QUEUES - Examples
+============================
+
+vsimple_q:	Very simple, single task, single queue 
+		puts same message on queue twice, reads it back once
+		and dies gracefully.
+
+simple_q1:	Quite simple, single task, single queue
+		puts two messages on queue, reads them back
+		and dies gracefully.
+
+simple_q2:	Simple, single task, single queue
+		puts four messages on queue (stored in expandable format)
+		reads them back and dies gracefully.
+
+simple_q3:	Simple, two tasks, single queue
+		parent puts four messages on queue then closes it.
+		child opens queue (read-only), gets messages then
+		closes queue and dies gracefully.
+
+q_test:		Uses two queues to do what simple_q3 does
+		and then pass messages back from child to parent, using
+		a semaphore for the parent to sleep on until child has 
+		written to queue.
+
+blq_test: 	Two queues, two tasks. Parent creates both queues, sends
+		messages to child and then sleeps on empty queue.
+		Child gets messages then posts one back to parent on other
+		queue.
+
+simple_blq:	Simple_q3 with a blocking queue.
+
+toomanyqs:	Tries to open 10 queues when limit is 4. 1-4 open ok, rest fail.
+
+mblq_test:	Multiple blocking test. Parent creates both queues, starts up
+		10 children that all block trying to read a message each from 
+		empty queue. Parent then sends 10 messages to wake up each
+		child in turn, as each child wakes up it replys to parent on
+		the other queue. When parent has finished sending messages to
+		the children it reads all the children's replies which by
+		now should be reordered according to priority rather than the
+		order sent.
+
+Further tests:
+
+a	Try to open/create more queues than will fit in memory
+b	Have too many tasks trying to open a queue
+c	Ensure multiple writers works
+d	Read/Write soak test
+
+-------------------------------------------------------------------------------
+mod_stuff:	All the module initialisation/finalisation gathered into
+		a single file.
+-------------------------------------------------------------------------------

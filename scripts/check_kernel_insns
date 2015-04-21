@@ -1,0 +1,53 @@
+#!/usr/bin/perl -w
+
+
+$vmlinux=shift @ARGV;
+
+@output = `objdump -dr $vmlinux`;
+
+$last_symbol="beginning";
+$last_section="beginning";
+$arch="none";
+while($_=shift @output){
+	if(m/file format/){
+		if(m/powerpc/){
+			$arch="powerpc";
+		}elsif(m/i386/){
+			$arch="i386";
+		}else{
+			# unknown arch!
+		}
+	}
+	if($arch eq "i386"){
+		if(m/^\w/){
+			$last_symbol=$_;
+		}
+		if(m/^Disass/){
+			$last_section=$_;
+		}
+		if(m/\t((pushf)|(popf)|(sti)|(cli)) /){
+			print "$last_section";
+			$last_section="";
+			print "$last_symbol";
+			$last_symbol="";
+			print;
+		}
+	}
+	if($arch eq "powerpc"){
+		if(m/^\w+ /){
+			$last_symbol=$_;
+		}
+		if(m/^Disass/){
+			$last_section=$_;
+		}
+		if(m/\t((mtmsr)|(mfmsr))\t/){
+			print "$last_section";
+			$last_section="";
+			print "$last_symbol";
+			$last_symbol="";
+			print;
+		}
+	}
+}
+
+

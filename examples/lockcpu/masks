@@ -1,0 +1,7 @@
+echo -n "irq  0 mask: ";  cat /proc/irq/0/smp_affinity
+echo -n "irq  1 mask: ";  cat /proc/irq/1/smp_affinity
+echo -n "irq  5 mask: ";  cat /proc/irq/5/smp_affinity
+echo -n "irq 12 mask: ";  cat /proc/irq/12/smp_affinity
+echo -n "irq 14 mask: ";  cat /proc/irq/14/smp_affinity
+echo -n "irq 15 mask: ";  cat /proc/irq/15/smp_affinity
+echo -n "irq 17 mask: ";  cat /proc/irq/17/smp_affinity

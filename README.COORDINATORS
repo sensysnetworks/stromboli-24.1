@@ -1,0 +1,84 @@
+NOTICE: there is no order, either of merit or whatever, intended in this 
+listing. Just the who is doing (mostly) what, to help anybody.
+
+ David Schleef (ds@schleef.org):
+- the big boss of directories layout, PPC, rtnet, patches coordination and
+  making.
+
+Erwin Rol (erwin@muffin.org):
+- AIO module and related operations, C++ support.
+
+Giuseppe Renoldi (giuseppe@renoldi.org):
+- rt_com_lxrt, spdrv, manual coordinator.
+
+Ian Soanes (ians@lineo.com):
+- trap handling, watchdog, kgdb.
+
+Karim Yaghmour (karym@opersys.com):
+- LTT interface, related parts of kernel patches to integrate
+  Linux-LTT-RTAI, PPC, rtai.c.
+
+Lorenzo Dozio (dozio@aero.polimi.it):
+- Configuration support.
+- RealTimeWorkshop support within RTAI.
+- Comedi_lxrt.
+- testing, a lot of friendly support to many users that write to
+  him for help and explanations.
+- uRTAI.
+- RTAI-Lab.
+
+Massimo Bertani (gmbertani@yahoo.it, http://www.geocities.com/gmbertani)
+- tbx.
+
+Pierre Cloutier (pcloutier@PoseidonControls.com):
+- lxrt, trapping traps, dynamic memory management, Octave support
+  within RTAI.
+
+Steve Papacharalombous (stevep@lineo.com):
+- posix extensions, dynamic memory manager, RTAI for MIPS processors.
+
+Stuart Hughes (stuarth@lineo.com):
+- fifos.
+
+Wolfgang Denk (wd@denx.de)
+Wolfgang Grandegger (Wolfgang.Grandegger@bluewin.ch)
+- if something is missing in PPC-RTAI distribution you might ask
+  them before thinking it does not exist.
+
+Guennadi Liakhovetski <gl@dsa-ac.de>
+- ARM
+
+Alex Zuepke <azu@sysgo.de> 
+- ARM 
+
+Thomas Gleixner <gleixner@autronix.de>
+- ARM
+
+Giuseppe Quaranta <quaranta@aero.polimi.it)
+- RealTimeWorkshop support within RTAI.
+
+Robert Schwebel <r.schwebel@pengutronix.de>
+- AMD Elan
+- Documentation
+- Web Site
+
+Bernhard Kuhn <bkuhn@lineo.com>
+- m68k-nommu port
+
+Thomas Leibner <thomas.leibner@tiscali-dsl.de>
+- Hard/soft real time support for LABVIEW in user space.
+- Comedi_lxrt.
+
+Philippe Gerum <rpm@xenomai.org>
+- ADEOS core support (and with it much of RTAI itself).
+
+Peter Soetens <peter.soetens@mech.kuleuven.ac.be>
+- userspace POSIX
+
+Last, but hope not least:
+Paolo Mantegazza (mantegazza@aero.polimi.it):
+- Linux patches, rtai.c, schedulers, shmem, tasklets, bits, net_rpc, spdrv,
+  RealTimeWorkshop support within RTAI, comedi_lxrt, usi, newlxrt, RTAI-Lab,
+  rtai_usp_posix.
+
+

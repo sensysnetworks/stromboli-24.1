@@ -1,0 +1,60 @@
+#!/bin/sh
+#
+# Originally written by Brendan Knox (brendan@zentropix.com).
+# Adapted for ppc by David Schleef <ds@schleef.org>.
+#
+
+
+case $(uname -m) in
+  i*86)
+	echo "Calibrating CPU Frequency..."
+	echo -n "Obtaining CPU Frequency... "
+	CPUF="`cat /proc/cpuinfo | grep 'cpu MHz' | head -1 | awk -F: '{print $2 * 1000000}'`"
+	echo "$CPUF"
+	echo -n "Creating include/asm-i386/calib.h... "
+	
+	echo "#define CPU_FREQ $CPUF" >include/asm-i386/calib.h
+	
+	echo "ok"
+	echo ""
+	
+	echo "Calibrating BUS Frequency..."
+	echo -n "Obtaining BUS Frequency..."
+	BUSF="`dmesg | grep 'host bus clock speed is ' | head -1 | awk -F' '  '{printf(\"%d\", $7 * 1000000)}'`"
+	if [ -z "$BUSF" ]; then
+		echo " Did not find a BUS Frequency! (It's OK if you are UP)";
+	fi
+	echo "$BUSF"
+
+	echo -n "Changing include/asm-i386/calib.h file..."
+
+	if [ -z "$BUSF" ]; then
+	  echo "#define BUS_FREQ 0" >>include/asm-i386/calib.h
+	  echo "#define FREQ_APIC ((BUS_FREQ + APIC_DIVISOR/2)/APIC_DIVISOR)" >>include/asm-i386/calib.h
+	else
+	  echo "#define BUS_FREQ $BUSF" >>include/asm-i386/calib.h
+	  echo "#define FREQ_APIC ((BUS_FREQ + APIC_DIVISOR/2)/APIC_DIVISOR)" >>include/asm-i386/calib.h
+	fi
+
+	echo "ok"
+	echo ""
+	;;
+  ppc)
+	echo "Calibrating CPU Frequency..."
+	echo -n "Obtaining CPU Frequency... "
+	CPUF="`cat /proc/cpuinfo | grep '^clock' | head -1 | awk -F: '{print $2 * 1000000}'`"
+	echo "$CPUF"
+	echo -n "Creating include/asm-ppc/calib.h... "
+	
+	echo "#define CPU_FREQ $CPUF" >include/asm-ppc/calib.h
+	echo "#define FREQ_DECR (CPU_FREQ/16)" >>include/asm-ppc/calib.h
+	
+	echo "ok"
+	echo ""
+	
+	;;
+  *)
+	echo You have a new architecture.  Cool.  Fix scripts/calibrate.
+	;;
+esac
+

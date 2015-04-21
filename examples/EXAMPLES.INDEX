@@ -1,0 +1,77 @@
+condtest: NonPosix conditionnal variable test.
+
+edf: a simple check of Early Deadline First (EDF) scheduling.
+
+fastick: simulate a higher frequency Linux tick for a task communicating with 
+         a real time task or an interrupt handler through a fifo.
+
+fp: demonstrates the support of floating point operations in real-time tasks 
+    by calculating a sine in a real time tasks that preempts a user process
+    carrying out floating point operations.
+
+frank: examples of fifos programming.
+
+jepplin: semaphores and message queues (in fact RTAI mailboxes). 
+
+jitter_free_sw: NTASKS realtime tasks running periodically in oneshot mode, 
+                produce a rectangular wave on the parallel port. It anticipates
+                the square wave transition times, then keeps polling on the
+                timer to get a very precise switch.
+
+lockcpu: reserve a CPU only to real time tasks.
+
+mbx: demonstrates the use of RTAI mailboxes.
+
+mbx_del: demonstrates how tasks waiting on a mailbox are released when it is
+         deleted.
+
+msg_clock: use of inter tasks messages to implement a digital clock.
+
+msgsw: inter tasks messages to produce a rectangular wave on parallel port.
+
+namedstuff: same as jepplin example above, but using named objects creations.
+
+parport: a data transfer protocol between the standard parallel ports (SPP) of 
+         two PCs.
+
+preempt: test to verify that a fast high priority task preempts a long lasting 
+         lower priority one (use of rt_busy_sleep to make a compute intensive 
+         long task).
+
+prioinhr: demonstrates how priority inheritance works in the case of the
+          standard low/medium/high priority tasks.
+
+resumefromintr: shows two ways for waking up real time tasks directly from 
+                interrupt handlers, using both semaphore wait/signal and 
+                rt_task_resume.
+
+res_sem: demonstrates priority inheritance and priority queueing when resource
+         semaphores are used.
+
+rr: shows the working of Round Robin (RR) scheduling.
+
+sem_clock: use of semaphores to implement a digital clock.
+
+sound: uses a real time task and not an interrupt handler to produce sound on 
+       the PC speaker.
+
+stress: stress test aimed at verifying that the schedulers do well under 
+        intense load.
+
+sw: same example as jitter_free_sw, but without an anticipated scheduling to 
+    reduce jitter.
+
+switches: checks task switching time by repeated use of suspend/resumes and 
+          semaphore signal/waits with many tasks.
+
+sysreq: interrupt handler to simulate a higher tick for a Linux process 
+        communicating with RTAI by using full two way rtai system requests. 
+        It is similar to rt_process2 in fastick directory but does not need 
+        to use fifos.
+
+tasktimer: same thing as the timer example, but using tasks instead.
+
+timer: handler on timer interrupt to perform a lot of floating point operations        and send the result through a fifo.
+
+zentr_preempt: verify that preemption withing the scheduler is working as 
+               expected.

@@ -1,0 +1,127 @@
+
+Support for Measurement-Computing PCI-DDA0x/12 boards
+under RTAI-LXRT/Simulink/RTW.
+
+Driver
+=====
+
+The driver (cb_pcidda.h) contains a set of
+inline functions suitable to be used into an LXRT app.
+The driver has been written from scratch by means
+of the Measurement Computing PCI-DDA0x/12 User's Guide.
+Last update : 31 May 2002.
+
+Status
+======
+
+The driver has been tested with PCI-DDA08/12, but it
+should work as it is also with PCI-DDA02/12 and PCI-DDA04/12.
+
+Since the DIO and DAC registers are I/O mapped,
+there is no strict need to access the board PCI resources
+in a standard way. To get the DIO and DAC base there is
+an utility called cb_pcidda_find. It writes the correct
+values according to the PCI initialization on your hardware.
+
+The current driver does not support multi boards.
+
+SubDevices supported
+====================
+
+- Analog Output
+- Digital Input
+- Digital Output
+
+Files
+=====
+
+- cb_pcidda_find
+- cb_pcidda.h
+
+- cb_pcidda_ao.c
+- cb_pcidda_di.c
+- cb_pcidda_do.c
+- cb_pcidda.mdl
+- cb_pcidda_test.mdl
+- cb_pcidda_ao.mexglx
+- cb_pcidda_di.mexglx
+- cb_pcidda_do.mexglx
+
+Location of files into the RTAI tree
+====================================
+
+lxrt/rtw/drivers/cb_pcidda_find
+		 cb_pcidda.h
+		 cb_pcidda.mdl
+		 cb_pcidda_ao.c
+		 cb_pcidda_di.c
+		 cb_pcidda_do.c
+		 cb_pcidda_ao.mexglx
+		 cb_pcidda_di.mexglx
+	   	 cb_pcidda_do.mexglx
+lxrt/rtw/examples/cb_pcidda_test.mdl
+
+Usage
+=====
+
+1) Run ./cb_pcidda_find to get the DAC and DIO addresses
+   (cb_pcidda_addr.h is created with the corresponding #defines).
+2) Insert the RTAI modules with the script ./runrtw
+3) Open Matlab
+4) Open cb_pcidda_test.mdl
+5) Compile the example with "Build Model"
+6) From the lxrt/rtw/examples directory run ./cb_pcidda_test "-tf inf -w"
+7) Open the External Mode Control Panel form the Simulink model menu
+8) Connect to the target and start the real time process
+9) Stop the real time process
+10) Remove the RTAI modules with ./stoprtw
+
+Library cb_pcidda.mdl
+=====================
+
+The cb_pcidda.mdl Simulink library contains
+the blocks for I/O operations on the supported
+boards.
+
+Two blocks are for board initialization
+('Header Files' and 'Reset Digital I/O').
+You have to include them in your own model
+without any connection.
+
+Block for Analog Output ('Analog Output') with four parameters:
+- DAC channel
+- Channel polarity
+- Channel range
+- Sampling time in seconds
+You have to include one block for each DAC channel you want to use.
+In this way each channel con be configured (polarity and range)
+indipendently.
+
+Block for Digital Input ('Digital Input') with four parameters:
+- Digital Input port number (0/1)
+- Digital Input port bank (A,B,Clow,Cup)
+- Number of digital lines (consecutive...)
+- Sampling time in seconds
+
+Block for Digital Output ('Digital Output') with five parameters:
+- Digital Output port number (0/1)
+- Digital Output port bank (A,B,Clow,Cup)
+- Number of digital lines (consecutive...)
+- Threshold in volts
+- Sampling time in seconds
+
+The digital lines are managed by two 82C55 chips. The boards emulates
+only Mode 0 of the 82C55. The 48 CMOS/TTL lines are configured in
+four banks of eight (Port 0 A/B, Port 1 A/B)
+and four banks of four(Port 0 Clow/Cup, Port 1 Clow/Cup).
+Each bank can be input or output.
+So your application must include one block for each bank you want
+to use. Inside the bank you may choose to use only a set of digital
+lines but this set must be of consecutive channels.
+
+NOTE: the PCI-DDA0x/12 manual contains a huge error in the Digital
+I/O Configuration Codes table. The columns B and CU should be reversed.
+Refer to the 82C55 manual for the correct info.
+
+Please report any bug and/or comment to
+Lorenzo Dozio (dozio@aero.polimi.it).

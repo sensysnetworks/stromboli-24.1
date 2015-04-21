@@ -1,0 +1,10 @@
+sync
+rmmod rt_process
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../rtai_lxrt.o
+insmod ./rt_process.o

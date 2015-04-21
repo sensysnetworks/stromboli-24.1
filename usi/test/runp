@@ -1,0 +1,18 @@
+sync
+rmmod handler
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+insmod ../../modules/rtai_tasklets.o
+insmod ../rtai_usi.o
+./rt_process
+sync
+rmmod rtai_usi
+rmmod rtai_tasklets
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

@@ -1,0 +1,322 @@
+Library {
+  Name			  "cb_pcidda"
+  Version		  4.00
+  LibraryLinkDisplay	  "none"
+  CovSaveName		  "covdata"
+  CovNameIncrementing	  off
+  CovHtmlReporting	  on
+  BlockNameDataTip	  off
+  BlockParametersDataTip  off
+  BlockDescriptionStringDataTip	off
+  ToolBar		  off
+  StatusBar		  off
+  BrowserShowLibraryLinks off
+  BrowserLookUnderMasks	  off
+  Created		  "Fri May 10 13:11:17 2002"
+  Creator		  "dozio"
+  UpdateHistory		  "UpdateHistoryNever"
+  ModifiedByFormat	  "%<Auto>"
+  LastModifiedBy	  "root"
+  ModifiedDateFormat	  "%<Auto>"
+  LastModifiedDate	  "Fri May 31 11:13:17 2002"
+  ModelVersionFormat	  "1.%<AutoIncrement:13>"
+  ConfigurationManager	  "none"
+  SimParamPage		  "Solver"
+  AlgebraicLoopMsg	  "warning"
+  MinStepSizeMsg	  "warning"
+  UnconnectedInputMsg	  "warning"
+  UnconnectedOutputMsg	  "warning"
+  UnconnectedLineMsg	  "warning"
+  InheritedTsInSrcMsg	  "warning"
+  SingleTaskRateTransMsg  "none"
+  MultiTaskRateTransMsg	  "error"
+  IntegerOverflowMsg	  "warning"
+  CheckForMatrixSingularity "none"
+  UnnecessaryDatatypeConvMsg "none"
+  Int32ToFloatConvMsg	  "warning"
+  SignalLabelMismatchMsg  "none"
+  LinearizationMsg	  "none"
+  VectorMatrixConversionMsg "none"
+  SfunCompatibilityCheckMsg "none"
+  BlockPriorityViolationMsg "warning"
+  ArrayBoundsChecking	  "none"
+  ConsistencyChecking	  "none"
+  Profile		  off
+  SimulationMode	  "normal"
+  RTWRetainRTWFile	  off
+  RTWMakeCommand	  "make_rtw"
+  RTWGenerateCodeOnly	  off
+  TLCProfiler		  off
+  TLCDebug		  off
+  TLCCoverage		  off
+  ExtModeMexFile	  "ext_comm"
+  ExtModeBatchMode	  off
+  ExtModeTrigType	  "manual"
+  ExtModeTrigMode	  "normal"
+  ExtModeTrigPort	  "1"
+  ExtModeTrigElement	  "any"
+  ExtModeTrigDuration	  1000
+  ExtModeTrigHoldOff	  0
+  ExtModeTrigDelay	  0
+  ExtModeTrigDirection	  "rising"
+  ExtModeTrigLevel	  0
+  ExtModeArchiveMode	  "off"
+  ExtModeAutoIncOneShot	  off
+  ExtModeIncDirWhenArm	  off
+  ExtModeAddSuffixToVar	  off
+  ExtModeWriteAllDataToWs off
+  ExtModeArmWhenConnect	  on
+  ExtModeLogAll		  on
+  BlockDefaults {
+    Orientation		    "right"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    NamePlacement	    "normal"
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+    ShowName		    on
+  }
+  AnnotationDefaults {
+    HorizontalAlignment	    "center"
+    VerticalAlignment	    "middle"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  LineDefaults {
+    FontName		    "Helvetica"
+    FontSize		    9
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  System {
+    Name		    "cb_pcidda"
+    Location		    [119, 175, 544, 580]
+    Open		    on
+    ModelBrowserVisibility  off
+    ModelBrowserWidth	    200
+    ScreenColor		    "white"
+    PaperOrientation	    "landscape"
+    PaperPositionMode	    "auto"
+    PaperType		    "usletter"
+    PaperUnits		    "inches"
+    ZoomFactor		    "100"
+    AutoZoom		    on
+    ReportName		    "simulink-default.rpt"
+    Block {
+      BlockType		      "S-Function"
+      Name		      "AO"
+      Ports		      [1]
+      Position		      [135, 278, 275, 362]
+      FunctionName	      "cb_pcidda_ao"
+      Parameters	      "chan,pol,vfs,dt"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "CB_PCIDDA_AO"
+      MaskDescription	      "Device Driver for the Analog Output section\nof"
+" the Measurement Computing\nPCI-DDAxx/12 Series I/O boards"
+      MaskHelp		      "Device Driver for the Analog Output section\nof"
+" the Measurement Computing PCI-DDAxx/12\nSeries I/O boards. There are four pa"
+"rameters\nthat must be set. 1) Channel - select the AO channel.\n2) Polarity "
+"- select the polarity of the channel.\n3) Full scale voltage - select the ran"
+"ge in voltage\n4) Sampling time - select the sampling period in seconds"
+      MaskPromptString	      "Channel|Polarity|Full scale voltage [V]|Samplin"
+"g time [s]"
+      MaskStyleString	      "popup(DAC0 | DAC1 | DAC2 | DAC3 | DAC4 | DAC5 |"
+" DAC6 | DAC7),popup(bipolar | unipolar),popup(10 V | 5 V | 2.5 V),edit"
+      MaskTunableValueString  "off,off,off,off"
+      MaskCallbackString      "|||"
+      MaskEnableString	      "on,on,on,on"
+      MaskVisibilityString    "on,on,on,on"
+      MaskToolTipString	      "on,on,on,on"
+      MaskVariables	      "chan=@1;pol=@2;vfs=@3;dt=@4;"
+      MaskDisplay	      "disp('Measurement Computing\\nPCI-DDAxx/12\\n\\"
+"nAnalog Output');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "DAC0 |bipolar |10 V|"
+      MaskVariableAliases     ",,,"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DI"
+      Ports		      [0, 1]
+      Position		      [230, 163, 370, 247]
+      FunctionName	      "cb_pcidda_di"
+      Parameters	      "number,port,nchan,dt"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "CB_PCIDDA_DI"
+      MaskDescription	      "Device Driver for the Digital Input section\nof"
+" the Measurement Computing\nPCI-DDAxx/12 Series I/O boards."
+      MaskHelp		      "Device Driver for the Digital Input section\nof"
+" the Measurement Computing PCI-DDAxx/12\nSeries I/O boards. There are four pa"
+"rameters\nthat must be set.\n1) Number - the digital I/O bank number (0/1).\n"
+"2) Port - the port of the bank (C/B/A). Each port is\neight bits. Port C is d"
+"ivided in two four bits (C_low/C_up).\n3) Number of channels - the number of "
+"consecutive\ndigital I/O lines connected\n4) Sampling time - select the sampl"
+"ing period in seconds"
+      MaskPromptString	      "Number|Port|Number of channels|Sampling time [s"
+"]"
+      MaskStyleString	      "popup(0|1),popup(C_low|B|C_up|A),edit,edit"
+      MaskTunableValueString  "off,off,off,off"
+      MaskCallbackString      "|||"
+      MaskEnableString	      "on,on,on,on"
+      MaskVisibilityString    "on,on,on,on"
+      MaskToolTipString	      "on,on,on,on"
+      MaskVariables	      "number=@1;port=@2;nchan=@3;dt=@4;"
+      MaskDisplay	      "disp('Measurement Computing\\nPCI-DDAxx/12\\n\\"
+"nDigital Input');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "0|C_low||"
+      MaskVariableAliases     ",,,"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DO"
+      Ports		      [1]
+      Position		      [55, 163, 195, 247]
+      FunctionName	      "cb_pcidda_do"
+      Parameters	      "number,port,nchan,threshold,dt"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "CB_PCIDDA_DO"
+      MaskDescription	      "Device Driver for the Digital Output section\no"
+"f the Measurement Computing\nPCI-DDAxx/12 Series I/O boards."
+      MaskHelp		      "Device Driver for the Digital Output section\no"
+"f the Measurement Computing PCI-DDAxx/12\nSeries I/O boards. There are five p"
+"arameters\nthat must be set.\n1) Number - the digital I/O bank number (0/1)."
+"\n2) Port - the port of the bank (C/B/A). Each port is\neight bits. Port C is"
+" divided in two four bits (C_low/C_up).\n3) Number of channels - the number o"
+"f consecutive\ndigital I/O lines connected\n4) Threshold - the threshold unde"
+"r which there is no digital\noutput\n5) Sampling time - select the sampling p"
+"eriod in seconds"
+      MaskPromptString	      "Number|Port|Number of channels :|Threshold [V] "
+":|Sampling time [s]"
+      MaskStyleString	      "popup(0|1),popup(C_low|B|C_up|A),edit,edit,edit"
+      MaskTunableValueString  "off,off,off,off,off"
+      MaskCallbackString      "||||"
+      MaskEnableString	      "on,on,on,on,on"
+      MaskVisibilityString    "on,on,on,on,on"
+      MaskToolTipString	      "on,on,on,on,on"
+      MaskVariables	      "number=@1;port=@2;nchan=@3;threshold=@4;dt=@5;"
+      MaskDisplay	      "disp('Measurement Computing\\nPCI-DDAxx/12\\n\\"
+"nDigital Output');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "0|C_low|||"
+      MaskVariableAliases     ",,,,"
+    }
+    Block {
+      BlockType		      SubSystem
+      Name		      "Header File"
+      Tag		      "line1\nline2"
+      Ports		      []
+      Position		      [55, 36, 195, 118]
+      ShowName		      off
+      List {
+	ListType		RTWdata
+	TLCFile			"custcode"
+	Location		"Header File"
+	Top			"#include \"cb_pcidda_addr.h\"\n#include \"cb_"
+"pcidda.h\"     \n"
+      }
+      CopyFcn		      "cccopyfcn(gcb)"
+      OpenFcn		      "ccopenfcn('Header File')"
+      FontName		      "Times New Roman"
+      FontSize		      12
+      FontWeight	      "bold"
+      ShowPortLabels	      on
+      TreatAsAtomicUnit	      off
+      RTWSystemCode	      "Auto"
+      RTWFcnNameOpts	      "Auto"
+      RTWFileNameOpts	      "Auto"
+      MaskType		      "Header File"
+      MaskDescription	      "Add code to model .h file"
+      MaskHelp		      "This header file block contains text fields to "
+"insert custom user code at the top and bottom of model.h file."
+      MaskDisplay	      "disp('Measurement Computing\\nPCI-DDAxx/12\\n\\"
+"nHeader Files');\n"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      System {
+	Name			"Header File"
+	Location		[355, 132, 483, 256]
+	Open			off
+	ModelBrowserVisibility	off
+	ModelBrowserWidth	200
+	ScreenColor		"white"
+	PaperOrientation	"landscape"
+	PaperPositionMode	"auto"
+	PaperType		"usletter"
+	PaperUnits		"inches"
+	ZoomFactor		"100"
+	AutoZoom		on
+      }
+    }
+    Block {
+      BlockType		      SubSystem
+      Name		      "Model Start Function"
+      Ports		      []
+      Position		      [230, 36, 367, 119]
+      ShowName		      off
+      List {
+	ListType		RTWdata
+	TLCFile			"custcode"
+	Location		"Model Start Function"
+	Middle			"cb_pcidda_reset_dio();\n"
+      }
+      CopyFcn		      "cccopyfcn(gcb)"
+      OpenFcn		      "ccopenfcn('Model Start Function')"
+      FontName		      "Times New Roman"
+      FontSize		      12
+      FontWeight	      "bold"
+      ShowPortLabels	      on
+      TreatAsAtomicUnit	      off
+      RTWSystemCode	      "Auto"
+      RTWFcnNameOpts	      "Auto"
+      RTWFileNameOpts	      "Auto"
+      MaskType		      "Model Start Function"
+      MaskDescription	      "Add code to Model Start function"
+      MaskHelp		      "This block contains text fields to insert custo"
+"m user code sections at the declarations, execution and exit sections of the "
+"model start function."
+      MaskDisplay	      "disp('Measurement Computing\\nPCI-DDAxx/12\\n\\"
+"nReset Digital I/O');"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      System {
+	Name			"Model Start Function"
+	Location		[674, 551, 849, 717]
+	Open			off
+	ModelBrowserVisibility	off
+	ModelBrowserWidth	200
+	ScreenColor		"white"
+	PaperOrientation	"landscape"
+	PaperPositionMode	"auto"
+	PaperType		"usletter"
+	PaperUnits		"inches"
+	ZoomFactor		"100"
+	AutoZoom		on
+      }
+    }
+  }
+}

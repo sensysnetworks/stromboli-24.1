@@ -1,0 +1,30 @@
+Linux kernel patches for rtainew.c
+
+For your corresponding kernel version select one of the following:
+
+Kernelversion 2.4.17 / 18 -rmkX:	linux-2.4.17-rmkX-rthal-v1.diff
+Kernelversion 2.4.19-rmk7:		linux-2.4.19-rmk7-rthal-v2.diff
+Kernelversion 2.4.21-rmk1:		linux-2.4.21-rmk1-rthal-v1.diff
+Kernelversion 2.4.19-rmk7-hynix10:	linux-2.4.19-rmk7-hynix10-rthal-v2.diff
+Kernelversion 2.4.21-rmk1-hynix10:	linux-2.4.21-rmk1-hynix10-rthal-v1.diff
+
+Changelog:
+
+linux-2.4.17-rmkX:
+Version 1:	Initial version was generated against 2.4.17-rmk2
+		Could have some fuzz / offset warnings for later
+		versions.
+		
+linux-2.4.19-rmk7:
+Version 2:	Added support for epxa (Excalibur)
+Version 1:	Initial version.
+
+linux-2.4.21-rmk7:
+Version 1:	Initial version.
+
+linux-2.4.19-rmk7-hynix10 (Hynix support):
+Version 2:	Added support for epxa (Excalibur)
+Version 1:	Initial version.
+
+linux-2.4.21-rmk7-hynix10 (Hynix support):
+Version 1:	Initial version.

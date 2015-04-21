@@ -1,0 +1,33 @@
+
+How to install COMEDI_LXRT
+==========================
+
+IMPORTANT!!!
+In the Makefiles, it is assumed that the COMEDI stuff is under /usr/src/comedi.
+If not so, change the related path into Makefile and lib/Makefile,
+according to your setup.
+
+From RTAI directory:
+- make menuconfig (selecting COMEDI support in user space)
+- make dep
+
+From COMEDI directory:
+- make (selecting Real-time support and Kernel comedilib)
+- make
+
+From RTAI directory:
+- make
+- make install
+- make dev
+
+From COMEDI directory:
+- make install
+- make dev
+
+All stuff here is based on "comedi-0.7.65", no hope for any backward
+compatibility with previous COMEDI releases.
+
+Have fun!
+	
+Lorenzo Dozio (dozio@aero.polimi.it)
+January 10th, 2003.

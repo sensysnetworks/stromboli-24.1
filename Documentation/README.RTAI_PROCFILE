@@ -1,0 +1,29 @@
+/proc 
+=====
+
+The proc file for rtai.c now prints all the global external irqs, the cpu own
+irqs and the RTAI internal system requests (sysreq), as used by RTAI itself and
+by its other buddy modules.
+
+It prints just integer numbers so it is somewhat criptic. For a more 
+intelligible reading note that:
+
+- global irqs are the same as those printed by doing "cat /proc/interrupts";
+
+- cpu own irqs ar as follows:
+	0 INVALIDATE_IPI    (dispatched Linux IPIrq) 
+	1 LOCAL_TIMER_IPI   (dispatched Linux IPIrq)
+	2 RESCHEDULE_IPI    (dispatched Linux IPIrq)
+	3 CALL_FUNCTION_IPI (dispatched Linux IPIrq)
+	4 SPURIOUS_IPI      (dispatched Linux IPIrq)
+	5 APIC_ERROR_IPI    (dispatched Linux IPIrq)
+	6 RTAI_1_IPI (used for global synchronization)
+	7 RTAI_2_IPI (used for hard real time in user space)
+	8 RTAI_3_IPI (used to schedule on IPIs sent by another scheduling cpu)
+	9 RTAI_4_IPI (used to schedule on timer);
+
+- RTAI sysreqs are assigned in the order they are asked for. So it depends
+  on which module you are using and in which order you loaded them. Note
+  however that sysreqs 0 and 1 are reserved. In fact at rtai mount syreq 0
+  is always assigned and used by rtai_open_srq to determine the sysreq, if any,
+  assigned to a sysreq identefier, while syreq 1 is reserved to rt_printk.

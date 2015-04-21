@@ -1,0 +1,30 @@
+.TH RT_TBX_URGENT_IF 8 "January 2001" RTAI "Typed Mailbox Functions"
+.SH NAME
+rt_tbx_urgent_if \- send a message with high priority if possible 
+.SH SYNOPSIS
+.B #include <rtai_sched.h>
+.sp
+.BI "int rt_tbx_urgent_if(TBX " *tbx ", void " *msg ", int " msg_size ");"
+.SH DESCRIPTION
+.B rt_tbx_urgent_if
+tries to insert a message
+.I msg 
+of 
+.I msg_size 
+bytes to the typed mailbox 
+.I tbx. 
+It returns immediately, the caller is never blocked.  The message is inserted in the head of the queue 
+so it will be immediately read before the other messages already
+present in the mailbox.
+.SH RETURN VALUES
+0 is returned in case of message regularly sent, otherwise 
+.I msg_size
+is returned. On failure a negative value is returned as described below.
+.SH ERRORS
+.B -EINVAL
+.I tbx
+points to an invalid typed mailbox.
+.B -EMSGSIZE
+.I msg_size
+is bigger than the size of the entire mailbox.
+

@@ -1,0 +1,21 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example features NTASKS realtime tasks competing for a 
+rwlock. They go through a sequence of rwlock acquisitions 
+and the printout shows that different services: unconditional,
+conditional, timed, work properly. Also shown is the priority
+based precedence.
+
+Type <return> to install modules
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_rwlocks.o $*
+
+echo "Program is running"
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_rwlocks

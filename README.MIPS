@@ -1,0 +1,39 @@
+MIPS port of RTAI 
+=================
+
+This is the first engineering release of the port of RTAI to the MIPS
+architecture. The first port has been done using the IDT79S334A board, so
+the only linux kernel patch that is currently available is for this
+particular board.
+
+The modules that have been ported so far are:
+
+- rtai.c core module.
+- rt_mem_mgr.c memory manager module. Note you *must* set the default
+  allocation to kmalloc otherwise crashes will occur. :-( To do this
+  CONFIG_RTAI_MM_VMALLOC must not be defined during the config stage.
+- posix modules.
+- rtai_fifos.c RT FIFOS module.
+- rtai_sched.c UP scheduler module.
+
+Next in line to be ported are:
+
+- User system requests.
+- Shared memory module.
+
+
+Notes
+=====
+
+If error messages similar to those shown below are generated when attempting
+to insert a module into the kernel then it is probably due to an old version
+of the mipsel binutils. The solutions to this are:
+
+- Update the binutils
+- Run ld -r on the module(s) and the modules will now insert into the kernel.
+
+Typical error messages:
+./rtai_utils.o: local symbol gcc2_compiled. with index 9 exceeds local _symtab_size 9
+./rtai_utils.o: local symbol __gnu_compiled_c with index 10 exceeds local _symtab_size 9                              ./rtai_utils.o: local symbol id_rtai_utils_c with index 11 exceeds local_symtab_size 9
+./rtai_utils.o: local symbol __module_kernel_version with index 12 exceeds local _symtab_size 9                       ./rtai_utils.o: local symbol id_rtai_utils_h with index 13 exceeds local_symtab_ size 9                                                                          
+

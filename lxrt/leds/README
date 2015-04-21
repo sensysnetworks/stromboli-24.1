@@ -1,0 +1,16 @@
+
+This module and library extends LXRT (the original concept is from Giuseppe 
+Renoldi (giuseppe@renoldi.org), see ../rt_com_lxrt) to implement my brute force
+and total ignorance trace tool kit:
+
+. The kernel and rtai source trees are no longer clubbered by *_leds() functions
+  nobody else wants...
+
+. It shows how to extend LXRT with a simple example.
+
+. Files ../traps/runh and ../traps/test_hrt.c show how to use it.
+
+Have fun,
+
+Pierre 
+

@@ -1,0 +1,27 @@
+P233MMX, using SMP scheduler
+----------------------------
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    45 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    48 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    52 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    60 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    54 (us)
+~/dev/lxrt/one# test_suite
+SFT ost    , MAX JIT: PERIOD   673 (us), SLEEP 12170 (us)
+SFT ost    , MAX JIT: PERIOD  1469 (us), SLEEP  4136 (us)
+SFT ost    , MAX JIT: PERIOD  9330 (us), SLEEP  4237 (us)
+SFT ost    , MAX JIT: PERIOD  2685 (us), SLEEP  1889 (us)
+SFT ost    , MAX JIT: PERIOD  1234 (us), SLEEP  3708 (us)
+SFT ost    , MAX JIT: PERIOD  3913 (us), SLEEP  8311 (us)
+HRT ost    , MAX JIT: PERIOD    69 (us), SLEEP    51 (us)
+HRT ost    , MAX JIT: PERIOD    69 (us), SLEEP    57 (us)
+HRT ost    , MAX JIT: PERIOD    69 (us), SLEEP    52 (us)
+HRT ost    , MAX JIT: PERIOD    69 (us), SLEEP    51 (us)
+HRT ost    , MAX JIT: PERIOD    69 (us), SLEEP    54 (us)
+HRT ost    , MAX JIT: PERIOD    69 (us), SLEEP    53 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    57 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    56 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    55 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    57 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    51 (us)
+HRT ost sig, MAX JIT: PERIOD    69 (us), SLEEP    53 (us)
+~/dev/lxrt/one#

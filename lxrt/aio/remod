@@ -1,0 +1,12 @@
+#!/bin/sh
+sync
+sync
+killall -9 "kaiod manager"
+sync
+sync
+rmmod aio
+sync
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

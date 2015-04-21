@@ -1,0 +1,44 @@
+****** TIMER EXAMPLE ******
+
+This directory shows how you can use the module rtai to install interrupt
+handlers that can guarantee an effective processing with a contained jitter
+and high effectivness.
+
+It implements a periodic timer doing a lot of floating point calculations,
+distributed to all available cpus. The computer load it creates is controlled
+by the macros TICK and LOOPS and you can verify the jitter, even without a
+scope, by looking at the printed messages, once every SECS (another macro).
+
+Set the macro ECHO_ALWAYS to 1 if you want to have the jitter always printed,
+and not only while communicating with fifos, 0 for the latter case.
+If ECHO_ALWAYS is 1 you'll see messages showing the jitter, the time for
+the calculation and interrupts count every SECS. Actually the line printed can
+be misleading, so note that of the two number within "()" the negative one 
+addresses the cpu that serviced the timer interrupt while the larger one is 
+multiplied by 10 to indicate the cpu that ended last, and writes to the data
+fifo. The last two numbers show the number of serviced interrupts, either due
+to the timer interrupt or tho the interprocessor interrupt caused by the
+message broadcast by the cpu in charge of handling the timer interrupt. They
+should be equal. On a UP machines the second numbers are always zero.
+If ECHO_ALWAYS is 0 you do not see anything unless you do not run "check".
+That switches the fifo on and start writing to disk 300 Mb aiming at a transfer
+rate of 5 Mb/s. That is for the actual tick timing of 1 ms. You can change 
+TICK, NREC, LOOPS and BUFSIZE to test other combinations and see what happens.
+This example can be a template for a controller that distributes the load 
+among all the available cpus, from 1 up to as many as you have, but no more
+than 8, while heavily commuticating with a soft realtime front Linux process.
+Note the use of the soft realtime POSIX scheduling in "check" and of a Linux 
+interrupt handler appended to the existing Linux one to echo the messages.
+The macros value are for a PII 233 Mhz. In place of "check" you can use 
+"checkloop" that keep repeating "check".
+
+To run it type:
+
+make clean
+make
+./run or ./run_check if you want to use fifos (ECHO_ALWAYS 0)
+
+To stop it type:
+
+./rem
+

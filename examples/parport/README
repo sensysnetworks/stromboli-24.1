@@ -1,0 +1,39 @@
+****** PARPORT EXAMPLE ******
+
+In this directory you'll find a real-time implementation of a data transfer 
+protocol between the standard parallel ports (SPP) of two PCs.
+Data can be transferred between such ports via a PC-to-PC parallel cable as the 
+standard LapLink, which links five data outputs from one end to the five status 
+inputs on the other and vice versa.
+Data is transferred four bits at a time using the fifth bits for handshaking 
+(nibble mode).
+
+This example was tested with a homemade cable with the following pin-to-pin 
+connections:
+
+2 -> 15  bit 0
+3 -> 13  bit 1
+4 -> 12  bit 2
+5 -> 11  bit 3
+8 -> 10  handshaking bit
+
+and the reverse
+
+15 -> 2
+13 -> 3
+12 -> 4
+11 -> 5
+10 -> 8.
+
+If you use the LapLink cable (the pin-to-pin connection is 2 <-> 15, 3 <-> 13, 
+4 <-> 12, 5 <-> 10, 6 <-> 11), you have to set the macro RT_PARPORT_LAPLINK to 
+RT_PARPORT_LAPLINK_MODE_D4.
+
+To build the example, type make.
+
+To run the example, type ./sender_run for the sender-PC,
+and ./receiver_run for the receiver-PC.
+
+To remove modules, type ./sender_rem or ./receiver_rem respectively.
+
+Report any bugs to Lorenzo Dozio, dozio@aero.polimi.it

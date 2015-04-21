@@ -1,0 +1,47 @@
+Dynamic creation of named fifos
+===============================
+
+To make it easier to keep track of which fifo to use and in order to
+avoid fifo number clashes beween separate real time tasks, it is now
+possible to dynamically create named fifos on an unused fifo number.
+Existing named fifos can have their name looked up in order to find
+which fifo number they occupy. The named fifo services available are...
+
+- rtf_create_named(name);
+- rtf_getfifobyname(name);
+
+Technical Notes...
+------------------
+
+- These functions are symmetrically available in kernel and user space.
+  Both return the allocated fifo number. In user space please note
+  that these calls will not automatically open the fifo device for
+  you. Instead you must append the returned fifo number onto the end
+  of '/dev/rtf' and then open the fifo device as normal.
+
+- The maximum length of a fifo's name is defined as RTF_NAMELEN. This
+  is currently set to 15.
+
+- When using rtf_create_named() from user space you may notice that the
+  first fifo created is assigned a fifo number of 1 rather than 0.
+  This is because /dev/rtf0 is used to communicate with the kernel
+  driver module (where the name to number mapping is kept), and so at
+  the time of calling fifo number 0 is not free. This should not cause
+  any problems. The same thing does not happen when rtf_create_named()
+  is called from kernel space.
+
+- If you want to monitor the fifo name to number mapping you have two
+  choices. Either look in /proc/rtai/fifos or use the new
+  RTF_GET_FIFO_INFO ioctl. Take a look in the test program regression.c
+  and rtai_fifos.h to see a (slightly contrived) example of using
+  this ioctl. Sample /proc interface output...
+
+  fifo No  Open Cnt  Buff Size  malloc type Name
+  ---------------------------------------------------------
+  0        1         1000       kmalloc     kernel_FIFO_345
+  1        2         1000       kmalloc     user_FIFO_12345                        
+- Future implementations may employ SRQs rather than /dev/rtf0 for the
+  name resolution.
+
+Ian Soanes <ians@lineo.com>
+Organization: Lineo ISG

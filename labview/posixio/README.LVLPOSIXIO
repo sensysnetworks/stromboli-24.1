@@ -1,0 +1,39 @@
+Author: 
+Thomas Leibner <leibner@t-online.de> http://www.leibner-it.de
+
+Purpose:
+Accessing unix files (and unix device files) from LabVIEW(tm) for Linux in a Posix conform manner.
+
+"LabVIEW" is a registered trademark of National Instruments (www.ni.com).
+
+Summary:
+The necessity for LVL/PosixIO arouse from the development of a scientific experimental setup,
+which utilizes 
+- Realtime Linux to do hard realtime control on the experiment's hardware and 
+- LabVIEW to have a reliable and rapid development suite for a graphical frontend. 
+
+LVL/PosixIO is a set of LabVIEW routines (called VI's) to access these C library's Posix calls:
+- open() / close()
+- read() / write()
+- select(), ioctl()
+
+These calls enable access to the stream oriented data model of Linux. Further developments will
+focus on a shared memory approach.
+
+The project was started by the need to communicate between LabVIEW and the NMT-RTLinux variant. 
+It also works fine (without recompilation) with the RTAI Realtime Linux variant. 
+The provided code (LabVIEW VI's)  were compiled for LabVIEW 5.1 and tested to be working up to Version 6.0.2 
+of LabVIEW.
+
+A similar set of interfacing VI's can be found at www.rtai.org, provided by Phil Daly. His set of VI's lacks
+support for select() and ioctl() but provide about 80+ routines for data typ conversion between RTLinux and
+LabVIEW. As a metapher, Phil's approach is CISC, while my approach is RISC.
+As a counterpart to Phil my set if routines use the LabVIEW built-in binary-to-XXX data type 
+conversion methods.
+
+While the project was rather a closed shop until now (some older VI were downloadable from my
+www.leibner-it.de site), I'd like to go public now, with all source and examples.
+
+License:
+Released under GNU LESSER PUBLIC LICENCE (GNU LGPL).
+

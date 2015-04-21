@@ -1,0 +1,66 @@
+NET_RPC with RTNET
+==================
+
+RTnet (http://www.rts.uni-hannover.de/rtnet/) is an Open Source hard real-time 
+network protocol stack for RTAI. It is based on standard Ethernet hardware and 
+supports several popular card chip sets. 
+
+It is possible to run NET_RPC using any combination of soft/hard real-time
+modes. At the time being, in order to switch net_rpc real-time modes 
+it is compulsory to recompile net_rpc.c with the appropriate definitions 
+set in the source file.
+
+First of all, choose the ethernet support(s):
+    #define SOFT_RTNET      n
+    #define HARD_RTNET      n
+    (n = 1 -> DO, n = 0 -> DO NOT) 
+It is possible to run both supports on the same machine (still to be tested).
+
+(Work in progress): if USE_KMOD is true there is no need to run the urtnet 
+command (running from kernel?)
+    #define USE_KMOD        n (n = 0, 1)
+
+In soft mode it is possible to use any type of socket (datagram, stream...).
+For datagram, select
+    #define SOFT_SOCK_TYPE  SOCK_DGRAM  
+
+If RTNet is not available, it is still possible to compile the module
+for debugging purpose by setting the option
+    #define COMPILE_ANYHOW
+
+If RTNet is available, set the right path to $(RTNETPATH)/include/rtnet.h 
+in all the #include<rtnet.h> entries.
+
+
+Hard Real Time Network Setup
+----------------------------
+    - set the desired definitions in net_rpc.c as explained above
+    - recompile net_rpc.c (run 'make' from net_rpc directory)
+    - shut down the network interface card to be used as a hard real-time 
+      network interface
+          /etc/rc.d/network stop <dev> 
+      where <dev> is lo, eth0, eth1,... 
+    - insmod needed rtai modules
+    - insmod rtnet.o module 
+    - insmod hard real-time device module (loopback-rt.o, 8139too-rt.o,...)
+    - setup hard real-time network interface
+          $(RTNET_PATH)/tools/rtifconfig <rt-dev> up <local ip-addr> <netmask>
+          /usr/src/rtnet/tools/rtifconfig rteth0 up 192.168.0.1 255.0.0.0
+          /usr/src/rtnet/tools/rtifconfig rtlo up 127.0.0.1 255.255.255.255
+      note that to overcome a current RTNET flaw, the real-time loopback 
+      device (rtlo) must be set up with a netmask value of 255.255.255.255 
+      (i.e. currently, only the broadcast address can be used to create a 
+      loopback route).
+    - setup hard real-time network routing (net ARP)
+          $(RTNET_PATH)/tools/rtifconfig <rt-dev> route solicit <remote ip-addr>
+          /usr/src/rtnet/tools/rtifconfig rteth0 route solicit 192.168.0.2 
+          /usr/src/rtnet/tools/rtifconfig rtlo route solicit 127.0.0.1 
+    - run application
+    - when done, shut down the hard real-time network before removing
+      the modules
+          $(RTNET_PATH)/tools/rtifconfig <rt-dev> down
+    - rmmod modules
+
+See README file in current directory for further infos about net_rpc.
+
+Matteo Martegani (martegani@aero.polimi.it)

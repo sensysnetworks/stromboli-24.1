@@ -1,0 +1,17 @@
+#!/bin/sh
+
+cat <<-EOF
+This test checks the time required for switching tasks, FPU support included.
+
+Type <return> to install modules
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_switches.o
+
+echo " "
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_switches
+

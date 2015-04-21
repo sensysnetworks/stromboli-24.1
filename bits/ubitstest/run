@@ -1,0 +1,15 @@
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+#export LD_LIBRARY_PATH=../../lxrt/lib
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_shm.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+insmod ../../modules/rtai_bits.o
+sync
+./rt_process
+sync
+./rem

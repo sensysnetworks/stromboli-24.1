@@ -1,0 +1,214 @@
+
+           RTAI LXRT QNX like Synchronous IPC Services API
+           ===============================================
+ 
+pid_t rt_Name_attach(char *name);
+
+Registers the calling process with LXRT and returns the pid of the process.
+Once this call has been made, the process can use the family of synchronous
+IPC functions:
+	rt_Send(...), rt_Receive(...), rt_Creceive(...), rt_Reply(...),
+	rt_Proxy_attach(...), rt_Proxy_detach(...) and rt_Trigger(...).
+
+The IPC functions are documented below.
+
+Names can be up to 6 characters long excluding the null at the end.
+Acceptable characters are numeric and upper case alphabetic. The additional
+charcters '$' and '_' are also valid. This design constraint results from
+the fact that native names are encoded into a four bytes unsigned long.
+
+The system allows the user to register alias names that can be up to
+32 characters long including the null at the end. The system
+searches through the list of native names and also checks for alias names 
+if any.  
+
+??????????? The name can be a null pointer in which case rt_Name_attach() will automaticallycreate a name of the form "T_XXXX" where XXXX is the hex ASCII representation
+of the returned pid. As the XXXX part is imprevisible, the rt_Name_locate()
+function is meant to be used for names agreed upon up front and declared with
+rt_Name_attach(). Typically, a client will attach a null name just to get a pid
+and use rt_Name_locate() to find the pid of the server.  
+
+User space program  first use rt_task_init( name, ...) to initialise the 
+real time component. In so doing, they supply a native name automatically 
+and therefore the rt_Name_attach() is not necessary in user space. The funtion
+rt_Name_alias() can be used to register an alias which can be up to 32 characters long including the null at the end.
+
+Returns the pid_t if successful. Otherwise returns an error code:
+
+	EBUSY  - name already exists.
+	EAGAIN - name space used up.
+	ENOMEM - no memory to fulfill request.
+        EINVAL - name must be point to at least a null string.
+
+
+pid_t rt_Name_locate(conts char *host, const char *name);
+
+Locates a process that has registered its name with rt_Name_attach().
+If host is null the search is made locally. If host is non null then a network
+ search occurs. Network searches are not implemented for now.
+
+If the name is located on another computer, the initial vc buffer size
+will be equal to a default size of 512 bytes. VC buffers grow automatically.
+
+Returns a process id if successful, otherwise return an error code:
+
+	ESRCH - no process with this name.
+
+
+int rt_Name_detach(pid_t pid);
+
+Removes the registered name and deregisters the process from LXRT.
+
+The pid parameter must be the same as that returned by rt_Name_attach().
+
+When a process dies, its name will be detached from the system and all real
+time resources created by LXRT will be freed.
+
+Returns zero if successfull, otherwise return an error code:
+
+	EINVAL - name does not exist, or not owned by you.
+
+
+pid_t rt_Proxy_attach(pid_t pid, char* data, int nbytes, int priority);
+ 
+Creates a canned message of length nbytes pointed to by data. The proxy
+will be attached to process pid. If pid is zero, the proxy will be attached
+to the calling process. The proxy can be assigned a priority. A value of
+-1 defaults to the priority of the calling process.
+
+The proxy acts as a messenger always ready to send its message. A proxy can
+send a zero byte message by setting nbytes to zero.
+
+The function returns a process id on success. On error, it returns a negative
+ error code: 
+
+	EAGAIN - no free process entries.
+	EINVAL - size of proxy is greater than _QNX_PROXY_SIZE_MAX.
+	ENOMEM - not enough memory to buffer message.
+	ESRCH  - pid does not exist.
+
+
+int rt_Proxy_detach(pid_t proxy);
+
+Releases the proxy previously created by the calling process.
+
+Returns zero on success. Otherwise, the function returns a negative error code:
+
+	EPERM - you are not owner of the proxy.
+	ESRCH - proxy does not exist.
+
+
+pid_t rt_Trigger(pid_t pid);
+
+Will trigger proxy to send a message to the process which owns the proxy.
+The calling process will not block. If more than one trigger occurs before
+the proxy message is received, then that number of messages will be received.
+
+The function can be called from an interrupt handler provided it is the
+last thing the handler does. The owner of the proxy can trigger the proxy
+to himself.
+
+Returns the process id of the task who owns the proxy. On error, returns 
+a negative error code:
+
+	ESRCH  - pid does not exist.
+	EINVAL - pid is not a proxy.
+
+
+pid_t rt_Receive(pid_t pid, void* msg, size_t maxsize, size_t *msglen);
+
+Waits for a message from process pid. If pid is zero, waits for a message or
+proxy from any process. If a message is waiting, up to size bytes are copied
+into msg. If a message is not waiting, the process will enter the RECEIVE
+blocked state.
+
+Messages are queued in priority order. RTAI allows to change this to FIFO time
+order by removing the MSG_PRIORD define in the scheduler source code. 
+
+If you specify a specific task and that process dies while you are RECEIVED
+blocked on it then rt_Receive(...) return -1 and the function returns -ESRCH.
+
+rt_Receive(...) can be interrupted by a signal in which case it will return 
+-EINTR.
+
+The number of bytes transferred will be the minimum of that specified by both
+sender and receiver and will be copied into msglen.
+
+The maximum number of bytes that can be transferred from user space is limited
+ by the maximum buffer size that can be allocated with kmalloc(). For kernel
+IPC, it depends on the maximum buffer size that can be implemented with
+rt_malloc() and is implementation specific for now.
+
+Receive changes the state of the sender fron RPC to RETURN blocked.
+
+Returns the pid of the sender on success, otherwise it returns a negative
+error code:
+
+	EFAULT - The transfer would have caused a segment violation.
+	EINTR  - Call interrupted by a signal.
+	ESRCH  - Process pid does not exists.
+
+
+int rt_Send(pid_t pid, void* smsg, void* rmsg, size_t ssize, size_t rsize);
+
+Sends the message pointed to by smsg to the process identified by pid. Any reply
+will be placed in the buffer pointed to by rmsg. The size of the sent message
+will be ssize while the the size of the reply will be truncated to a maximum
+of rsize bytes.
+
+The number of bytes transferred will be the minimum of that specified by 
+both the sender and the receiver. Data overflow of the receiver buffer will
+not occur.
+
+After sending a message, the task will block in the RPC state waiting for a
+reply. If the receiving process is RECEIVED blocked and ready to receive a
+message, the transfer of data into its address space will occur immediately
+and the receiver will be unblocked and made ready to run. The sending process
+will enter the RETURN blocked state.
+
+If the receiver is not ready to receive the message, the sender enters the
+RPC blocked state. The transfer will not occur until the receiver executes
+a rt_Receive(...) call.
+ 
+Returns zero or the actual number of bytes transferred on success, otherwise
+the function returns a negative error code:
+
+	EFAULT - process would have incurred a segv.
+	EINTR - interrupted by a signal.
+	EINVAL - message length invalid.
+	ENOMEM - insufficient memory to grow buffer.
+	ESRCH - process pid does not exist, or died.
+
+
+int rt_Reply(pid_t pid, void* msg, size_t size);
+
+Replies size bytes of data to the process identified by pid. 
+
+The number of bytes sent will be the minimum of that specified by both
+the replier and the sender.
+
+The data transfer occurs immediately and the replier does not block. Reply
+changes the state of the sender from RETURN blocked to READY. 
+
+Returns zero on success otherwise it returns a negative error code:
+
+	EFAULT - process would have incurred a segv.
+	EINTR - interrupted by a signal.
+	EINVAL -  message length invalid.
+	ENOMEM -  insufficient memory to grow buffer.
+	ESRCH -  process pid does not exist.
+
+
+pid_t rt_Creceive(pid_t pid, void* msg, size_t size, RTIME delay);
+
+A non blocking form of rt_Receive( 0, ...). Returns zero if no messages from
+any pid are available for an immediate transfer when delay is set to zero.
+
+When delay is non zero, the function will wait up to delay tics for a message
+ to transfer. The functions returns either a pid if a transfer occurred or
+ zero at the expiration of the delay.
+
+
+Pierre Cloutier
+pcloutier@PoseidonControls.com
+ 

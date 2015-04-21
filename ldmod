@@ -1,0 +1,6 @@
+sync
+lsmod
+insmod ./modules/rtai.o
+insmod ./modules/rtai_fifos.o
+insmod ./modules/rtai_sched.o
+lsmod

@@ -1,0 +1,49 @@
+    Perl bindings to the lxrt system in RTAI
+    ----------------------------------------
+
+Introduction
+------------
+
+This extension provides bindings to the lxrt system in RTAI-2.4.
+
+
+Installation
+-------------
+
+To install the binding (<rtai> is the place you installed RTAI).  
+
+cd <rtai>/lxrt
+tar zxvf LXRT-0.30.tar.gz
+cd LXRT-0.30
+perl Makefile.PL
+make
+make test
+
+The test will print out some stuff.
+
+If you are happy with this, as root install by doing:
+
+make install
+
+
+Limitations
+-----------
+
+- I have not put the bindings for the semaphore stuff in yet
+
+- 64 bit long long items are not supported by standard perl (although they
+are in versions 5.005_63).  This means you cannot do 64 bit arithmetic 
+unless you have the right version of perl.  Also a value that exceeds 2 ** 32 
+will cause problems.
+
+- Only limited testing has been done.
+
+
+
+
+
+
+
+
+
+

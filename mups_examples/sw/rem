@@ -1,0 +1,3 @@
+rmmod rt_process
+rmmod rtai_sched
+rmmod rtai

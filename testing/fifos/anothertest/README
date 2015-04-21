@@ -1,0 +1,11 @@
+This is a test that shows how to use some peculiar new services made available 
+by the fifo implementation available here. Note that, contrary to the regression
+test found in the newfifos directory, the test found here is structured just
+for RTAI.
+
+To use it:
+
+make clean
+make
+./run 
+then follow the instructions.

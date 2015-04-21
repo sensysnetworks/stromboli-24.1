@@ -1,0 +1,16 @@
+sync
+echo " "
+echo "This example demonstrates priority inheritance in recursive resource"
+echo "semaphores. It is an adaption to RTAI of what is found in the POSIX"
+echo "examples in mutexprio.c."
+echo "Its output is to the console, so running it in a normal xterm"
+echo "wouldn't be very interesting."
+echo "Type <return> to continue"
+read junk
+../../scripts/rt_modprobe ex_res_sem.o
+echo " "
+echo "Type <return> to remove modules"
+read junk
+../../scripts/rt_rmmod ex_res_sem
+echo "Type <return> to leave this test"
+read junk

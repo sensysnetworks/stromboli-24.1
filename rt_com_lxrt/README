@@ -1,0 +1,32 @@
+RT_COM_LXRT
+===========
+
+This contribution, from Giuseppe Renoldi (giuseppe@renoldi.org),
+strengthens the RTAI approach to symmetric usage of all services in
+kernel-user space for soft-hard real time. 
+
+Giuseppe contributed also the few changes to lxrt.c and rtai_lxrt.h needed
+to support it. His original changes have been further modified by Pierre in
+RTAI for Linux 2.4.xx to allow a safer addition of users extensions, see
+also the leds module for another examples extending LXRT functionalities.
+In fact here you'll find the RTAI user space interface to the rt_com
+package to be used when serial ports are required in hard-soft real time
+user space applications. 
+
+There are also the same tests you can find in rt_com package. These tests
+can be of help in learning how to use it. It requires you to have the
+original rt_com package installed. The rt_com package found in this
+distribution is ready to be interfaced to your user space applications
+simply by including rt_com_lxrt.h in the code files using it. 
+
+To use it you must insmod rtai, rtai_sched, rt_com, lxrt, and any other
+RTAI module you need. 
+
+Note that before running the examples found here it is likely you have to
+change the macro RT_COM_DIR and LINUX_DIR in the Makefile, according to
+your installation of rt_com and Linux include directory.
+
+To use the all stuff do: make clean, make, from this directory.
+
+Send any comment/feedback to Giuseppe.
+

@@ -1,0 +1,43 @@
+****** ZENTR_PREEMPT EXAMPLE ******
+
+WARNING FROM RTAI DEVELOPPERS.
+What you'll find here has been slightly modified our way. There is also the
+possibility of executing in a continuous loop, just type "./loop". Note that
+we often found it difficult to kill the all stuff and had to reboot, i.e. 
+CTRL-ALT_DEL, to stop the loop.
+END OF WARNING FROM RTAI DEVELOPPERS.
+
+This test can be use to verify that preemption withing the scheduler is
+working as expected.
+
+The test works by starting 2 RT tasks, the highest priority one with a 
+5 millisecond period and a lower priority one with an 8 millisecond period.
+Both tasks spin in a busy loop which is empirically calculated to take about 
+2 milliseconds (it is factored by bogomips/cpu frequency to present the 
+same load on all machines).  Each task writes to a fifo before the start of
+its busy loop and after.  The user process preeempt gathers the data from
+the fifo and prints the results to stdout, this data is piped to a perl 
+program (peconv) that gathers 25 samples before printing the results in
+an easily understood bit string.
+
+To run this example type:
+
+make
+t, this data is piped to a perl 
+program (peconv) that gathers 25 samples before printing the results in
+an easily understood bit string.
+
+To run this example type:
+
+make
+./run
+./run_test
+
+You should see something like the following if the test passes:
+
+[root@dell preempt]# ./run
+
+Results, in millisecond intervals
+0123456789012345678901234567890123456789012345678901234567890123456789
+1100011000110001100011000110001100011000110001100011000110001100
+00011000000011000001110000011000000001100001100000001100

@@ -1,0 +1,3710 @@
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/config-shared.in linux-2.4.21/arch/mips/config-shared.in
+--- linux-2.4.21.orig/arch/mips/config-shared.in	2003-04-24 05:32:21.000000000 -0700
++++ linux-2.4.21/arch/mips/config-shared.in	2003-04-17 05:51:28.000000000 -0700
+@@ -453,6 +453,7 @@
+    define_bool CONFIG_NONCOHERENT_IO y
+    define_bool CONFIG_DUMMY_KEYB y
+    define_bool CONFIG_SCSI n
++   define_bool CONFIG_ISA y #steve
+ fi
+ if [ "$CONFIG_NEC_EAGLE" = "y" ]; then
+    define_bool CONFIG_IRQ_CPU y
+@@ -692,6 +693,7 @@
+ else
+    define_bool CONFIG_CPU_HAS_SYNC y
+ fi
++bool 'Real-Time Hardware Abstraction Layer (RTAI)' CONFIG_RTHAL
+ endmenu
+ 
+ #
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/kernel/cpu-probe.c linux-2.4.21/arch/mips/kernel/cpu-probe.c
+--- linux-2.4.21.orig/arch/mips/kernel/cpu-probe.c	2003-04-24 05:32:21.000000000 -0700
++++ linux-2.4.21/arch/mips/kernel/cpu-probe.c	2003-04-24 05:26:42.000000000 -0700
+@@ -69,6 +69,7 @@
+ 	case CPU_NEVADA:
+ 	case CPU_RM7000:
+ 	case CPU_TX49XX:
++	case CPU_VR4181: //steve
+ 	case CPU_4KC:
+ 	case CPU_4KEC:
+ 	case CPU_4KSC:
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/kernel/entry.S linux-2.4.21/arch/mips/kernel/entry.S
+--- linux-2.4.21.orig/arch/mips/kernel/entry.S	2003-01-09 11:25:46.000000000 -0800
++++ linux-2.4.21/arch/mips/kernel/entry.S	2003-04-22 16:21:12.000000000 -0700
+@@ -6,7 +6,10 @@
+  * Copyright (C) 1994 - 2000, 2001 by Ralf Baechle
+  * Copyright (C) 1999, 2000 Silicon Graphics, Inc.
+  * Copyright (C) 2001 MIPS Technologies, Inc.
++ *
++ * rthal mods by Steven Seeger (sseeger@stellartec.com) 16Apr03
+  */
++ 
+ #include <linux/config.h>
+ #include <linux/init.h>
+ #include <linux/sys.h>
+@@ -31,12 +34,26 @@
+ 		.align	5
+ 		.set	push
+ 		.set	reorder
++#ifndef CONFIG_RTHAL
+ FEXPORT(ret_from_irq)
+ FEXPORT(ret_from_exception)
+ 		lw	t0, PT_STATUS(sp)	# returning to kernel mode?
+ 		andi	t0, t0, KU_USER
+ 		beqz	t0, restore_all
+-
++#else //!CONFIG_RTHAL
++FEXPORT(ret_from_irq)
++		beqz v0, 2f	# if zero, return to rtai domain...
++		nop
++		j  ret_from_exception #skip down to common code
++		nop
++2:		.set noat
++		RESTORE_ALL_AND_RET
++		.set at
++FEXPORT(ret_from_exception)
++		lw	t0, PT_STATUS(sp)	# returning to kernel mode?
++		andi	t0, t0, KU_USER
++		beqz	t0, restore_all
++#endif //!CONFIG_RTHAL
+ FEXPORT(ret_from_sys_call)		# here to prevent code duplication
+ ret_from_schedule:
+ 		mfc0	t0, CP0_STATUS	# need_resched and signals atomic test
+@@ -50,7 +67,17 @@
+ 		bnez	v0, reschedule
+ 		bnez	v1, signal_return
+ restore_all:	.set	noat
++#ifndef CONFIG_RTHAL		
+ 		RESTORE_ALL_AND_RET
++#else //!CONFIG_RTHAL
++      		lw   	t0, (rthal + 24) /* rtai_active? */
++		beqz	t0, 1f
++		nop
++		lw 	t0, (rthal + 20) /* enable ints */
++		jal	t0
++		nop
++1:		RESTORE_ALL_AND_RET
++#endif //!CONFIG_RTHAL
+ 		.set	at
+ 
+ /* Put this behind restore_all for the sake of the branch prediction.  */
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/kernel/head.S linux-2.4.21/arch/mips/kernel/head.S
+--- linux-2.4.21.orig/arch/mips/kernel/head.S	2003-02-14 04:58:52.000000000 -0800
++++ linux-2.4.21/arch/mips/kernel/head.S	2003-04-17 06:19:19.000000000 -0700
+@@ -151,11 +151,12 @@
+ 		.set    mips0
+ 		END(nmi_handler)
+ 
+-		__INIT
++//		__INIT //move kernel entry up so my bootloader doesn't barf steve s.
+ 
+ 		/*
+ 		 * Kernel entry point
+ 		 */
++
+ 		NESTED(kernel_entry, 16, sp)
+ 		.set	noreorder
+ 
+@@ -184,7 +185,7 @@
+ 		 nop
+ 		END(kernel_entry)
+ 
+-
++		__INIT
+ #ifdef CONFIG_SMP
+ 
+ /*
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/kernel/irq.c linux-2.4.21/arch/mips/kernel/irq.c
+--- linux-2.4.21.orig/arch/mips/kernel/irq.c	2003-03-25 06:30:19.000000000 -0800
++++ linux-2.4.21/arch/mips/kernel/irq.c	2003-04-22 09:11:56.000000000 -0700
+@@ -7,6 +7,8 @@
+  *
+  * Copyright (C) 1992 Linus Torvalds
+  * Copyright (C) 1994 - 2000 Ralf Baechle
++ * 
++ * rthal mods by Steven Seeger (sseeger@stellartec.com) 16Apr03
+  */
+ #include <linux/config.h>
+ #include <linux/kernel.h>
+@@ -412,7 +414,14 @@
+  * SMP cross-CPU interrupts have their own specific
+  * handlers).
+  */
+-asmlinkage unsigned int do_IRQ(int irq, struct pt_regs *regs)
++
++asmlinkage unsigned int 
++#ifdef CONFIG_RTHAL
++  _do_IRQ
++#else
++  do_IRQ
++#endif  
++  (int irq, struct pt_regs *regs)
+ {
+ 	/*
+ 	 * We ack quickly, we don't want the irq controller
+@@ -490,9 +499,29 @@
+ 
+ 	if (softirq_pending(cpu))
+ 		do_softirq();
+-	return 1;
++	return 1; //don't return to rtai!
++}
++
++#ifdef CONFIG_RTHAL
++
++/* Ok here is where the fun begins. Since I'm trying to be nice to all boards,
++ * I'm going to put the RTHAL stuff here. Our do_IRQ function will handle
++ * the RTHAL gate. However, I am using only a VR4181 for MIPS right now
++ * and I know this will work. If other boards' specific interrupt handlers
++ * go to functions other than this do_IRQ, they'll have to fiddle with their
++ * interrupt handlers. */
++
++asmlinkage unsigned int do_IRQ(int irq, struct pt_regs *regs)
++{
++   if(rthal.rtai_active && irq==7) {
++      return rthal.mips_timer_interrupt(irq, regs);
++   }
++      
++   return rthal.mips_interrupt(irq, regs);
+ }
+ 
++#endif //CONFIG_RTHAL
++
+ /**
+  *	request_irq - allocate an interrupt line
+  *	@irq: Interrupt line to allocate
+@@ -1063,3 +1092,67 @@
+ 	for (i = 0; i < NR_IRQS; i++)
+ 		register_irq_proc(i);
+ }
++
++#ifdef CONFIG_RTHAL
++
++static void linux_cli(void)
++{                          
++   hard_cli();
++}
++
++static void linux_sti(void)
++{  
++   hard_sti();  
++}
++
++static unsigned long linux_save_flags(void)
++{
++   unsigned long flags;
++   
++   hard_save_flags(flags);
++   
++   return flags;
++}
++
++static void linux_restore_flags(unsigned long flags)
++{
++   hard_restore_flags(flags);
++}
++
++static unsigned long linux_save_flags_and_cli(void)
++{
++   unsigned long flags;
++   
++   hard_save_flags_and_cli(flags);
++   return flags;
++}
++
++static asmlinkage long long rtai_srq_interrupt(unsigned int srq, unsigned int args)
++{
++   return 1;
++}
++
++extern void *ret_from_irq;
++extern void linux_mips_timer_intr(struct pt_regs *);
++extern void linux_soft_mips_timer_intr(struct pt_regs *);
++extern void timer_interrupt(unsigned int irq, struct pt_regs*);
++
++asmlinkage struct rt_hal rthal =
++{
++   ret_from_intr: &ret_from_irq,
++   mips_interrupt: _do_IRQ,
++     mips_timer_interrupt: timer_interrupt, //might want to change on your board
++     rtai_srq_interrupt: rtai_srq_interrupt,
++     disint: linux_cli,
++     enint: linux_sti,
++     rtai_active: 0,
++     getflags: linux_save_flags,
++     setflags: linux_restore_flags,
++     getflags_and_cli: linux_save_flags_and_cli,
++     irq_desc: irq_desc,
++     tsc: {tsc: 0LL},
++     linux_mips_timer_intr: linux_mips_timer_intr,
++     linux_soft_mips_timer_intr: linux_soft_mips_timer_intr
++};
++
++#endif //CONFIG_RTHAL
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/kernel/mips_ksyms.c linux-2.4.21/arch/mips/kernel/mips_ksyms.c
+--- linux-2.4.21.orig/arch/mips/kernel/mips_ksyms.c	2003-04-03 06:08:59.000000000 -0800
++++ linux-2.4.21/arch/mips/kernel/mips_ksyms.c	2003-04-22 11:46:40.000000000 -0700
+@@ -6,7 +6,10 @@
+  * for more details.
+  *
+  * Copyright (C) 1996, 1997, 1998, 2000, 2001 by Ralf Baechle
++ * 
++ * rthal mods by Steven Seeger (sseeger@stellartec.com) 16Apr03
+  */
++
+ #include <linux/config.h>
+ #include <linux/module.h>
+ #include <linux/string.h>
+@@ -40,6 +43,22 @@
+ extern long __strnlen_user_nocheck_asm(const char *s);
+ extern long __strnlen_user_asm(const char *s);
+ 
++extern void flush_dcache_page(struct page *page);
++EXPORT_SYMBOL(flush_dcache_page);
++
++#ifdef CONFIG_RTHAL
++/*
++ * RTHAL exports
++ */
++extern struct rt_hal rthal;
++EXPORT_SYMBOL(rthal);
++extern unsigned long cycles_per_jiffy;
++EXPORT_SYMBOL(cycles_per_jiffy);
++extern unsigned int mips_counter_frequency;
++EXPORT_SYMBOL(mips_counter_frequency);
++#include <linux/console.h>
++EXPORT_SYMBOL(console_drivers);
++#endif
+ EXPORT_SYMBOL(mips_machtype);
+ #ifdef CONFIG_EISA
+ EXPORT_SYMBOL(EISA_bus);
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/kernel/scall_o32.S linux-2.4.21/arch/mips/kernel/scall_o32.S
+--- linux-2.4.21.orig/arch/mips/kernel/scall_o32.S	2002-08-05 16:53:33.000000000 -0700
++++ linux-2.4.21/arch/mips/kernel/scall_o32.S	2003-04-16 12:57:51.000000000 -0700
+@@ -5,7 +5,10 @@
+  *
+  * Copyright (C) 1997, 1998, 1999, 2000, 2001 by Ralf Baechle
+  * Copyright (C) 2001 MIPS Technologies, Inc.
++ *
++ * rthal modifications by Steven Seeger (sseeger@stellartec.com) 16Apr03
+  */
++ 
+ #include <linux/config.h>
+ #include <linux/errno.h>
+ #include <asm/asm.h>
+@@ -28,7 +31,23 @@
+ 	.set	at
+ 
+ 	lw	t1, PT_EPC(sp)		# skip syscall on return
++#ifdef CONFIG_RTHAL
++	move	t0, v0
++	li	t2, 0xfe000000		#rtai syscalls start at 0xfe000000
++	and	t2, t0
++	beqz	t2, lnx_scall
++	nop
++	lw 	t2, (rthal + 12)	#rtai_srq_interrupt
++	jalr	t2  	     		#through the rthal gate
++	nop
++	
++	sw 	v0, PT_R2(sp)		#result
++	sw	v1, PT_R3(sp)
++	j	fast_ret_from_sys_call
++	nop
+ 
++lnx_scall:
++#endif //CONFIG_RTHAL
+ 	sltiu	t0, v0, MAX_SYSCALL_NO + 1 # check syscall number
+ 	addiu	t1, 4			# skip to next instruction
+ 	beqz	t0, illegal_syscall
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/kernel/time.c linux-2.4.21/arch/mips/kernel/time.c
+--- linux-2.4.21.orig/arch/mips/kernel/time.c	2003-04-24 05:32:21.000000000 -0700
++++ linux-2.4.21/arch/mips/kernel/time.c	2003-04-23 10:08:51.000000000 -0700
+@@ -28,6 +28,7 @@
+ #include <asm/time.h>
+ #include <asm/hardirq.h>
+ #include <asm/div64.h>
++#include <asm/mipsregs.h>
+ 
+ /* This is for machines which generate the exact clock. */
+ #define USECS_PER_JIFFY (1000000/HZ)
+@@ -135,7 +136,10 @@
+ static unsigned int sll32_usecs_per_cycle=0;
+ 
+ /* how many counter cycles in a jiffy */
+-static unsigned long cycles_per_jiffy=0;
++#ifndef CONFIG_RTHAL
++static 
++#endif  
++unsigned long cycles_per_jiffy=0;
+ 
+ /* Cycle counter value at the previous timer interrupt.. */
+ static unsigned int timerhi, timerlo;
+@@ -329,11 +333,25 @@
+ #endif
+ }
+ 
++static inline int 
++bit64_compare(unsigned hi1, unsigned lo1, unsigned hi2, unsigned lo2)
++{
++	if (hi1 == hi2) 
++		return lo1 - lo2;
++	else
++		return hi1 - hi2;
++}
++
+ /*
+  * high-level timer interrupt service routines.  This function
+  * is set as irqaction->handler and is invoked through do_IRQ.
+  */
+-void timer_interrupt(int irq, void *dev_id, struct pt_regs *regs)
++#ifdef CONFIG_RTHAL
++unsigned int 
++#else
++void
++#endif
++timer_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+ {
+ 	if (cpu_has_counter) {
+ 		unsigned int count;
+@@ -353,6 +371,27 @@
+ 		/* Update timerhi/timerlo for intra-jiffy calibration. */
+ 		timerhi += count < timerlo;	/* Wrap around */
+ 		timerlo = count;
++
++		/*
++		 * set up for next timer interrupt - no harm if the machine
++		 * is using another timer interrupt source.
++		 * Note that writing to COMPARE register clears the interrupt
++		 */
++		write_c0_compare(count + cycles_per_jiffy);
++
++		/* check to see if we have missed a timer interrupt */
++		if (bit64_compare(timerhi, timerlo, expirehi, expirelo) < 0) {
++			unsigned int old_expirelo=expirelo;
++			expirelo += cycles_per_jiffy;
++			expirehi += expirelo < old_expirelo;
++			write_c0_compare(old_expirelo + EXTRA_CUSHION_CYCLES);
++		} else {
++			// missed_timer_count ++;
++			/* we have missed at least one timer interrupt */
++			expirelo = timerlo + cycles_per_jiffy*2 - EXTRA_CUSHION_CYCLES;
++			expirehi = timerhi + (expirelo < timerlo);
++			write_c0_compare(timerlo + cycles_per_jiffy);
++		}
+ 	}
+ 
+ 	/*
+@@ -412,6 +451,9 @@
+ 		panic("Not implemented yet!!!");
+ 	}
+ #endif	/* CONFIG_SMP */
++#ifdef CONFIG_RTHAL
++   return 1; //don't return to rtai domain!!
++#endif   
+ }
+ 
+ asmlinkage void ll_timer_interrupt(int irq, struct pt_regs *regs)
+@@ -507,7 +549,7 @@
+ 	/* caclulate cache parameters */
+ 	if (mips_counter_frequency) {
+ 		cycles_per_jiffy = mips_counter_frequency / HZ;
+-
++	   printk("cycles per jiffy: %d\n", cycles_per_jiffy);
+ 		/* sll32_usecs_per_cycle = 10^6 * 2^32 / mips_counter_freq */
+ 		/* any better way to do this? */
+ 		sll32_usecs_per_cycle = mips_counter_frequency / 100000;
+@@ -585,3 +627,66 @@
+ }
+ 
+ EXPORT_SYMBOL(rtc_lock);
++
++#ifdef CONFIG_RTHAL
++unsigned int linux_mips_timer_intr(int irq, struct pt_regs *regs)
++{   
++   extern struct rt_hal rthal;
++   
++   unsigned long count;
++   long flags;
++   int cpu;
++   
++   cpu = smp_processor_id();
++   irq_enter(cpu, irq);
++   
++   kstat.irqs[cpu][irq]++;
++   do_timer(regs);
++   count = read_c0_count();
++   write_c0_count(count+cycles_per_jiffy);
++   save_and_cli(flags);
++   rthal.tsc.hltsc[1] += (count < rthal.tsc.hltsc[0]);
++   rthal.tsc.hltsc[0] = count;
++   restore_flags(flags);
++   irq_exit(cpu, irq);
++   
++   return 1;
++}
++
++
++unsigned int linux_soft_mips_timer_intr(int irq, struct pt_regs *regs)
++{   
++   extern struct rt_hal rthal;
++   unsigned long count;
++   long flags;
++   int cpu;
++   struct irqaction *action;
++      
++   cpu = smp_processor_id();
++   irq_enter(cpu, irq);
++   count = read_c0_count();
++   hard_save_flags_and_cli(flags);
++   rthal.tsc.hltsc[1] += (count < rthal.tsc.hltsc[0]);
++   rthal.tsc.hltsc[0] = count;
++   hard_restore_flags(flags);
++   kstat.irqs[cpu][irq]++;
++   do_timer(regs);
++   irq_exit(irq, cpu);
++   
++   /*
++    *     * Check whether there have been any interrupt handlers chained to
++    *     * the end of this one, and if so call them.  This is really horrible
++    *     * and this whole area should be changed to use the descriptor
++    *     * mechanism.
++    *     */
++   action = irq_desc[irq].action;
++   action = action->next;          /* Ignore the primary handler. */
++   while(action) 
++     {	
++	action->handler(irq, action->dev_id, regs);
++	action = action->next;
++     }
++   
++   return 1;
++}
++#endif //CONFIG_RTHAL
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/mm/tlb-r4k.c linux-2.4.21/arch/mips/mm/tlb-r4k.c
+--- linux-2.4.21.orig/arch/mips/mm/tlb-r4k.c	2003-04-08 17:46:23.000000000 -0700
++++ linux-2.4.21/arch/mips/mm/tlb-r4k.c	2003-04-22 17:14:31.000000000 -0700
+@@ -23,7 +23,21 @@
+ #include <asm/mmu_context.h>
+ #include <asm/pgtable.h>
+ #include <asm/system.h>
++#if 1
++#ifdef CONFIG_RTHAL
++/*
++ * You may likely need this for your board...
++ * Sucks that this eats away at some RTAI performance, too. :(
++ * 
++ * (then again, it beats crashing)
++ */
+ 
++#undef local_irq_save
++#undef local_irq_restore
++#define local_irq_save(x) hard_save_flags_and_cli(x)
++#define local_irq_restore(x) hard_restore_flags(x)
++#endif
++#endif
+ #undef DEBUG_TLB
+ #undef DEBUG_TLBUPDATE
+ 
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/vr4181/common/int_handler.S linux-2.4.21/arch/mips/vr4181/common/int_handler.S
+--- linux-2.4.21.orig/arch/mips/vr4181/common/int_handler.S	2001-10-02 16:27:11.000000000 -0700
++++ linux-2.4.21/arch/mips/vr4181/common/int_handler.S	2003-04-16 13:55:52.000000000 -0700
+@@ -45,12 +45,13 @@
+ 	and	t0, t2
+ 
+ 	/* we check IP3 first; it happens most frequently */
++	//steve changed these here since he wants to use IP7 anyway
++	andi	t1, t0, STATUSF_IP7	/* cpu timer */
++	bnez	t1, ll_cputimer_irq
+ 	andi	t1, t0, STATUSF_IP3
+ 	bnez	t1, ll_cpu_ip3
+ 	andi	t1, t0, STATUSF_IP2
+ 	bnez	t1, ll_cpu_ip2
+-	andi	t1, t0, STATUSF_IP7	/* cpu timer */
+-	bnez	t1, ll_cputimer_irq
+ 	andi	t1, t0, STATUSF_IP4
+ 	bnez	t1, ll_cpu_ip4
+ 	andi	t1, t0, STATUSF_IP5
+diff -uNr --exclude=CVS linux-2.4.21.orig/arch/mips/vr4181/common/time.c linux-2.4.21/arch/mips/vr4181/common/time.c
+--- linux-2.4.21.orig/arch/mips/vr4181/common/time.c	2002-12-01 13:20:14.000000000 -0800
++++ linux-2.4.21/arch/mips/vr4181/common/time.c	2003-04-22 08:57:10.000000000 -0700
+@@ -22,6 +22,7 @@
+ #include <asm/time.h>
+ 
+ #include <asm/vr4181/vr4181.h>
++#include <asm/mipsregs.h>
+ 
+ #define COUNTS_PER_JIFFY ((32768 + HZ/2) / HZ)
+ 
+@@ -92,7 +93,7 @@
+ vr4181_timer_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+ {
+ 	/* Clear the interrupt. */
+-	*VR4181_RTCINTREG = 0x2;
++//	*VR4181_RTCINTREG = 0x2;
+ 
+ 	/* call the generic one */
+ 	timer_interrupt(irq, dev_id, regs);
+@@ -115,22 +116,31 @@
+ 
+ extern int setup_irq(unsigned int irq, struct irqaction *irqaction);
+ 
++static void vr4181_timer_init(void)
++{
++   mips_counter_frequency = 65400000/4; //steve vr4181
++}
++
++
+ static void
+ vr4181_timer_setup(struct irqaction *irq)
+ {
++   extern unsigned int cycles_per_jiffy;
+ 	/* over-write the handler to be our own one */
+ 	irq->handler = vr4181_timer_interrupt;
+ 
+ 	/* sets up the frequency */
+-	*VR4181_RTCL1LREG = COUNTS_PER_JIFFY;
+-	*VR4181_RTCL1HREG = 0;
++//	*VR4181_RTCL1LREG = COUNTS_PER_JIFFY;
++//	*VR4181_RTCL1HREG = 0;
+ 
+ 	/* and ack any pending ints */
+-	*VR4181_RTCINTREG = 0x2;
++//	*VR4181_RTCINTREG = 0x2;
+ 
+ 	/* setup irqaction */
+-	setup_irq(VR4181_IRQ_INT1, irq);
++	setup_irq(VR4181_IRQ_TIMER, irq);
+ 
++   write_c0_compare(read_c0_count()+cycles_per_jiffy);
++   set_c0_status(IE_IRQ5);
+ }
+ 
+ void
+@@ -140,6 +150,7 @@
+ 	rtc_get_time = vr4181_rtc_get_time;
+ 	rtc_set_time = vr4181_rtc_set_time;
+ 
++        board_time_init = vr4181_timer_init; //set up mips_counter_frequency
+ 	board_timer_setup = vr4181_timer_setup;
+ }
+ 
+
+  * [jsun] right now we assume it is the nec debug monitor, which does
+  * not pass any arguments.
+  */
+-void __init prom_init()
++//steve does NOT assume this, bitch!
++void __init prom_init(int argc, char **argv)
+ {
+-	strcpy(arcs_cmdline, "ip=bootp ");
+-	strcat(arcs_cmdline, "ether=46,0x03fe0300,eth0 ");
++//	strcpy(arcs_cmdline, "ip=bootp ");
++//	strcat(arcs_cmdline, "ether=46,0x03fe0300,eth0 ");
+ 	// strcpy(arcs_cmdline, "ether=0,0x0300,eth0 "
+ 	// strcat(arcs_cmdline, "video=vr4181fb:xres:240,yres:320,bpp:8 ");
+ 
++   //steve is here
++   unsigned int s;
++   
++   arcs_cmdline[0] = 0;
++   for(s=1;s<argc;s++)
++     {	
++	strcat(arcs_cmdline, argv[s]);
++	strcat(arcs_cmdline, " ");
++     }
++   
++   
+ 	mips_machgroup = MACH_GROUP_NEC_VR41XX;
+ 	mips_machtype = MACH_NEC_OSPREY;
+ 
+ 	/* 16MB fixed */
+-	add_memory_region(0, 16 << 20, BOOT_MEM_RAM);
++   //8 for our board
++	add_memory_region(0, 8 << 20, BOOT_MEM_RAM);
+ }
+ 
+diff -uNr --exclude=CVS linux-2.4.21.orig/Documentation/Configure.help linux-2.4.21/Documentation/Configure.help
+--- linux-2.4.21.orig/Documentation/Configure.help	2003-04-14 05:30:37.000000000 -0700
++++ linux-2.4.21/Documentation/Configure.help	2003-04-16 09:06:48.000000000 -0700
+@@ -262,6 +262,13 @@
+ 
+   If you don't have this computer, you may safely say N.
+ 
++Real-Time Harware Abstraction
++CONFIG_RTHAL
++  The Real-Time Hardware Abstraction Layer (RTHAL) is used by
++  the Real-Time Application Interface (RTAI) to provide a
++  hard real-time environment as part of Linux.  This feature
++  cannot be turned off, so say Y.	
++
+ IO-APIC support on uniprocessors
+ CONFIG_X86_UP_IOAPIC
+   An IO-APIC (I/O Advanced Programmable Interrupt Controller) is an
+diff -uNr --exclude=CVS linux-2.4.21.orig/drivers/block/Config.in linux-2.4.21/drivers/block/Config.in
+--- linux-2.4.21.orig/drivers/block/Config.in	2002-09-11 05:44:45.000000000 -0700
++++ linux-2.4.21/drivers/block/Config.in	2003-04-16 14:02:11.000000000 -0700
+@@ -50,4 +50,11 @@
+ 
+ bool 'Per partition statistics in /proc/partitions' CONFIG_BLK_STATS
+ 
++tristate 'ROM block device support' CONFIG_BLK_DEV_ROM
++if [ "$CONFIG_BLK_DEV_ROM" = "y" ]; then
++   bool '  ROM disk at well-known address?' CONFIG_BLK_DEV_ROM_AT_WKA
++   if [ "$CONFIG_BLK_DEV_ROM_AT_WKA" = "y" ]; then
++      hex '    Address of ROM disk' CONFIG_BLK_DEV_ROM_ADDRESS
++   fi
++fi
+ endmenu
+diff -uNr --exclude=CVS linux-2.4.21.orig/drivers/block/ll_rw_blk.c linux-2.4.21/drivers/block/ll_rw_blk.c
+--- linux-2.4.21.orig/drivers/block/ll_rw_blk.c	2003-02-25 14:03:05.000000000 -0800
++++ linux-2.4.21/drivers/block/ll_rw_blk.c	2003-04-16 14:01:26.000000000 -0700
+@@ -1419,6 +1419,9 @@
+ #ifdef CONFIG_BLK_DEV_XD
+ 	xd_init();
+ #endif
++#ifdef CONFIG_BLK_DEV_ROM
++   rom_init();
++#endif   
+ #ifdef CONFIG_BLK_DEV_MFM
+ 	mfm_init();
+ #endif
+diff -uNr --exclude=CVS linux-2.4.21.orig/drivers/block/Makefile linux-2.4.21/drivers/block/Makefile
+--- linux-2.4.21.orig/drivers/block/Makefile	2003-02-25 16:53:48.000000000 -0800
++++ linux-2.4.21/drivers/block/Makefile	2003-04-16 14:05:39.000000000 -0700
+@@ -10,7 +10,7 @@
+ 
+ O_TARGET := block.o
+ 
+-export-objs	:= ll_rw_blk.o blkpg.o loop.o DAC960.o genhd.o acsi.o
++export-objs	:= ll_rw_blk.o blkpg.o loop.o DAC960.o genhd.o acsi.o rom.o
+ 
+ obj-y	:= ll_rw_blk.o blkpg.o genhd.o elevator.o
+ 
+@@ -31,6 +31,7 @@
+ obj-$(CONFIG_BLK_DEV_DAC960)	+= DAC960.o
+ obj-$(CONFIG_BLK_DEV_UMEM)	+= umem.o
+ obj-$(CONFIG_BLK_DEV_NBD)	+= nbd.o
++obj-$(CONFIG_BLK_DEV_ROM)	+= rom.o
+ 
+ subdir-$(CONFIG_PARIDE) += paride
+ 
+diff -uNr --exclude=CVS linux-2.4.21.orig/drivers/block/rom.c linux-2.4.21/drivers/block/rom.c
+--- linux-2.4.21.orig/drivers/block/rom.c	1969-12-31 16:00:00.000000000 -0800
++++ linux-2.4.21/drivers/block/rom.c	2003-04-16 16:27:06.000000000 -0700
+@@ -0,0 +1,351 @@
++/*
++ * rom.c
++ *
++ * Nov 2000 v0.1 oxymoron@waste.org
++ * Mar 2000 v0.2 adjust for kernel 2.3.47, well-know address, and devfs <brad@ltc.com>
++ *
++ * Based largely on linux/drivers/block/loop.c
++ *
++ * Copyright 1993 by Theodore Ts'o.  Redistribution of this file is
++ * permitted under the GNU Public License.
++ */
++
++#include <linux/module.h>
++#include <linux/config.h>
++#include <linux/fs.h>
++#include <linux/stat.h>
++#include <linux/errno.h>
++#include <linux/major.h>
++#include <linux/string.h>
++#include <asm/segment.h>
++#include <asm/byteorder.h>
++#include <asm/uaccess.h>
++
++/*#define DEBUG_BLKDEV_ROM*/
++
++#define MAJOR_NR 60
++
++#define DEVICE_NAME "rom"
++#define DEVICE_REQUEST do_rom_request
++#define DEVICE_NR(device) (MINOR(device))
++#define DEVICE_ON(device)
++#define DEVICE_OFF(device)
++#define DEVICE_NO_RANDOM
++#define TIMEOUT_VALUE (6 * HZ)
++
++#include <linux/blk.h>
++
++struct rom_device {
++	int rle;
++	int rom_refcnt;
++	const unsigned char * data;
++	long length;
++};
++
++#define MAX_ROM 8
++static struct rom_device rom_dev[MAX_ROM];
++static int rom_sizes[MAX_ROM];
++static int rom_blksizes[MAX_ROM];
++static devfs_handle_t devfs_handle = NULL;  /* For the directory */
++
++#define ESCAPE 167
++#define BLOCKSIZE 1024
++
++#ifdef CONFIG_BLK_DEV_ROM_ADDRESS
++
++/* Romdisk image is at a well-known address in ROM, separate from the kernel. */
++unsigned char* romdisk = (unsigned char*)CONFIG_BLK_DEV_ROM_ADDRESS;
++
++#else
++
++/* Romdisk image is linked into the kernel image. */
++//steve #include "romdisk.inc"
++unsigned char *romdisk = (unsigned char*)0xBF200000; //by steve
++
++#endif
++
++static void do_rom_request(request_queue_t* rq)
++{
++	unsigned int minor;
++	int offset, len;
++	struct rom_device *rom;
++	int block, boffset, run;
++	int lastc = 0;
++	const unsigned char *data;
++	unsigned char *dest;
++
++repeat:
++	INIT_REQUEST;
++
++	minor = MINOR(CURRENT->rq_dev);
++
++	if (minor >= MAX_ROM) {
++		printk(DEVICE_NAME ": bad minor\n");
++		end_request(0);
++		goto repeat;
++	}
++
++	if (CURRENT->cmd != READ) {
++		printk(DEVICE_NAME ": not read command\n");
++		end_request(0);
++		goto repeat;
++	}
++
++	rom = &rom_dev[minor];
++	
++	offset = CURRENT->sector << 9;
++	len = CURRENT->current_nr_sectors << 9;
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": %x(%d)\n", offset, len);
++#endif
++
++	if((offset+len) > rom->length) {
++		printk(DEVICE_NAME ": request past end of device (offset %d, length %d)\n",
++			offset, len);
++		end_request(0);
++		goto repeat;
++	}
++
++	if(!rom->rle) {
++		memcpy(CURRENT->buffer, rom->data + offset, len);
++		end_request(1);
++		goto repeat;
++	}
++
++	/* Decode rle block. */
++	dest = CURRENT->buffer;
++
++	block = offset / BLOCKSIZE; 		/* Locate encoded block */
++	boffset = offset % BLOCKSIZE;
++	data = rom->data + ntohl(*(long *)(rom->data + (block*4)));
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": rle blk %d off %d data %p\n",block,boffset,data);
++#endif
++
++	while(boffset > 0) {
++		if(*data != ESCAPE) { /* Normal character */
++			boffset--; /* We've skipped a char */
++		}
++		else { /* ESCAPE indicates RLE */
++			data++;
++			run = *data;
++			if(run) { /* Run count? */
++				data++;
++				lastc = (int)*data;
++				boffset -= run;
++			}
++		}
++		data++;
++	}
++			
++	if(boffset < 0) { /* Did an RLE span take us too far? */
++		boffset = -boffset > len ? len : -boffset;
++		memset(dest, lastc, boffset);
++		len += boffset;
++		dest += boffset;
++	}
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": cpy off %d len %d data %p\n", boffset, len, data);
++#endif
++
++	while(len) {
++		if(*data != ESCAPE) {
++			*dest++ = *data;
++			len--;
++		}
++		else { /* RLE */
++			data++;
++			run = *data;
++			if(run) {
++				data++;
++				run = run>len ? len : run;
++				memset(dest, *data, run);
++				dest += run;
++				len -= run;
++			}
++			else {
++				*dest ++= ESCAPE;
++				len--;
++			}
++		}
++		data++;
++	}
++
++	end_request(1);
++	goto repeat;
++}
++
++static int rom_ioctl(struct inode * inode, struct file * file,
++	unsigned int cmd, unsigned long arg)
++{
++	struct rom_device *rom;
++	int dev;
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": ioctl %d:%d cmd %d arg %lx\n", MAJOR(inode->i_rdev),
++		MINOR(inode->i_rdev), cmd, arg);
++#endif
++
++	if (!inode)
++		return -EINVAL;
++	if (MAJOR(inode->i_rdev) != MAJOR_NR) {
++		printk(DEVICE_NAME ": ioctl pseudo-major != %d\n", MAJOR_NR);
++		return -ENODEV;
++	}
++	dev = MINOR(inode->i_rdev);
++	if (dev >= MAX_ROM)
++		return -ENODEV;
++	rom = &rom_dev[dev];
++
++	switch (cmd) {
++		case BLKGETSIZE:   /* Return device size */
++			if (!arg)  return -EINVAL;
++			if (!put_user((rom->length)>>9, (int *) arg))
++				return -EFAULT;
++#ifdef DEBUG_BLKDEV_ROM
++			printk(DEVICE_NAME ": BLKGETSIZE= %ld\n", (rom->length) >> 9);
++#endif
++			return 0;
++
++		default:
++			return -EINVAL;
++	}
++	return 0;
++}
++
++static int rom_open(struct inode *inode, struct file *file)
++{
++	struct rom_device *rom;
++	int dev;
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": %d\n",MINOR(inode->i_rdev));
++#endif
++
++	if (!inode)
++		return -EINVAL;
++
++	if (MAJOR(inode->i_rdev) != MAJOR_NR) {
++		printk(DEVICE_NAME ": open pseudo-major != %d\n", MAJOR_NR);
++		return -ENODEV;
++	}
++
++	dev = MINOR(inode->i_rdev);
++	if (dev >= MAX_ROM)
++		return -ENODEV;
++
++	rom = &rom_dev[dev];
++	rom->rom_refcnt++;
++	MOD_INC_USE_COUNT;
++   
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": %d: %p (%ld) (%d)\n",
++		dev, rom->data, rom->length, rom->rom_refcnt);
++#endif
++	return 0;
++}
++
++static int rom_release(struct inode *inode, struct file *file)
++{
++	struct rom_device *rom;
++	int	dev;
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": release %d\n", MINOR(inode->i_rdev));
++#endif
++
++	if (!inode)
++		return -ENODEV;
++
++	if (MAJOR(inode->i_rdev) != MAJOR_NR) {
++		printk(DEVICE_NAME ": release pseudo-major != %d\n", MAJOR_NR);
++		return -ENODEV;
++	}
++
++	dev = MINOR(inode->i_rdev);
++
++	if (dev >= MAX_ROM)
++		return -ENODEV;
++printk("hey are we here?\n");
++//	fsync_dev(inode->i_rdev);
++
++   rom = &rom_dev[dev];
++	if (rom->rom_refcnt <= 0)
++		printk(DEVICE_NAME ": release refcount(%d) <= 0\n", rom->rom_refcnt);
++	else {
++		rom->rom_refcnt--;
++		MOD_DEC_USE_COUNT;
++	}
++	return 0;
++}
++
++static struct block_device_operations rom_fops = {
++	open:		rom_open,
++	release:	rom_release,
++	ioctl:		rom_ioctl,
++};
++
++/*
++ * And now the modules code and kernel interface.
++ */
++#ifdef MODULE
++#define rom_init init_module
++#endif
++
++int rom_init(void) {
++	int	i;
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": init\n");
++#endif
++
++	if (devfs_register_blkdev(MAJOR_NR, DEVICE_NAME, &rom_fops)) {
++		printk(DEVICE_NAME ": error registering major number %d for rom device\n", MAJOR_NR);
++		return -EIO;
++	}
++
++	devfs_handle = devfs_mk_dir(NULL, DEVICE_NAME, NULL);
++	devfs_register_series(devfs_handle, "%u", MAX_ROM, DEVFS_FL_DEFAULT,
++		MAJOR_NR, 0, S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP, &rom_fops, NULL);
++
++	printk(DEVICE_NAME ": registered device at major %d\n", MAJOR_NR);
++
++	blk_init_queue(BLK_DEFAULT_QUEUE(MAJOR_NR), DEVICE_REQUEST);
++	blk_queue_headactive(BLK_DEFAULT_QUEUE(MAJOR_NR), 0);
++
++	for (i=0; i < MAX_ROM; i++) {
++		memset(&rom_dev[i], 0, sizeof(struct rom_device));
++		rom_sizes[i] = 0;
++		rom_blksizes[i] = BLOCKSIZE;
++	}
++
++	blk_size[MAJOR_NR] = rom_sizes;
++	blksize_size[MAJOR_NR] = rom_blksizes;
++
++	rom_dev[0].length = ntohl(*(long *)romdisk);
++	rom_dev[0].rle = (int)ntohl(*(long *)(romdisk+4));
++	rom_dev[0].data = romdisk+8;
++	rom_sizes[0] = rom_dev[0].length/BLOCKSIZE;
++
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": %p\n", romdisk);
++	printk(DEVICE_NAME ": rom_dev[0]: loc %p data %p length %ld\n",
++		&rom_dev[0],rom_dev[0].data,rom_dev[0].length);
++#endif
++
++	return 0;
++}
++
++#ifdef MODULE
++void cleanup_module(void) {
++#ifdef DEBUG_BLKDEV_ROM
++	printk(DEVICE_NAME ": cleanup_module\n");
++#endif
++	devfs_unregister(devfs_handle);
++	if (devfs_unregister_blkdev(MAJOR_NR, DEVICE_NAME) != 0)
++		printk(DEVICE_NAME ": error unregistering rom blkdev\n");
++}
++#endif
+diff -uNr --exclude=CVS linux-2.4.21.orig/drivers/sound/Config.in linux-2.4.21/drivers/sound/Config.in
+--- linux-2.4.21.orig/drivers/sound/Config.in	2003-04-15 18:24:03.000000000 -0700
++++ linux-2.4.21/drivers/sound/Config.in	2003-04-17 06:01:49.000000000 -0700
+@@ -125,6 +125,9 @@
+ dep_tristate '  VIA 82C686 Audio Codec' CONFIG_SOUND_VIA82CXXX $CONFIG_PCI
+ dep_mbool    '  VIA 82C686 MIDI' CONFIG_MIDI_VIA82CXXX $CONFIG_SOUND_VIA82CXXX
+ 
++#Sound driver for VR41XX
++dep_tristate '  Enable VR41XX 10bit DAC sound' CONFIG_SOUND_VR41XX $CONFIG_CPU_VR41XX
++
+ dep_tristate '  OSS sound modules' CONFIG_SOUND_OSS $CONFIG_SOUND
+ 
+ if [ "$CONFIG_SOUND_OSS" = "y" -o "$CONFIG_SOUND_OSS" = "m" ]; then
+diff -uNr --exclude=CVS linux-2.4.21.orig/drivers/sound/Makefile linux-2.4.21/drivers/sound/Makefile
+--- linux-2.4.21.orig/drivers/sound/Makefile	2003-02-25 14:03:09.000000000 -0800
++++ linux-2.4.21/drivers/sound/Makefile	2003-04-17 05:57:09.000000000 -0700
+@@ -80,6 +80,7 @@
+ obj-$(CONFIG_SOUND_RME96XX)     += rme96xx.o
+ obj-$(CONFIG_SOUND_BT878)	+= btaudio.o
+ obj-$(CONFIG_SOUND_IT8172)	+= ite8172.o ac97_codec.o
++obj-$(CONFIG_SOUND_VR41XX)	+= vr41xx-sound.o
+ 
+ ifeq ($(CONFIG_MIDI_EMU10K1),y)
+   obj-$(CONFIG_SOUND_EMU10K1)	+= sound.o
+diff -uNr --exclude=CVS linux-2.4.21.orig/drivers/sound/vr41xx-sound.c linux-2.4.21/drivers/sound/vr41xx-sound.c
+--- linux-2.4.21.orig/drivers/sound/vr41xx-sound.c	1969-12-31 16:00:00.000000000 -0800
++++ linux-2.4.21/drivers/sound/vr41xx-sound.c	2003-04-17 06:11:40.000000000 -0700
+@@ -0,0 +1,2312 @@
++/*
++	linux/drivers/sound/vr41xx.c
++
++	VR41XX DMA based 10bit DAC sound driver derived from dmasound.c (of AMIGA)
++
++	Copyright (C) 2000 by Hiroshi Kawashima <kawashima@iname.com>
++
++	Vr4181 modifications 21-Feb-2001
++	Copyright (C) 2001 Shane Nay <shane@esdev.net>
++	Copyright (C) 2001 Robert Leslie <rob@mars.org>
++
++	This is distributed under the GNU GENERAL PUBLIC LICENSE (GPL)
++	Version 2 (June 1991). See the "COPYING" file distributed with this
++	software for more info.
++*/
++
++/*
++	**** WARNING ****
++	This code is Alpha code. It may hang up your kernel.
++	Please use this with care.
++
++	**** Supported feature ****
++	* Linear signed/unsigned 8/16bit big/little endian PCM.
++	* 8bit A-Law/Mu-Law.
++	* Stereo -> Mono conversion (just compute average of R/L-ch).
++
++	**** Known Limitation ****
++	* Will work only on :
++		* MobileGear-II/Pro
++		* IBM WorkPad z50
++		* Everex Freestyle
++		* Compaq Aero 15xx
++	  platforms. (Because speaker On/Off code (via GPIO) depends on
++	  each platform).
++	  Tested on MobileGear-II/R300 (Japanese model) && z50.
++	* If your machine has more than 32M byte, it may not work.
++	  (Limitation of VR41xx's sound DMA architecture)
++	* Volume setting is ignored. (always full volume)
++	
++	Enjoy! -- kawashima
++*/
++
++#include <linux/module.h>
++#include <linux/sched.h>
++#include <linux/timer.h>
++#include <linux/major.h>
++#include <linux/config.h>
++#include <linux/fcntl.h>
++#include <linux/errno.h>
++#include <linux/mm.h>
++#include <linux/slab.h>
++#include <linux/sound.h>
++#include <linux/init.h>
++
++#include <linux/delay.h>
++
++#include <asm/system.h>
++#include <asm/irq.h>
++#include <asm/pgtable.h>
++#include <asm/uaccess.h>
++
++static void VR4181_ENABLE_SPEAKER(void);
++static void VR4181_DISABLE_SPEAKER(void);
++
++#include <asm/vr4181/vr4181.h> //steve hack
++#include <asm/vr41xx/vr41xx.h> //steve hack
++
++#include <linux/soundcard.h>
++
++//#define DEBUG	1
++
++
++#define	HAS_10BIT_TABLES
++#define	HAS_8BIT_TABLES
++
++#ifdef MODULE
++static int sq_unit = -1;
++static int mixer_unit = -1;
++static int state_unit = -1;
++static int irq_installed = 0;
++#endif /* MODULE */
++
++
++
++/*** Some declarations *******************************************************/
++/*==== Copied from old dmasound.h ====*/
++/*
++ * Minor numbers for the sound driver.
++ *
++ * Unfortunately Creative called the codec chip of SB as a DSP. For this
++ * reason the /dev/dsp is reserved for digitized audio use. There is a
++ * device for true DSP processors but it will be called something else.
++ * In v3.0 it's /dev/sndproc but this could be a temporary solution.
++ */
++
++#define SND_NDEVS	256		/* Number of supported devices */
++#define SND_DEV_CTL	0		/* Control port /dev/mixer */
++#define SND_DEV_SEQ	1		/* Sequencer output /dev/sequencer (FM
++							   synthesizer and MIDI output) */
++#define SND_DEV_MIDIN	2	/* Raw midi access */
++#define SND_DEV_DSP		3	/* Digitized voice /dev/dsp */
++#define SND_DEV_AUDIO	4	/* Sparc compatible /dev/audio */
++#define SND_DEV_DSP16	5	/* Like /dev/dsp but 16 bits/sample */
++#define SND_DEV_STATUS	6	/* /dev/sndstat */
++/* #7 not in use now. Was in 2.4. Free for use after v3.0. */
++#define SND_DEV_SEQ2	8	/* /dev/sequencer, level 2 interface */
++#define SND_DEV_SNDPROC 9	/* /dev/sndproc for programmable devices */
++#define SND_DEV_PSS	SND_DEV_SNDPROC
++
++#define DSP_DEFAULT_SPEED	8000
++
++#define ON		1
++#define OFF		0
++
++#define MAX_AUDIO_DEV	5
++#define MAX_MIXER_DEV	2
++#define MAX_SYNTH_DEV	3
++#define MAX_MIDI_DEV	6
++#define MAX_TIMER_DEV	3
++/*====================================*/
++
++#define DMASND_TT				1
++#define DMASND_FALCON			2
++#define DMASND_AMIGA			3
++#define DMASND_AWACS			4
++#  define	DMASND_VR41XX		5
++
++#define MAX_CATCH_RADIUS		10
++#define MIN_BUFFERS				4
++
++#  define MIN_BUFSIZE 			2	/* Always just only 2K byte allowed */
++#  define MAX_BUFSIZE			128	/* Always just only 2K byte allowed */
++
++#define VR4181_SPK_BUSY       1
++#define VR4181_MIC_BUSY       1<<1
++
++
++static int catchRadius = 0;
++/* Real buffer size is bufSize * 1024 byte */
++static int numBufs=16, bufSize=2;
++
++MODULE_PARM(catchRadius, "i");
++MODULE_PARM(numBufs, "i");
++MODULE_PARM(bufSize, "i");
++MODULE_PARM(numreadBufs, "i");
++MODULE_PARM(readbufSize, "i");
++
++#define arraysize(x)	(sizeof(x)/sizeof(*(x)))
++#define min(x, y)	((x) < (y) ? (x) : (y))
++#define le2be16(x)	(((x)<<8 & 0xff00) | ((x)>>8 & 0x00ff))
++#define le2be16dbl(x)	(((x)<<8 & 0xff00ff00) | ((x)>>8 & 0x00ff00ff))
++
++#define IOCTL_IN(arg, ret) \
++	do { int error = get_user(ret, (int *)(arg)); \
++		if (error) return error; \
++	} while (0)
++#define IOCTL_OUT(arg, ret)	ioctl_return((int *)(arg), ret)
++
++
++/*** Some low level helpers **************************************************/
++
++#ifdef HAS_8BIT_TABLES
++/* 8 bit mu-law */
++
++static char ulaw2dma8[] = {
++	-126,	-122,	-118,	-114,	-110,	-106,	-102,	-98,
++	-94,	-90,	-86,	-82,	-78,	-74,	-70,	-66,
++	-63,	-61,	-59,	-57,	-55,	-53,	-51,	-49,
++	-47,	-45,	-43,	-41,	-39,	-37,	-35,	-33,
++	-31,	-30,	-29,	-28,	-27,	-26,	-25,	-24,
++	-23,	-22,	-21,	-20,	-19,	-18,	-17,	-16,
++	-16,	-15,	-15,	-14,	-14,	-13,	-13,	-12,
++	-12,	-11,	-11,	-10,	-10,	-9,	-9,	-8,
++	-8,	-8,	-7,	-7,	-7,	-7,	-6,	-6,
++	-6,	-6,	-5,	-5,	-5,	-5,	-4,	-4,
++	-4,	-4,	-4,	-4,	-3,	-3,	-3,	-3,
++	-3,	-3,	-3,	-3,	-2,	-2,	-2,	-2,
++	-2,	-2,	-2,	-2,	-2,	-2,	-2,	-2,
++	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,
++	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,
++	-1,	-1,	-1,	-1,	-1,	-1,	-1,	0,
++	125,	121,	117,	113,	109,	105,	101,	97,
++	93,	89,	85,	81,	77,	73,	69,	65,
++	62,	60,	58,	56,	54,	52,	50,	48,
++	46,	44,	42,	40,	38,	36,	34,	32,
++	30,	29,	28,	27,	26,	25,	24,	23,
++	22,	21,	20,	19,	18,	17,	16,	15,
++	15,	14,	14,	13,	13,	12,	12,	11,
++	11,	10,	10,	9,	9,	8,	8,	7,
++	7,	7,	6,	6,	6,	6,	5,	5,
++	5,	5,	4,	4,	4,	4,	3,	3,
++	3,	3,	3,	3,	2,	2,	2,	2,
++	2,	2,	2,	2,	1,	1,	1,	1,
++	1,	1,	1,	1,	1,	1,	1,	1,
++	0,	0,	0,	0,	0,	0,	0,	0,
++	0,	0,	0,	0,	0,	0,	0,	0,
++	0,	0,	0,	0,	0,	0,	0,	0
++};
++
++/* 8 bit A-law */
++
++static char alaw2dma8[] = {
++	-22,	-21,	-24,	-23,	-18,	-17,	-20,	-19,
++	-30,	-29,	-32,	-31,	-26,	-25,	-28,	-27,
++	-11,	-11,	-12,	-12,	-9,	-9,	-10,	-10,
++	-15,	-15,	-16,	-16,	-13,	-13,	-14,	-14,
++	-86,	-82,	-94,	-90,	-70,	-66,	-78,	-74,
++	-118,	-114,	-126,	-122,	-102,	-98,	-110,	-106,
++	-43,	-41,	-47,	-45,	-35,	-33,	-39,	-37,
++	-59,	-57,	-63,	-61,	-51,	-49,	-55,	-53,
++	-2,	-2,	-2,	-2,	-2,	-2,	-2,	-2,
++	-2,	-2,	-2,	-2,	-2,	-2,	-2,	-2,
++	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,
++	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,
++	-6,	-6,	-6,	-6,	-5,	-5,	-5,	-5,
++	-8,	-8,	-8,	-8,	-7,	-7,	-7,	-7,
++	-3,	-3,	-3,	-3,	-3,	-3,	-3,	-3,
++	-4,	-4,	-4,	-4,	-4,	-4,	-4,	-4,
++	21,	20,	23,	22,	17,	16,	19,	18,
++	29,	28,	31,	30,	25,	24,	27,	26,
++	10,	10,	11,	11,	8,	8,	9,	9,
++	14,	14,	15,	15,	12,	12,	13,	13,
++	86,	82,	94,	90,	70,	66,	78,	74,
++	118,	114,	126,	122,	102,	98,	110,	106,
++	43,	41,	47,	45,	35,	33,	39,	37,
++	59,	57,	63,	61,	51,	49,	55,	53,
++	1,	1,	1,	1,	1,	1,	1,	1,
++	1,	1,	1,	1,	1,	1,	1,	1,
++	0,	0,	0,	0,	0,	0,	0,	0,
++	0,	0,	0,	0,	0,	0,	0,	0,
++	5,	5,	5,	5,	4,	4,	4,	4,
++	7,	7,	7,	7,	6,	6,	6,	6,
++	2,	2,	2,	2,	2,	2,	2,	2,
++	3,	3,	3,	3,	3,	3,	3,	3
++};
++#endif /* HAS_8BIT_TABLES */
++
++#ifdef HAS_10BIT_TABLES
++/* 10-bit mu-law */
++static unsigned short ulaw2dma10[] = {
++      10,   26,   42,   58,   74,   90,  106,  122,
++     138,  154,  170,  186,  202,  218,  234,  250,
++     262,  270,  278,  286,  294,  302,  310,  318,
++     326,  334,  342,  350,  358,  366,  374,  382,
++     388,  392,  396,  400,  404,  408,  412,  416,
++     420,  424,  428,  432,  436,  440,  444,  448,
++     451,  453,  455,  457,  459,  461,  463,  465,
++     467,  469,  471,  473,  475,  477,  479,  481,
++     482,  483,  484,  485,  486,  487,  488,  489,
++     490,  491,  492,  493,  494,  495,  496,  497,
++     498,  498,  499,  499,  500,  500,  501,  501,
++     502,  502,  503,  503,  504,  504,  505,  505,
++     506,  506,  506,  506,  507,  507,  507,  507,
++     508,  508,  508,  508,  509,  509,  509,  509,
++     510,  510,  510,  510,  510,  510,  510,  510,
++     511,  511,  511,  511,  511,  511,  511,  511,
++    1013,  997,  981,  965,  949,  933,  917,  901,
++     885,  869,  853,  837,  821,  805,  789,  773,
++     761,  753,  745,  737,  729,  721,  713,  705,
++     697,  689,  681,  673,  665,  657,  649,  641,
++     635,  631,  627,  623,  619,  615,  611,  607,
++     603,  599,  595,  591,  587,  583,  579,  575,
++     572,  570,  568,  566,  564,  562,  560,  558,
++     556,  554,  552,  550,  548,  546,  544,  542,
++     541,  540,  539,  538,  537,  536,  535,  534,
++     533,  532,  531,  530,  529,  528,  527,  526,
++     525,  525,  524,  524,  523,  523,  522,  522,
++     521,  521,  520,  520,  519,  519,  518,  518,
++     517,  517,  517,  517,  516,  516,  516,  516,
++     515,  515,  515,  515,  514,  514,  514,  514,
++     513,  513,  513,  513,  513,  513,  513,  512,
++     512,  512,  512,  512,  512,  512,  512,  511
++};
++
++/* 10-bit A-law */
++static unsigned short alaw2dma10[] = {
++     425,  429,  417,  421,  441,  445,  433,  437,
++     393,  397,  385,  389,  409,  413,  401,  405,
++     468,  470,  464,  466,  476,  478,  472,  474,
++     452,  454,  448,  450,  460,  462,  456,  458,
++     167,  183,  135,  151,  231,  247,  199,  215,
++      39,   55,    7,   23,  103,  119,   71,   87,
++     339,  347,  323,  331,  371,  379,  355,  363,
++     275,  283,  259,  267,  307,  315,  291,  299,
++     506,  506,  506,  506,  507,  507,  507,  507,
++     504,  504,  504,  504,  505,  505,  505,  505,
++     510,  510,  510,  510,  511,  511,  511,  511,
++     508,  508,  508,  508,  509,  509,  509,  509,
++     490,  491,  488,  489,  494,  495,  492,  493,
++     482,  483,  480,  481,  486,  487,  484,  485,
++     501,  501,  500,  500,  503,  503,  502,  502,
++     497,  497,  496,  496,  499,  499,  498,  498,
++     597,  593,  605,  601,  581,  577,  589,  585,
++     629,  625,  637,  633,  613,  609,  621,  617,
++     554,  552,  558,  556,  546,  544,  550,  548,
++     570,  568,  574,  572,  562,  560,  566,  564,
++     855,  839,  887,  871,  791,  775,  823,  807,
++     983,  967, 1015,  999,  919,  903,  951,  935,
++     683,  675,  699,  691,  651,  643,  667,  659,
++     747,  739,  763,  755,  715,  707,  731,  723,
++     517,  517,  517,  517,  516,  516,  516,  516,
++     519,  519,  519,  519,  518,  518,  518,  518,
++     513,  513,  513,  513,  512,  512,  512,  512,
++     515,  515,  515,  515,  514,  514,  514,  514,
++     533,  532,  535,  534,  529,  528,  531,  530,
++     541,  540,  543,  542,  537,  536,  539,  538,
++     522,  522,  523,  523,  520,  520,  521,  521,
++     526,  526,  527,  527,  524,  524,  525,  525
++};
++#endif	/* HAS_10BIT_TABLES */
++
++/*** Translations ************************************************************/
++static ssize_t VR4181_ct_law(const u_char *userPtr, size_t userCount,
++			  u_char frame[], ssize_t *frameUsed,
++			  ssize_t frameLeft);
++static ssize_t VR4181_ct_s8(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed,
++			 ssize_t frameLeft);
++static ssize_t VR4181_ct_u8(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed,
++			 ssize_t frameLeft);
++
++/*** Machine definitions *****************************************************/
++
++
++typedef struct {
++	int type;
++	void *(*dma_alloc)(unsigned int, int);
++	void (*dma_free)(void *, unsigned int);
++	int (*irqinit)(void);
++#ifdef MODULE
++	void (*irqcleanup)(void);
++#endif /* MODULE */
++	void (*init)(void);
++	void (*silence)(void);
++	int (*setFormat)(int);
++	int (*setVolume)(int);
++	int (*setBass)(int);
++	int (*setTreble)(int);
++	int (*setGain)(int);
++	void (*play)(void);
++} MACHINE;
++
++
++/*** Low level stuff *********************************************************/
++
++
++typedef struct {
++	int format;		/* AFMT_* */
++	int stereo;		/* 0 = mono, 1 = stereo */
++	int size;		/* 8/16 bit*/
++	int speed;		/* speed */
++} SETTINGS;
++
++typedef struct {
++	ssize_t (*ct_ulaw)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++	ssize_t (*ct_alaw)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++	ssize_t (*ct_s8)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++	ssize_t (*ct_u8)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++	ssize_t (*ct_s16be)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++	ssize_t (*ct_u16be)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++	ssize_t (*ct_s16le)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++	ssize_t (*ct_u16le)(const u_char *, size_t, u_char *, ssize_t *, ssize_t);
++} TRANS;
++
++struct sound_settings {
++	MACHINE mach;		/* machine dependent things */
++	SETTINGS hard;		/* hardware settings */
++	SETTINGS soft;		/* software settings */
++	SETTINGS dsp;		/* /dev/dsp default settings */
++	TRANS *trans;		/* supported translations */
++	int volume_left;	/* volume (range is machine dependent) */
++	int volume_right;
++	int bass;		/* tone (range is machine dependent) */
++	int treble;
++	int gain;
++	int minDev;		/* minor device number currently open */
++};
++
++static struct sound_settings sound;
++
++static int Vr41xxIrqInit(void);
++#ifdef MODULE
++static void Vr41xxIrqCleanUp(void);
++#endif /* MODULE */
++static void Vr41xxSilence(void);
++static void Vr41xxInit(void);
++static int Vr41xxSetFormat(int format);
++/* static int Vr41xxSetVolume(int volume); */
++/* static int Vr41xxSetTreble(int treble); */
++static void VR4181_sq_play_next_frame(int index);
++static void Vr41xxPlay(void);
++static void VR4181_sq_interrupt(int irq, void *dummy, struct pt_regs *fp);
++
++
++
++/*** Mid level stuff *********************************************************/
++
++
++static void sound_silence(void);
++static void sound_init(void);
++static int sound_set_format(int format);
++static int sound_set_speed(int speed);
++static int sound_set_stereo(int stereo);
++// static int sound_set_volume(int volume);
++static ssize_t sound_copy_translate(const u_char *userPtr,
++				    size_t userCount,
++				    u_char frame[], ssize_t *frameUsed,
++				    ssize_t frameLeft);
++/*
++ * /dev/mixer abstraction
++ */
++
++struct sound_mixer {
++    int busy;
++    int modify_counter;
++};
++
++static struct sound_mixer mixer;
++
++/*
++ * Sound queue stuff, the heart of the driver
++ */
++
++struct sound_buffer {
++    int max_count, max_active, block_size;
++    char **buffers;
++    char **seg0_buffers;
++    int front, rear, count, syncing,active, rear_size, open_mode;
++    u_short wake_up_threshold;
++    wait_queue_head_t sync_queue;
++};
++
++struct sound_queue {
++
++	/* it shouldn't be necessary to declare any of these volatile */
++	/*
++	 *	The use of the playing field depends on the hardware
++	 *
++	 *	Atari, PMac: The number of frames that are loaded/playing
++	 *
++	 *	Amiga: Bit 0 is set: a frame is loaded
++	 *	       Bit 1 is set: a frame is playing
++	 */
++	int active;
++	wait_queue_head_t action_queue, read_open_queue, write_open_queue;
++	int busy;
++    struct sound_buffer mic,spk;
++};
++
++static struct sound_queue sq;
++
++#define sq_block_address(i)	(sq.spk.buffers[i])
++#define SIGNAL_RECEIVED	(signal_pending(current))
++#define NON_BLOCKING(open_mode)	(open_mode & O_NONBLOCK)
++#define ONE_SECOND	HZ	/* in jiffies (100ths of a second) */
++#define NO_TIME_LIMIT	0xffffffff
++#define SLEEP(queue, time_limit) \
++	interruptible_sleep_on_timeout(&queue, (time_limit));
++#define WAKE_UP(queue)	(wake_up_interruptible(&queue))
++
++/*
++ * /dev/sndstat
++ */
++
++struct sound_state {
++	int busy;
++	char buf[512];
++	int len, ptr;
++};
++
++static struct sound_state state;
++
++/*** Common stuff ********************************************************/
++
++static loff_t sound_lseek(struct file *file, long long offset, int orig);
++static inline int ioctl_return(int *addr, int value)
++{
++	if (value < 0)
++		return(value);
++
++	return put_user(value, addr);
++}
++
++
++/*** Translations ************************************************************/
++
++
++/* ++TeSche: radically changed for new expanding purposes...
++ *
++ * These two routines now deal with copying/expanding/translating the samples
++ * from user space into our buffer at the right frequency. They take care about
++ * how much data there's actually to read, how much buffer space there is and
++ * to convert samples into the right frequency/encoding. They will only work on
++ * complete samples so it may happen they leave some bytes in the input stream
++ * if the user didn't write a multiple of the current sample size. They both
++ * return the number of bytes they've used from both streams so you may detect
++ * such a situation. Luckily all programs should be able to cope with that.
++ *
++ * I think I've optimized anything as far as one can do in plain C, all
++ * variables should fit in registers and the loops are really short. There's
++ * one loop for every possible situation. Writing a more generalized and thus
++ * parameterized loop would only produce slower code. Feel free to optimize
++ * this in assembler if you like. :)
++ *
++ * I think these routines belong here because they're not yet really hardware
++ * independent, especially the fact that the Falcon can play 16bit samples
++ * only in stereo is hardcoded in both of them!
++ *
++ * ++geert: split in even more functions (one per format)
++ */
++
++
++static inline void VR4181_fill(u_short d, u_short *p, int n)
++{
++	while (n--)
++		*p++ = d;
++}
++
++static ssize_t VR4181_ct_law(const u_char *userPtr, size_t userCount,
++			  u_char frame[], ssize_t *frameUsed,
++			  ssize_t frameLeft)
++{
++	u_short *table =
++		(sound.soft.format == AFMT_MU_LAW) ? ulaw2dma10 : alaw2dma10;
++	ssize_t count, uUsed, fUsed;
++	u_short *p = (u_short *)(&frame[*frameUsed]);
++
++	if (sound.hard.stereo) {
++		count = min(userCount >> 1, frameLeft >> 1);
++		uUsed = count * 2;
++		fUsed = count * 2;
++	} else {
++		count = min(userCount, frameLeft >> 1);
++		uUsed = count;
++		fUsed = count * 2;
++	}
++	while (count > 0) {
++		u_char data;
++		u_short d;
++		if (get_user(data, userPtr++))
++			return -EFAULT;
++		d = data;
++		if (sound.hard.stereo) {
++			// Translate stereo -> mono
++			if (get_user(data, userPtr++))
++				return -EFAULT;
++			d += data;
++			d >>= 1;	// take average of R/L ch
++		}
++		*p++ = ((u_short)table[d]);
++		count--;
++	}
++	*frameUsed += fUsed;
++	// Clear rest of frame
++	VR4181_fill(0x0200, p, (frameLeft - fUsed) >> 1);
++
++	return(uUsed);
++}
++
++
++static ssize_t VR4181_ct_s8(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed, ssize_t frameLeft)
++{
++	ssize_t count, uUsed, fUsed;
++
++	u_short *p = (u_short *)(&frame[*frameUsed]);
++	if (sound.hard.stereo) {
++		count = min(userCount >> 1, frameLeft >> 1);
++		uUsed = count * 2;
++		fUsed = count * 2;
++	} else {
++		count = min(userCount, frameLeft >> 1);
++		uUsed = count;
++		fUsed = count * 2;
++	}
++	while (count > 0) {
++		u_char data;
++		u_short d;
++		if (get_user(data, userPtr++))
++			return -EFAULT;
++		d = data;
++		if (sound.hard.stereo) {
++			// Translate stereo -> mono
++			if (get_user(data, userPtr++))
++				return -EFAULT;
++			d += data;
++			d >>= 1;	// take average of R/L ch
++		}
++		*p++ = (d << 2) ^ 0x0200;
++		count--;
++	}
++	*frameUsed += fUsed;
++	// Clear rest of frame
++	VR4181_fill(0x0200, p, (frameLeft - fUsed) >> 1);
++
++	return (uUsed);
++}
++
++
++static ssize_t VR4181_ct_u8(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed, ssize_t frameLeft)
++{
++	ssize_t count, uUsed, fUsed;
++
++	u_short  *p = (u_short *)(&frame[*frameUsed]);
++	if (sound.hard.stereo) {
++		count = min(userCount >> 1, frameLeft >> 1);
++		uUsed = count * 2;
++		fUsed = count * 2;
++	} else {
++		count = min(userCount, frameLeft >> 1);
++		uUsed = count;
++		fUsed = count * 2;
++	}
++	while (count > 0) {
++		u_char data;
++		u_short d;
++		if (get_user(data, userPtr++))
++			return -EFAULT;
++		d = data;
++		if (sound.hard.stereo) {
++			// Translate stereo -> mono
++			if (get_user(data, userPtr++))
++				return -EFAULT;
++			d += data;
++			d >>= 1;	// take average of R/L ch
++		}
++		*p++ = d << 2;	// make it 10-bit
++		count--;
++	}
++	*frameUsed += fUsed;
++	// Clear rest of frame
++	VR4181_fill(0x0200, p, (frameLeft - fUsed) >> 1);
++
++	return (uUsed);
++}
++
++static ssize_t VR4181_ct_s16le(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed, ssize_t frameLeft)
++{
++	// uUsed & fUsed is byte count!!
++	ssize_t count, uUsed, fUsed;
++	u_short  *p = (u_short *)(&frame[*frameUsed]);
++
++	if (sound.hard.stereo) {
++		count = min(userCount >> 2, frameLeft >> 1);
++		uUsed = count * 4;
++		fUsed = count * 2;
++	} else {
++		count = min(userCount >> 1, frameLeft >> 1);
++		uUsed = count * 2;
++		fUsed = count * 2;
++	}
++	while (count > 0) {
++		u_short data;
++		u_int d;
++		if (get_user(data, ((u_short *)userPtr)++))
++			return -EFAULT;
++		d = data ^ 0x8000;
++		if (sound.hard.stereo) {
++			if (get_user(data, ((u_short *)userPtr)++))
++				return -EFAULT;
++			d += data ^ 0x8000;
++			d >>= 1;	// take average of R/L ch
++		}
++		*p++ = (d + (1 << 5)) >> 6;	// 16bit -> 10 bit
++		count--;
++	}
++	*frameUsed += fUsed;
++	// Clear rest of frame
++	VR4181_fill(0x0200, p, (frameLeft - fUsed) >> 1);
++
++	return (uUsed);
++}
++
++static ssize_t VR4181_ct_u16le(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed, ssize_t frameLeft)
++{
++	ssize_t count, uUsed, fUsed;
++	u_short  *p = (u_short *)(&frame[*frameUsed]);
++
++	if (sound.hard.stereo) {
++		count = min(userCount >> 2, frameLeft >> 1);
++		uUsed = count * 4;
++		fUsed = count * 2;
++	} else {
++		count = min(userCount >> 1, frameLeft >> 1);
++		uUsed = count * 2;
++		fUsed = count * 2;
++	}
++	while (count > 0) {
++		u_short data;
++		u_int d;
++		if (get_user(data, ((u_short *)userPtr)++))
++			return -EFAULT;
++		d = data;
++		if (sound.hard.stereo) {
++			if (get_user(data, ((u_short *)userPtr)++))
++				return -EFAULT;
++			d += data;
++			d >>= 1;	// take average of R/L ch
++		}
++		*p++ = (d + (1 << 5)) >> 6;	// 16bit -> 10 bit
++		count--;
++	}
++	*frameUsed += fUsed;
++	// Clear rest of frame
++	VR4181_fill(0x0200, p, (frameLeft - fUsed) >> 1);
++
++	return(uUsed);
++}
++
++/* Convert Big Endian short -> Little Endian short */
++static inline u_short be2le(u_short d)
++{
++	return (((d << 8) & 0xff00) + ((d >>8) & 0x00ff));
++}
++
++static ssize_t VR4181_ct_s16be(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed, ssize_t frameLeft)
++{
++	ssize_t count, uUsed, fUsed;
++	u_short  *p = (u_short *)(&frame[*frameUsed]);
++
++	if (sound.hard.stereo) {
++		count = min(userCount >> 2, frameLeft >> 1);
++		uUsed = count * 4;
++		fUsed = count * 2;
++	} else {
++		count = min(userCount >> 1, frameLeft >> 1);
++		uUsed = count * 2;
++		fUsed = count * 2;
++	}
++	while (count > 0) {
++		u_short data;
++		u_int d;
++		if (get_user(data, ((u_short *)userPtr)++))
++			return -EFAULT;
++		d = be2le(data) ^ 0x8000;
++		if (sound.hard.stereo) {
++			if (get_user(data, ((u_short *)userPtr)++))
++				return -EFAULT;
++			d += be2le(data) ^ 0x8000;
++			d >>= 1;	// take average of R/L ch
++		}
++		*p++ = (d + (1 << 5)) >> 6;	// 16bit -> 10 bit
++		count--;
++	}
++	*frameUsed += fUsed;
++	// Clear rest of frame
++	VR4181_fill(0x0200, p, (frameLeft - fUsed) >> 1);
++
++	return(uUsed);
++}
++
++static ssize_t VR4181_ct_u16be(const u_char *userPtr, size_t userCount,
++			 u_char frame[], ssize_t *frameUsed, ssize_t frameLeft)
++{
++	ssize_t count, uUsed, fUsed;
++	u_short  *p = (u_short *)(&frame[*frameUsed]);
++
++	if (sound.hard.stereo) {
++		count = min(userCount >> 2, frameLeft >> 1);
++		uUsed = count * 4;
++		fUsed = count * 2;
++	} else {
++		count = min(userCount >> 1, frameLeft >> 1);
++		uUsed = count * 2;
++		fUsed = count * 2;
++	}
++	while (count > 0) {
++		u_short data;
++		u_int d;
++		if (get_user(data, ((u_short *)userPtr)++))
++			return -EFAULT;
++		d = be2le(data);
++		if (sound.hard.stereo) {
++			if (get_user(data, ((u_short *)userPtr)++))
++				return -EFAULT;
++			d += be2le(data);
++			d >>= 1;	// take average
++		}
++		*p++ = (d + (1 << 5)) >> 6;	// 16bit -> 10 bit
++		count--;
++	}
++	*frameUsed += fUsed;
++	// Clear rest of frame
++	VR4181_fill(0x0200, p, (frameLeft - fUsed) >> 1);
++
++	return (uUsed);
++}
++
++
++static TRANS transVr41xx = {
++	VR4181_ct_law, VR4181_ct_law, VR4181_ct_s8, VR4181_ct_u8,
++	VR4181_ct_s16be, VR4181_ct_u16be, VR4181_ct_s16le, VR4181_ct_u16le
++};
++
++/*** Low level stuff *********************************************************/
++
++static
++unsigned long vr4181_get_pclk(void)
++{
++	unsigned long pclock, tclock, pclk;
++
++	/*
++	 * CPU core clock (PClock)
++	 *
++	 * PClock = (18.432 MHz / CLKSP(4:0)) x 64
++	 */
++
++	pclock = 18432000L / (*VR4181_CLKSPEEDREG & 0x001f) * 64;
++# ifdef DEBUG
++	printk("PClock = %lu Hz\n", pclock);
++# endif
++
++	/*
++	 * Peripheral clock (TClock)
++	 *
++	 * DIV(2:4)  Ratio                Mode
++	 * 111       TClock = PClock / 1  Div1 mode
++	 * 011       TClock = PClock / 2  Div2 mode
++	 * 101       TClock = PClock / 3  Div3 mode
++	 * 110       TClock = PClock / 4  Div4 mode
++	 * Others    Reserved             -
++	 */
++
++	tclock = pclock;
++	switch ((*VR4181_CLKSPEEDREG & 0xe000) >> 13) {
++	case 0x7:
++		tclock /= 1;
++		break;
++	case 0x3:
++		tclock /= 2;
++		break;
++	case 0x5:
++		tclock /= 3;
++		break;
++	case 0x6:
++		tclock /= 4;
++		break;
++	}
++# ifdef DEBUG
++	printk("TClock = %lu Hz\n", tclock);
++# endif
++
++	/*
++	 * PCLK (peripheral clock) divisor
++	 * (PCLK must be < 33 MHz)
++	 *
++	 * PCLKDIV(1:0)
++	 * 00 : TClock / 8
++	 * 01 : TClock / 4
++	 * 10 : TClock / 2
++	 * 11 : TClock / 1
++	 *
++	 * NEC Customer Notification SBB-T-12856-5
++	 * problem # 33 says: "When PCLK division ratio is Tclock/8,
++ * audio-in DMA doesn't work properly"
++	 *
++	 */
++
++	pclk = tclock / (1 << (~*VR4181_ISABRGCTL & 0x0003));
++# ifdef DEBUG
++	printk("PCLK = %lu Hz\n", pclk);  /* should be < 33 MHz */
++# endif
++
++	return pclk;
++}
++
++static
++void vr41xxspk_set_rate(void)
++{
++	unsigned long pclk;
++
++	/* select conversion rate for DAC */
++
++	pclk = vr4181_get_pclk();
++
++# ifdef DEBUG
++	printk("SCNVC_END := %lu (%d Hz)\n",
++	       pclk / sound.soft.speed, sound.soft.speed);
++# endif
++
++	*VR4181_SCNVC_END = pclk / sound.soft.speed;
++}
++
++static
++void vr41xxmic_set_rate(void)
++{
++	unsigned long pclk;
++
++	/* select conversion rate for ADC */
++
++	pclk = vr4181_get_pclk();
++
++# ifdef DEBUG
++	printk("MCNVC_END := %lu (%d Hz)\n",
++	       pclk / sound.soft.speed, sound.soft.speed);
++# endif
++
++	*VR4181_MCNVC_END = pclk / sound.soft.speed;
++}
++
++static int VR4181_irq_status(void) {
++    return (*VR4181_DMAITRQREG & (3<<4))>>4;
++}
++
++static void vr41xxspk_enable_irq(void)
++{
++    *VR4181_DMAITMKREG |= (1<<5);
++}
++
++static void vr41xxspk_disable_irq(void)
++{
++    *VR4181_DMAITMKREG &= ~(1<<5);
++}
++
++static void vr41xxspk_clear_irq(void)
++{
++    *VR4181_DMAITRQREG |= (1<<5);
++}
++
++
++static void vr41xxspk_enable_dma(void)
++{
++    *VR4181_AIUDMAMSKREG |= (1<<2);
++}
++
++static void vr41xxspk_disable_dma(void)
++{
++    *VR4181_AIUDMAMSKREG &= ~(1<<2);	// Disable Audio Output DMA   
++}
++
++static void vr41xxmic_enable_irq(void)
++{
++    //    printk("Enable IRQ\n");
++    *VR4181_DMAITMKREG |= (1<<4);
++}
++
++static void vr41xxmic_disable_irq(void)
++{
++    //    printk("Disable IRQ\n");
++    *VR4181_DMAITMKREG &= ~(1<<4);
++}
++
++static void vr41xxmic_clear_irq(void)
++{
++    //    printk("Clear IRQ\n");
++    *VR4181_DMAITRQREG |= (1<<4);
++}
++
++
++static void vr41xxmic_enable_dma(void)
++{
++    //    printk("Enable DMA\n");
++    *VR4181_AIUDMAMSKREG |= (1<<3);
++}
++
++static void vr41xxmic_disable_dma(void)
++{
++    //    printk("Disable DMA\n");
++    *VR4181_AIUDMAMSKREG &= ~(1<<3);	// Disable Audio Output DMA   
++}
++
++static void VR4181_mic_on(void) {
++    /* Need to flip on GPIO here */
++    VR4181_ENABLE_SPEAKER();
++}
++
++static void VR4181_speaker_on(void)
++{
++    /* Speaker power ON via GPIO it's machine dependent */
++	VR4181_ENABLE_SPEAKER();
++	barrier();
++        // printk("Speaker turned on\n");
++}
++
++static void VR4181_disable_sound(void)
++{
++    vr41xxspk_disable_irq();
++    vr41xxspk_clear_irq();
++
++    *VR4181_SEQREG &= ~0x0001;	// AIUSEN := 0
++    barrier();
++    VR4181_DISABLE_SPEAKER();
++    barrier();
++    // printk("Speaker turned off\n");
++
++    *VR4181_SCNTREG &= ~0x8000;	// DAENAIU := 0
++    barrier();
++
++    vr41xxspk_disable_dma();
++}
++
++static void vr41xx_disable_mic(void)
++{
++    vr41xxmic_disable_irq();
++    vr41xxmic_clear_irq();
++    *VR4181_SEQREG &= ~(1<<4);
++}
++
++static inline
++void vr41xxmic_kick_dma(void)
++{
++# ifdef DEBUG
++	printk("kicking DMA mic\n");
++# endif
++
++	*VR4181_MICDMACFGREG |= 1;  // Put it in autoload mode
++	barrier();
++	*VR4181_DMACLTREG &= ~(3 << 12);
++	barrier();
++
++	/* 5 us Vref setup time */
++	*VR4181_DAVREF_SETUP = 5L * vr4181_get_pclk() / 1000000L;
++	barrier();
++
++	/* Enable DMA */
++	vr41xxmic_enable_dma();
++	barrier();
++
++	/* DAC Vref on */
++	*VR4181_MCNTREG |= 1 << 15;
++	barrier();
++
++	/* Wait for Vref stablization */
++	udelay(5);	// 5 usecs from VR4181 docs
++
++	// Speaker Power On
++	VR4181_mic_on();
++	barrier();
++	*VR4181_SEQREG |= 1 << 4;	// AIUMEN := 1  Actually starts a DMA transfer for microphone.
++	barrier();
++}
++
++/* Might as well be inlined.., only called once */
++static inline
++void vr41xxspk_kick_dma(void)
++{
++# ifdef DEBUG
++	printk("kicking DMA spk\n");
++# endif
++
++	*VR4181_SPKDMACFGREG |= 0x0001;  // Put it in autoload mode
++	barrier();
++	*VR4181_DMACLTREG &= ~(3 << 14);   // source address increment mode
++	barrier();
++
++	/* 5 us Vref setup time */
++	*VR4181_DAVREF_SETUP = 5L * vr4181_get_pclk() / 1000000L;
++	barrier();
++
++	/* Enable DMA */
++	vr41xxspk_enable_dma();
++	barrier();
++
++	/* DAC Vref on - DAENAIU */
++	*VR4181_SCNTREG |= 0x8000;
++	barrier();
++
++	/* Wait for Vref stablization */
++	udelay(5);	// 5 usecs from VR4181 docs
++
++	// Speaker Power On
++	VR4181_speaker_on();
++	barrier();
++	*VR4181_SEQREG |= 0x0001;	// AIUSEN := 1  Actually starts a DMA transfer for speaker.
++	barrier();
++}
++
++/*
++ * VR41XX
++ */
++static int __init Vr41xxIrqInit(void)
++{
++	int err;
++	/* turn off DMA for audio channels */
++	vr41xxspk_disable_dma();
++	vr41xxspk_clear_irq();
++	VR4181_disable_sound();
++	/* Register interrupt handler. */
++	if ((err = request_irq(VR4181_IRQ_DMA, VR4181_sq_interrupt, 0,
++			"DMA sound", VR4181_sq_interrupt))) {
++		return(0);
++	}
++	return(1);
++}
++
++#ifdef MODULE
++static void Vr41xxIrqCleanUp(void)
++{
++	/* turn off DMA for audio channels */
++	vr41xxspk_disable_dma();
++	vr41xxspk_disable_irq();
++	vr41xxspk_clear_irq();
++	VR4181_disable_sound();
++	/* release the interrupt */
++	free_irq(VR4181_IRQ_DMA, VR4181_sq_interrupt);
++}
++#endif /* MODULE */
++
++static void Vr41xxSilence(void)
++{
++	/* Disable sound & DMA */
++	VR4181_disable_sound();
++}
++
++
++static char VR4181_first_dma_kick = 1;
++static char VR4181_first_dma_kick_mic=1;
++
++static void Vr41xxInit(void)
++{
++	sound.hard = sound.soft;
++	sound.trans = &transVr41xx;
++	//	printk("vr41xxInitting\n");
++
++    /* Enable AIU clock in CMU */
++	*VR4181_CMUCLKMSK |= 0x002a;
++}
++
++static int Vr41xxSetFormat(int format)
++{
++	int size;
++
++	/* Vr41xx sound DMA supports only 8bit (expanded to 10bit mode */
++	switch (format) {
++	case AFMT_QUERY:
++		return(sound.soft.format);
++	case AFMT_MU_LAW:
++		size = 8;
++		break;
++	case AFMT_A_LAW:
++		size = 8;
++		break;
++	case AFMT_U8:
++		size = 8;
++		break;
++	case AFMT_S8:
++		size = 8;
++		break;
++	case AFMT_S16_BE:
++		size = 16;
++		break;
++	case AFMT_U16_BE:
++		size = 16;
++		break;
++	case AFMT_S16_LE:
++		size = 16;
++		break;
++	case AFMT_U16_LE:
++		size = 16;
++		break;
++	default: /* :-) */
++#ifdef DEBUG
++		printk("default: AFMT_S8\n");
++#endif
++		size = 8;
++		format = AFMT_S8;
++	}
++
++	sound.soft.format = format;
++	sound.soft.size = size;
++	if (sound.minDev == SND_DEV_DSP) {
++		sound.dsp.format = format;
++		sound.dsp.size = sound.soft.size;
++	}
++
++	return(format);
++}
++
++
++#define VR4181_PLAY_LOADED		1
++#define VR4181_PLAY_PLAYING		2
++#define VR4181_PLAY_MASK		3
++
++
++static void VR4181_sq_play_next_frame(int index)
++{
++	u_char *start;
++	u_long size;
++	static int which_dma_channel=0;
++	if(VR4181_first_dma_kick==1)
++	    which_dma_channel=0;
++	if(VR4181_first_dma_kick==2) 
++	    vr41xxspk_set_rate();
++	/* used by Vr41xxPlay() if all doubts whether there really is something
++	 * to be played are already wiped out.
++	 */
++	start = (u_char *)sq_block_address(sq.spk.front);
++	size = (sq.spk.count == index ? sq.spk.rear_size : sq.spk.block_size)>>1;
++	// printk("Playing next frame size %u\n", size);
++	// Setup DMA address
++	// Mask upper 7bit (only lower 32M byte can set to DMA adr reg.)
++	{
++		unsigned long flags;
++
++		save_and_cli(flags);
++
++		if (which_dma_channel == 0) {
++			*VR4181_SPKRRC1REG1 = (u_int) start & 0xffff;
++			*VR4181_SPKRRC1REG2 = (u_int) start >> 16;
++			++which_dma_channel;
++		} else {
++			*VR4181_SPKRRC2REG1 = (u_int) start & 0xffff;
++			*VR4181_SPKRRC2REG2 = (u_int) start >> 16;
++			--which_dma_channel;
++		}
++
++		*VR4181_SPKRCLENREG = size /* - 1 */;
++
++		restore_flags(flags);
++	}
++
++	vr41xxspk_clear_irq();
++	sq.spk.front = (sq.spk.front+1) % sq.spk.max_count;
++	if (VR4181_first_dma_kick==2) {
++		vr41xxspk_kick_dma();
++		VR4181_first_dma_kick = 0;
++	}
++	if(VR4181_first_dma_kick!=1) {
++	    vr41xxspk_enable_dma();
++	    // pj
++	    VR4181_ENABLE_SPEAKER();
++	    sq.spk.active |= VR4181_PLAY_LOADED;
++	} else
++	    VR4181_first_dma_kick++;
++}
++
++static void Vr41xxPlay(void)
++{
++	// fixme
++	int minframes = 1;
++	vr41xxspk_disable_irq();
++	// printk("Vr41xxPlay\n");
++	//	printk("trying to play... %x, %x,AIUMEN: %x, SCNTREG: %x  \n",*VR4181_DVALIDREG, *VR4181_DMARSTREG,*VR4181_SEQREG,*VR4181_SCNTREG);
++	if (sq.spk.active & VR4181_PLAY_LOADED) {
++	    /* There's already a frame loaded */
++	    vr41xxspk_enable_irq();
++		return;
++	}
++
++	if (sq.spk.active & VR4181_PLAY_PLAYING)
++		/* Increase threshold: frame 1 is already being played */
++		minframes = 2;
++
++	if (sq.spk.count < minframes) {
++		/* Nothing to do */
++	    vr41xxspk_enable_irq();
++		return;
++	}
++	if (sq.spk.count <= minframes && sq.spk.rear_size < sq.spk.block_size && !sq.spk.syncing) {
++		/* hmmm, the only existing frame is not
++		 * yet filled and we're not syncing?
++		 */
++		vr41xxspk_enable_irq();
++		return;
++	}
++
++	VR4181_sq_play_next_frame(minframes);
++
++	vr41xxspk_enable_irq();
++}
++
++static void vr41xxspk_handle_irq(void) {
++	int minframes = 1;
++	if (!sq.spk.active) {
++		/* Playing was interrupted and sq_reset() has already cleared
++		 * the sq variables, so better don't do anything here.
++		 */
++		WAKE_UP(sq.spk.sync_queue);
++		vr41xxspk_clear_irq();
++		return;
++	}
++
++	if (sq.spk.active & VR4181_PLAY_PLAYING) {
++		/* We've just finished a frame */
++		sq.spk.count--;
++		if (sq.spk.count < sq.spk.wake_up_threshold)
++			WAKE_UP(sq.action_queue);
++	}
++
++	if (sq.spk.active & VR4181_PLAY_LOADED)
++		/* Increase threshold: frame 1 is already being played */
++		minframes = 2;
++
++	/* Shift the flags */
++	sq.spk.active = (sq.spk.active << 1) & VR4181_PLAY_MASK;
++
++	if (!sq.spk.active) {
++	    /* No frame is playing, disable audio DMA */
++	    vr41xxspk_clear_irq();
++/* 000315 kei -- to avoid kernel hang up when heavy load...
++		vr41xxspk_disable_dma();
++*/
++		vr41xxspk_disable_dma();
++		barrier();
++		VR4181_DISABLE_SPEAKER();
++		barrier();
++ 
++	}
++
++	if (sq.spk.count >= minframes) {
++		/* Try to play the next frame */
++		Vr41xxPlay();
++	}
++
++	if (!sq.spk.active) {
++		/* Nothing to play anymore.
++		   Wake up a process waiting for audio output to drain. */
++		WAKE_UP(sq.spk.sync_queue);
++	}
++}
++
++#define VR4181_RECORDING 1
++#define VR4181_LOAD_REQ 1<<1
++
++static void VR4181_sq_record_next_frame(void) {
++    static int which_dma_channel=0;
++    u_long size;
++    u_char *start;
++    //    printk("In record_next_frame\n");
++    if(VR4181_first_dma_kick_mic) {
++	vr41xxmic_set_rate();
++	which_dma_channel=1;
++	sq.mic.rear=0;
++	*VR4181_MICDEST1REG1=(u_int)((u_char*)sq.mic.buffers[sq.mic.rear]) & 0xffff;
++	*VR4181_MICDEST1REG2=((u_int)((u_char*)sq.mic.buffers[sq.mic.rear])>>16);
++	sq.mic.active++;
++	sq.mic.rear++;
++    }
++    if(which_dma_channel==0) {
++	*VR4181_MICDEST1REG1=(u_int)((u_char*)sq.mic.buffers[sq.mic.rear]) & 0xffff;
++	*VR4181_MICDEST1REG2=((u_int)((u_char*)sq.mic.buffers[sq.mic.rear])>>16);
++	which_dma_channel++;
++    } else {
++	*VR4181_MICDEST2REG1=(u_int)((u_char*)sq.mic.buffers[sq.mic.rear]) &0xffff;
++	*VR4181_MICDEST2REG2=((u_int)((u_char*)sq.mic.buffers[sq.mic.rear]))>>16;
++	which_dma_channel--;
++    }
++    *VR4181_MICRCLENREG=((sq.mic.block_size>>1)-1)&0xfffe;
++    vr41xxspk_clear_irq();
++    if(sq.mic.rear==(sq.mic.max_count-1))
++	sq.mic.rear=0;
++    else
++	sq.mic.rear++;
++    sq.mic.active++;
++    if(VR4181_first_dma_kick_mic) {
++	VR4181_first_dma_kick_mic=0;
++	vr41xxmic_kick_dma();
++    }
++    vr41xxmic_enable_dma();
++    sq.mic.active=VR4181_RECORDING;
++    //	printk("trying to play... %x, %x,AIUMEN: %x, MCNTREG: %x  MICDEST1 %x 2: %x DEST2 %x 2:%x LEN: %x\n",*VR4181_DVALIDREG, *VR4181_DMARSTREG,*VR4181_SEQREG,*VR4181_MCNTREG,*VR4181_MICDEST1REG1,*VR4181_MICDEST1REG2,*VR4181_MICDEST2REG1, *VR4181_MICDEST2REG2,*VR4181_MICRCLENREG);
++}
++
++static void Vr41xxRecord(void) {
++    //	printk("trying to play... %x, %x,AIUMEN: %x, MCNTREG: %x  MICDEST1 %x 2: %x DEST2 %x 2:%x LEN: %x\n",*VR4181_DVALIDREG, *VR4181_DMARSTREG,*VR4181_SEQREG,*VR4181_MCNTREG,*VR4181_MICDEST1REG1,*VR4181_MICDEST1REG2,*VR4181_MICDEST2REG1, *VR4181_MICDEST2REG2,*VR4181_MICRCLENREG);
++
++    vr41xxmic_disable_irq();
++    if(sq.mic.count>=sq.mic.max_count) {
++	//	printk("Doh, over our max count\n");
++	vr41xxmic_disable_dma();
++	sq.mic.active=0;
++	return;
++    }
++    if(sq.mic.active & VR4181_RECORDING) {
++	//	printk("Doh, recording already\n");
++	vr41xxmic_enable_irq();
++	return;
++    }
++    VR4181_sq_record_next_frame();
++    vr41xxmic_enable_irq();
++}
++
++static void vr41xxmic_handle_irq(void) {
++    vr41xxmic_clear_irq();
++    if(!sq.mic.active) {
++	WAKE_UP(sq.mic.sync_queue);
++	return;
++    }
++    if(sq.mic.active & VR4181_RECORDING) {
++	/* Just finished frame */
++	sq.mic.active=VR4181_LOAD_REQ;
++	sq.mic.count++;
++	WAKE_UP(sq.mic.sync_queue);
++    }
++    Vr41xxRecord();
++}
++
++static void VR4181_sq_interrupt(int irq, void *dummy, struct pt_regs *fp)
++{
++  // printk("INTERRUPT!!! :-)\n");
++	if(VR4181_irq_status()&0x02) {;
++	    vr41xxspk_handle_irq();
++	}
++	if(VR4181_irq_status()&0x01) {
++	    vr41xxmic_handle_irq();
++	}
++}
++
++static void chk_dma_xfer_mic(void) {
++    Vr41xxRecord();
++}
++
++/*** Machine definitions *****************************************************/
++
++static MACHINE machVr41xx = {
++	DMASND_VR41XX,		// int type
++	NULL,				// void *dma_alloc(uint, int)
++	NULL,				// void  dma_free(void *, uint)
++	Vr41xxIrqInit,		// void  irqinit(void)
++#ifdef MODULE
++	Vr41xxIrqCleanUp,	// void  irqcleanup(void)
++#endif /* MODULE */
++	Vr41xxInit,			// void  init(void)
++	Vr41xxSilence,		// void  silence(void)
++	Vr41xxSetFormat,	// int   setFormat(int)
++	NULL,				// int   setVolume(int)
++	NULL,				// int   setBass(int)
++	NULL,				// int   setTreble(int)
++	NULL,				// int   setGain(int)
++	Vr41xxPlay			// void  play(void)
++};
++
++
++/*** Mid level stuff *********************************************************/
++
++
++static void sound_silence(void)
++{
++	/* update hardware settings one more */
++    (*sound.mach.init)();
++    //    printk("Done initiing sound again\n");
++    (*sound.mach.silence)();
++    //    printk("Done making silence?\n");
++}
++
++
++static void sound_init(void)
++{
++	(*sound.mach.init)();
++}
++
++
++static int sound_set_format(int format)
++{
++	return(*sound.mach.setFormat)(format);
++}
++
++
++static int sound_set_speed(int speed)
++{
++	if (speed < 0)
++		return(sound.soft.speed);
++
++	sound.soft.speed = speed;
++	(*sound.mach.init)();
++	if (sound.minDev == SND_DEV_DSP)
++		sound.dsp.speed = sound.soft.speed;
++
++	return(sound.soft.speed);
++}
++
++
++static int sound_set_stereo(int stereo)
++{
++	if (stereo < 0)
++		return(sound.soft.stereo);
++	stereo = !!stereo;    /* should be 0 or 1 now */
++
++	sound.soft.stereo = stereo;
++	if (sound.minDev == SND_DEV_DSP)
++		sound.dsp.stereo = stereo;
++	(*sound.mach.init)();
++
++	return(stereo);
++}
++
++#if 0
++//Fix Me
++static int sound_set_volume(int volume)
++{
++	return(*sound.mach.setVolume)(volume);
++}
++#endif
++
++
++static ssize_t sound_copy_translate(const u_char *userPtr,
++				    size_t userCount,
++				    u_char frame[], ssize_t *frameUsed,
++				    ssize_t frameLeft)
++{
++	ssize_t
++		(*ct_func)(const u_char *, size_t, u_char *, ssize_t *, ssize_t) = NULL;
++
++	switch (sound.soft.format) {
++	case AFMT_MU_LAW:
++		ct_func = sound.trans->ct_ulaw;
++		break;
++	case AFMT_A_LAW:
++		ct_func = sound.trans->ct_alaw;
++		break;
++	case AFMT_S8:
++		ct_func = sound.trans->ct_s8;
++		break;
++	case AFMT_U8:
++		ct_func = sound.trans->ct_u8;
++		break;
++	case AFMT_S16_BE:
++		ct_func = sound.trans->ct_s16be;
++		break;
++	case AFMT_U16_BE:
++		ct_func = sound.trans->ct_u16be;
++		break;
++	case AFMT_S16_LE:
++		ct_func = sound.trans->ct_s16le;
++		break;
++	case AFMT_U16_LE:
++		ct_func = sound.trans->ct_u16le;
++		break;
++	}
++	if (ct_func)
++		return ct_func(userPtr, userCount, frame, frameUsed, frameLeft);
++	else
++		return 0;
++}
++
++
++/*
++ * /dev/mixer abstraction
++ */
++
++
++#define RECLEVEL_VOXWARE_TO_GAIN(v) \
++	((v) < 0 ? 0 : (v) > 100 ? 15 : (v) * 3 / 20)
++#define RECLEVEL_GAIN_TO_VOXWARE(v) (((v) * 20 + 2) / 3)
++
++
++static int mixer_open(struct inode *inode, struct file *file)
++{
++	MOD_INC_USE_COUNT;
++	mixer.busy = 1;
++	return 0;
++}
++
++
++static int mixer_release(struct inode *inode, struct file *file)
++{
++	mixer.busy = 0;
++	MOD_DEC_USE_COUNT;
++	VR4181_disable_sound();
++	return 0;
++}
++
++
++static int mixer_ioctl(struct inode *inode, struct file *file, u_int cmd,
++		       u_long arg)
++{
++	// int data;
++	if (_SIOC_DIR(cmd) & _SIOC_WRITE)
++	    mixer.modify_counter++;
++	if (cmd == OSS_GETVERSION)
++	    return IOCTL_OUT(arg, SOUND_VERSION);
++	switch (sound.mach.type) {
++	case DMASND_VR41XX:
++		switch (cmd) {
++		case SOUND_MIXER_INFO: {
++		    mixer_info info;
++		    strncpy(info.id, "VR41XX", sizeof(info.id));
++		    strncpy(info.name, "VR41XX", sizeof(info.name));
++		    info.name[sizeof(info.name)-1] = 0;
++		    info.modify_counter = mixer.modify_counter;
++		    if (copy_to_user((int *)arg, &info, sizeof(info)))
++			    return -EFAULT;
++		    return 0;
++		}
++		case SOUND_MIXER_READ_DEVMASK:
++			return IOCTL_OUT(arg, 0);	// fixme
++		case SOUND_MIXER_READ_RECMASK:
++			return IOCTL_OUT(arg, 0);
++		case SOUND_MIXER_READ_STEREODEVS:
++			return IOCTL_OUT(arg, 0);
++		case SOUND_MIXER_READ_VOLUME:
++			return IOCTL_OUT(arg, 0);	// fixme
++		case SOUND_MIXER_WRITE_VOLUME:
++			return IOCTL_OUT(arg, 0);	// fixme
++		case SOUND_MIXER_READ_TREBLE:
++			return IOCTL_OUT(arg, 0);	// fixme
++		case SOUND_MIXER_WRITE_TREBLE:
++			return IOCTL_OUT(arg, 0);	// fixme
++		}
++		break;
++	}
++
++	return -EINVAL;
++}
++
++
++static struct file_operations mixer_fops =
++{
++	llseek:  sound_lseek,
++	ioctl:   mixer_ioctl,
++	open:    mixer_open,
++	release: mixer_release
++};
++
++static void __init mixer_init(void)
++{
++#ifndef MODULE
++	int mixer_unit;
++#endif
++	mixer_unit = register_sound_mixer(&mixer_fops, -1);
++	if (mixer_unit < 0)
++		return;
++
++	mixer.busy = 0;
++	sound.treble = 0;
++	sound.bass = 0;
++	switch (sound.mach.type) {
++    case DMASND_VR41XX:
++		sound.volume_left = 64;
++		sound.volume_right = 64;
++		// nothing to do ?? fixme
++		break;
++	}
++}
++
++
++/*
++ * Sound queue stuff, the heart of the driver
++ */
++
++
++static int sq_allocate_buffers(struct sound_buffer * sb)
++{
++	int i;
++	if (sb->buffers)
++		return 0;
++	sb->buffers = kmalloc (numBufs * sizeof(char *), GFP_DMA);
++	if (!sb->buffers)
++		return -ENOMEM;
++	sb->seg0_buffers = kmalloc(numBufs * sizeof(char *), GFP_DMA);
++	if (!sb->seg0_buffers) {
++		kfree(sb->buffers);
++		sb->buffers = 0;
++		return -ENOMEM;
++	}
++
++	for (i = 0; i < numBufs; i++) {
++	    sb->seg0_buffers[i]=kmalloc(bufSize<<10,GFP_DMA);
++	    if (sb->seg0_buffers[i] == NULL) {
++		// Fail to allocate
++		while (i--)
++		    kfree(sb->seg0_buffers[i]);
++		kfree(sb->buffers);
++		kfree(sb->seg0_buffers);
++		sb->buffers = sb->seg0_buffers = 0;
++		return -ENOMEM;
++	    } else {
++		// Map to KSEG1
++	        sb->buffers[i] = (char *) KSEG1ADDR(sb->seg0_buffers[i]);
++	    }
++
++	}
++	return 0;
++}
++
++
++static void sq_release_buffers(struct sound_buffer* sb)
++{
++	int i;
++	if (sb->seg0_buffers) {
++	    for (i = 0; i < numBufs; i++) {
++			kfree(sb->seg0_buffers[i]);
++
++	    }
++	    kfree (sb->buffers);
++	    kfree (sb->seg0_buffers);
++	    sb->buffers=sb->seg0_buffers = 0;
++	}
++}
++
++static void sq_setup(int numBufs, int bufSize, struct sound_buffer* sb)
++{
++	sb->max_count = numBufs;
++	sb->max_active = numBufs;
++	sb->block_size = bufSize;
++
++	sb->front = sb->count = 0;
++	sb->rear = -1;
++	sb->syncing = 0;
++	sb->active = 0;
++	sb->wake_up_threshold = numBufs / 4;
++}
++
++
++
++static void sq_play(void)
++{
++	(*sound.mach.play)();
++}
++
++
++/* ++TeSche: radically changed this one too */
++
++static ssize_t sq_write(struct file *file, const char *src, size_t uLeft,
++			loff_t *ppos)
++{
++	ssize_t uWritten = 0;
++	u_char *dest;
++	ssize_t uUsed, bUsed, bLeft;
++	//	printk("sq_write\n");
++	/* ++TeSche: Is something like this necessary?
++	 * Hey, that's an honest question! Or does any other part of the
++	 * filesystem already checks this situation? I really don't know.
++	 */
++	if (uLeft == 0)
++		return 0;
++
++	/* The interrupt doesn't start to play the last, incomplete frame.
++	 * Thus we can append to it without disabling the interrupts! (Note
++	 * also that sq.spk.rear isn't affected by the interrupt.)
++	 */
++	if (sq.spk.count > 0 && (bLeft = sq.spk.block_size-sq.spk.rear_size) > 0) {
++		dest = sq_block_address(sq.spk.rear);
++		bUsed = sq.spk.rear_size;
++		uUsed = sound_copy_translate(src, uLeft, dest, &bUsed, bLeft);
++		if (uUsed <= 0)
++			return uUsed;
++		src += uUsed;
++		uWritten += uUsed;
++		uLeft -= uUsed;
++		sq.spk.rear_size = bUsed;
++	}
++
++	do {
++		while (sq.spk.count == sq.spk.max_active) {
++			/* All frames are in use.  -- kei */
++			sq_play();
++			if (NON_BLOCKING(sq.spk.open_mode))
++				return uWritten > 0 ? uWritten : -EAGAIN;
++			SLEEP(sq.action_queue, ONE_SECOND);
++			if (SIGNAL_RECEIVED)
++				return uWritten > 0 ? uWritten : -EINTR;
++		}
++
++		/* Here, we can avoid disabling the interrupt by first
++		 * copying and translating the data, and then updating
++		 * the sq variables. Until this is done, the interrupt
++		 * won't see the new frame and we can work on it
++		 * undisturbed.
++		 */
++
++		dest = sq_block_address((sq.spk.rear+1) % sq.spk.max_count);
++		bUsed = 0;
++		bLeft = sq.spk.block_size;
++		uUsed = sound_copy_translate(src, uLeft, dest, &bUsed, bLeft);
++		if (uUsed <= 0)
++			break;
++		src += uUsed;
++		uWritten += uUsed;
++		uLeft -= uUsed;
++		if (bUsed) {
++			// Need to be atomic -- kei
++		    unsigned long flags;
++		    save_and_cli(flags);
++			sq.spk.rear = (sq.spk.rear+1) % sq.spk.max_count;
++			sq.spk.rear_size = bUsed;
++			sq.spk.count++;
++			restore_flags(flags);
++		}
++	} while (bUsed);   /* uUsed may have been 0 */
++	sq_play();
++	return uUsed < 0? uUsed: uWritten;
++}
++
++static ssize_t sq_read(struct file* file, char* buffer, size_t count, loff_t *ppos)
++{
++    int ret = 0;
++    //    printk("In sq_read\n");
++    while(count >0) {
++	int sending=count>bufSize?bufSize:count;
++	while(sq.mic.count<=0) {
++	    chk_dma_xfer_mic();
++	    SLEEP(sq.mic.sync_queue,ONE_SECOND);
++	}
++	if(copy_to_user(buffer,sq.mic.buffers[sq.mic.front],sending))
++	    return ret ? ret: -EFAULT;
++	sq.mic.count--;
++	if(sq.mic.front==(sq.mic.max_count-1)) 
++	    sq.mic.front=0;
++	else
++	    sq.mic.front++;
++	count-=sending;
++	ret+=sending;
++	buffer+=sending;
++    }
++    return ret;
++}
++
++/***********/
++
++
++static int sq_open(struct inode *inode, struct file *file)
++{
++	int rc = 0;
++	//	printk("sq_open\n");
++	MOD_INC_USE_COUNT;
++	if (file->f_mode & FMODE_WRITE) {
++		if (sq.busy & VR4181_SPK_BUSY) {
++			rc = -EBUSY;
++			if (NON_BLOCKING(file->f_flags))
++				goto err_out;
++			rc = -EINTR;
++			while (sq.busy & VR4181_SPK_BUSY) {
++				SLEEP(sq.write_open_queue, ONE_SECOND);
++				if (SIGNAL_RECEIVED)
++					goto err_out;
++			}
++		}
++		sq.busy |= VR4181_SPK_BUSY; /* Let's play spot-the-race-condition */
++
++		if (sq_allocate_buffers(&sq.spk)) goto err_out_nobusy;
++
++		sq_setup(numBufs, bufSize<<10, &sq.spk);
++		sq.spk.open_mode = file->f_mode;
++		VR4181_first_dma_kick=1;
++	}
++	if (file->f_mode & FMODE_READ) {
++		if (sq.busy & VR4181_MIC_BUSY) {
++			rc = -EBUSY;
++			if (NON_BLOCKING(file->f_flags))
++				goto write_relmem_err_out;
++			rc = -EINTR;
++			while (sq.busy & VR4181_SPK_BUSY) {
++				SLEEP(sq.read_open_queue, ONE_SECOND);
++				if (SIGNAL_RECEIVED)
++					goto write_relmem_err_out;
++			}
++		}
++		sq.busy |= VR4181_MIC_BUSY; /* Let's play spot-the-race-condition */
++		if (sq_allocate_buffers(&sq.mic)) goto write_relmem_err_out_rm;
++
++		sq_setup(numBufs, bufSize<<10, &sq.mic);
++		sq.mic.open_mode = file->f_mode;
++		VR4181_first_dma_kick_mic=1;
++	}
++	sound.minDev = MINOR(inode->i_rdev) & 0x0f;
++	sound.soft = sound.dsp;
++	sound.hard = sound.dsp;
++	if(file->f_mode & FMODE_WRITE)
++	    sound_init();
++	if ((MINOR(inode->i_rdev) & 0x0f) == SND_DEV_AUDIO) {
++		sound_set_speed(8000);
++		sound_set_stereo(0);
++		sound_set_format(AFMT_MU_LAW);
++	}
++
++	return 0;
++ write_relmem_err_out_rm:
++	if(file->f_mode & FMODE_READ) {
++	    sq.busy &=~(VR4181_MIC_BUSY);
++	    WAKE_UP(sq.read_open_queue);
++	}
++ write_relmem_err_out:
++	if(file->f_mode & FMODE_WRITE) {
++	    sq_release_buffers(&sq.spk);
++	}
++
++ err_out_nobusy:
++	if (file->f_mode & FMODE_WRITE) {
++	    sq.busy &= ~(VR4181_SPK_BUSY);
++	    WAKE_UP(sq.write_open_queue);
++	}
++ err_out:
++	MOD_DEC_USE_COUNT;
++	return rc;
++}
++
++
++static void sq_reset(void)
++{
++	sound_silence();
++	sq.spk.active = 0;
++	sq.spk.count = 0;
++	sq.spk.front = (sq.spk.rear+1) % sq.spk.max_count;
++}
++
++
++static int sq_fsync(struct file *filp, struct dentry *dentry)
++{
++	int rc = 0;
++	if(filp->f_mode & FMODE_WRITE) {
++	    sq.spk.syncing = 1;
++	    sq_play();	/* there may be an incomplete frame waiting */
++
++	    while (sq.spk.active) {
++		SLEEP(sq.spk.sync_queue, ONE_SECOND);
++		if (SIGNAL_RECEIVED) {
++		    /* While waiting for audio output to drain, an
++		     * interrupt occurred.  Stop audio output immediately
++		     * and clear the queue. */
++		    sq_reset();
++		    rc = -EINTR;
++		    break;
++		}
++	    }
++	}
++
++	sq.spk.syncing = 0;
++	return rc;
++}
++
++static int sq_release(struct inode *inode, struct file *file)
++{
++	int rc = 0;
++	if (sq.busy)
++		rc = sq_fsync(file, file->f_dentry);
++	sound.soft = sound.dsp;
++	sound.hard = sound.dsp;
++	if(file->f_mode & FMODE_WRITE) {
++	    sound_silence();
++	    sq_release_buffers(&sq.spk);
++	}
++	MOD_DEC_USE_COUNT;
++
++	/* There is probably a DOS atack here. They change the mode flag. */
++	/* XXX add check here */
++	if (file->f_mode & FMODE_WRITE) {
++		sq.busy &=~(VR4181_SPK_BUSY);
++		WAKE_UP(sq.write_open_queue);
++	}
++	if(file->f_mode & FMODE_READ) {
++	    sq.busy &=~(VR4181_MIC_BUSY);
++	    WAKE_UP(sq.read_open_queue);
++	}
++
++	/* Wake up a process waiting for the queue being released.
++	 * Note: There may be several processes waiting for a call
++	 * to open() returning. */
++	return rc;
++}
++
++
++static int sq_ioctl(struct inode *inode, struct file *file, u_int cmd,
++		    u_long arg)
++{
++	u_long fmt;
++	int data;
++	int size;
++
++	switch (cmd) {
++	case SNDCTL_DSP_RESET:
++		sq_reset();
++		return 0;
++	case SNDCTL_DSP_POST:
++	case SNDCTL_DSP_SYNC:
++		return sq_fsync(file, file->f_dentry);
++
++		/* ++TeSche: before changing any of these it's
++		 * probably wise to wait until sound playing has
++		 * settled down. */
++	case SNDCTL_DSP_SPEED:
++		sq_fsync(file, file->f_dentry);
++		IOCTL_IN(arg, data);
++		return IOCTL_OUT(arg, sound_set_speed(data));
++	case SNDCTL_DSP_STEREO:
++		sq_fsync(file, file->f_dentry);
++		IOCTL_IN(arg, data);
++		return IOCTL_OUT(arg, sound_set_stereo(data));
++	case SOUND_PCM_WRITE_CHANNELS:
++		sq_fsync(file, file->f_dentry);
++		IOCTL_IN(arg, data);
++		return IOCTL_OUT(arg, sound_set_stereo(data-1)+1);
++	case SNDCTL_DSP_SETFMT:
++		sq_fsync(file, file->f_dentry);
++		IOCTL_IN(arg, data);
++		return IOCTL_OUT(arg, sound_set_format(data));
++	case SNDCTL_DSP_GETFMTS:
++		fmt = 0;
++		if (sound.trans) {
++			if (sound.trans->ct_ulaw)
++				fmt |= AFMT_MU_LAW;
++			if (sound.trans->ct_alaw)
++				fmt |= AFMT_A_LAW;
++			if (sound.trans->ct_s8)
++				fmt |= AFMT_S8;
++			if (sound.trans->ct_u8)
++				fmt |= AFMT_U8;
++			if (sound.trans->ct_s16be)
++				fmt |= AFMT_S16_BE;
++			if (sound.trans->ct_u16be)
++				fmt |= AFMT_U16_BE;
++			if (sound.trans->ct_s16le)
++				fmt |= AFMT_S16_LE;
++			if (sound.trans->ct_u16le)
++				fmt |= AFMT_U16_LE;
++		}
++		return IOCTL_OUT(arg, fmt);
++	case SNDCTL_DSP_GETBLKSIZE:
++		size = sq.spk.block_size
++			* sound.soft.size * (sound.soft.stereo + 1)
++			/ (sound.hard.size * (sound.hard.stereo + 1));
++		return IOCTL_OUT(arg, size);
++	case SNDCTL_DSP_SUBDIVIDE:
++		break;
++	case SNDCTL_DSP_SETFRAGMENT:
++		if (sq.spk.count || sq.spk.active || sq.spk.syncing)
++			return -EINVAL;
++		// Can't set fragment on VR41xx Sound driver
++		return -EINVAL;
++
++	default:
++		return mixer_ioctl(inode, file, cmd, arg);
++	}
++	return -EINVAL;
++}
++
++
++
++static struct file_operations sq_fops =
++{
++	llseek:  sound_lseek,
++	write:   sq_write,
++	ioctl:   sq_ioctl,
++	open:    sq_open,
++	release: sq_release,
++	read:    sq_read
++};
++
++
++static void __init sq_init(void)
++{
++#ifndef MODULE
++	int sq_unit;
++#endif
++	//	printk("In sq_init\n");
++	sq_unit = register_sound_dsp(&sq_fops, -1);
++	if (sq_unit < 0)
++		return;
++	//	printk("DSP registered\n");
++	init_waitqueue_head(&sq.action_queue);
++	init_waitqueue_head(&sq.write_open_queue);
++	init_waitqueue_head(&sq.read_open_queue);
++	init_waitqueue_head(&sq.spk.sync_queue);
++	init_waitqueue_head(&sq.mic.sync_queue);
++	//	printk("Waitqueue's initted\n");
++	sq.busy = 0;
++
++	/* whatever you like as startup mode for /dev/dsp,
++	 * (/dev/audio hasn't got a startup mode). note that
++	 * once changed a new open() will *not* restore these!
++	 */
++	sound.dsp.format = AFMT_U8;
++	sound.dsp.stereo = 0;
++	sound.dsp.size = 8;
++	//	printk("Formats set\n");
++	/* set minimum rate possible without expanding */
++	switch (sound.mach.type) {
++	case DMASND_VR41XX:
++		sound.dsp.speed = 8000;
++		break;
++	}
++	//	printk("Minimum rate set\n");
++	/* before the first open to /dev/dsp this wouldn't be set */
++	sound.soft = sound.dsp;
++	sound.hard = sound.dsp;
++	//	printk("Sounds hooked\n");
++	sound_silence();
++	//	printk("Silence has sounded\n");
++}
++
++/*
++ * /dev/sndstat
++ */
++
++
++/* state.buf should not overflow! */
++
++static int state_open(struct inode *inode, struct file *file)
++{
++	char *buffer = state.buf, *mach = "";
++	int len = 0;
++
++	if (state.busy)
++		return -EBUSY;
++
++	MOD_INC_USE_COUNT;
++	state.ptr = 0;
++	state.busy = 1;
++
++	switch (sound.mach.type) {
++	case DMASND_VR41XX:
++		mach = "Vr41xx ";
++		break;
++	}
++	len += sprintf(buffer+len, "%sDMA sound driver:\n", mach);
++
++	len += sprintf(buffer+len, "\tsound.format = 0x%x", sound.soft.format);
++	switch (sound.soft.format) {
++	case AFMT_MU_LAW:
++		len += sprintf(buffer+len, " (mu-law)");
++		break;
++	case AFMT_A_LAW:
++		len += sprintf(buffer+len, " (A-law)");
++		break;
++	case AFMT_U8:
++		len += sprintf(buffer+len, " (unsigned 8 bit)");
++		break;
++	case AFMT_S8:
++		len += sprintf(buffer+len, " (signed 8 bit)");
++		break;
++	case AFMT_S16_BE:
++		len += sprintf(buffer+len, " (signed 16 bit big)");
++		break;
++	case AFMT_U16_BE:
++		len += sprintf(buffer+len, " (unsigned 16 bit big)");
++		break;
++	case AFMT_S16_LE:
++		len += sprintf(buffer+len, " (signed 16 bit little)");
++		break;
++	case AFMT_U16_LE:
++		len += sprintf(buffer+len, " (unsigned 16 bit little)");
++		break;
++	}
++	len += sprintf(buffer+len, "\n");
++	len += sprintf(buffer+len, "\tsound.speed = %dHz (phys. %dHz)\n",
++		       sound.soft.speed, sound.hard.speed);
++	len += sprintf(buffer+len, "\tsound.stereo = 0x%x (%s)\n",
++		       sound.soft.stereo, sound.soft.stereo ? "stereo" : "mono");
++	switch (sound.mach.type) {
++	}
++	len += sprintf(buffer+len, "\tsq.spk.block_size = %d sq.spk.max_count = %d"
++		       " sq.spk.max_active = %d\n",
++		       sq.spk.block_size, sq.spk.max_count, sq.spk.max_active);
++	len += sprintf(buffer+len, "\tsq.spk.count = %d sq.spk.rear_size = %d\n", sq.spk.count,
++		       sq.spk.rear_size);
++	len += sprintf(buffer+len, "\tsq.spk.active = %d sq.spk.syncing = %d\n",
++		       sq.spk.active, sq.spk.syncing);
++	state.len = len;
++	return 0;
++}
++
++
++static int state_release(struct inode *inode, struct file *file)
++{
++	state.busy = 0;
++	MOD_DEC_USE_COUNT;
++	return 0;
++}
++
++
++static ssize_t state_read(struct file *file, char *buf, size_t count,
++			  loff_t *ppos)
++{
++	int n = state.len - state.ptr;
++	//	printk("State read\n");
++	if (n > count)
++		n = count;
++	if (n <= 0)
++		return 0;
++	if (copy_to_user(buf, &state.buf[state.ptr], n))
++		return -EFAULT;
++	state.ptr += n;
++	return n;
++}
++
++
++static struct file_operations state_fops =
++{
++	llseek:  sound_lseek,
++	read:    state_read,
++	open:    state_open,
++	release: state_release
++};
++
++
++static void __init state_init(void)
++{
++#ifndef MODULE
++	int state_unit;
++#endif
++	state_unit = register_sound_special(&state_fops, SND_DEV_STATUS);
++	if (state_unit < 0)
++		return;
++	state.busy = 0;
++}
++
++
++/*** Common stuff ********************************************************/
++
++static loff_t sound_lseek(struct file *file, long long offset, int orig)
++{
++	return -ESPIPE;
++}
++
++static void VR4181_ENABLE_SPEAKER(void)
++{
++
++}
++
++static void VR4181_DISABLE_SPEAKER(void)
++{
++
++}
++
++/*** Config & Setup **********************************************************/
++
++
++static int __init VR4181_init(void)
++{
++	int has_sound = 0;
++	sound.mach = machVr41xx;
++	has_sound = 1;
++	// printk("Initializing Sound\n");
++	if (!has_sound)
++		return -ENODEV;
++
++	/* Set up sound queue, /dev/audio and /dev/dsp. */
++
++	/* Set default settings. */
++
++	sq_init();
++	//	printk("sq_init done\n");
++	/* Set up /dev/sndstat. */
++	state_init();
++	//	printk("State inited\n");
++	/* Set up /dev/mixer. */
++	mixer_init();
++	//	printk("Mixer inited\n");
++	if (!sound.mach.irqinit()) {
++		printk(KERN_ERR "DMA sound driver: Interrupt initialization failed\n");
++		return -ENODEV;
++	}
++#ifdef MODULE
++	irq_installed = 1;
++#endif
++
++	printk(KERN_INFO "DMA sound driver installed, using %d buffers of %dk.\n",
++	       numBufs, bufSize);
++	//	printk("Done initing sound\n");
++	return 0;
++}
++
++module_init(VR4181_init);
++
++#ifdef MODULE
++
++static void __exit VR4181_cleanup(void)
++{
++	if (irq_installed) {
++		sound_silence();
++		//		printk("Cleanup?\n");
++		sound.mach.irqcleanup();
++	}
++
++	sq_release_buffers(&sq.spk);
++
++	if (mixer_unit >= 0)
++		unregister_sound_mixer(mixer_unit);
++	if (state_unit >= 0)
++		unregister_sound_special(state_unit);
++	if (sq_unit >= 0)
++		unregister_sound_dsp(sq_unit);
++}
++
++module_exit(VR4181_cleanup);
++
++#else /* !MODULE */
++
++static int __init dmasound_setup(char *str)
++{
++	int ints[6];
++
++	str = get_options(str, ARRAY_SIZE(ints), ints);
++
++	/* check the bootstrap parameter for "dmasound=" */
++
++	switch (ints[0]) {
++	case 3:
++		if ((ints[3] < 0) || (ints[3] > MAX_CATCH_RADIUS))
++			printk("dmasound_setup: illegal catch radius, using default = %d\n", catchRadius);
++		else
++			catchRadius = ints[3];
++		/* fall through */
++	case 2:
++		if (ints[1] < MIN_BUFFERS)
++			printk("dmasound_setup: illegal number of buffers, using default = %d\n", numBufs);
++		else
++			numBufs = ints[1];
++		if (ints[2] < MIN_BUFSIZE || ints[2] > MAX_BUFSIZE)
++			printk("dmasound_setup: illegal buffer size, using default = %d\n", bufSize);
++		else
++			bufSize = ints[2];
++		break;
++	case 0:
++		break;
++	default:
++		printk("dmasound_setup: illegal number of arguments\n");
++		return 0;
++	}
++	return 1;
++}
++
++__setup("dmasound=", dmasound_setup);
++
++#endif /* MODULE */
++
++/* vim:set ts=4:set sw=4: */
+diff -uNr --exclude=CVS linux-2.4.21.orig/include/asm-mips/io.h linux-2.4.21/include/asm-mips/io.h
+--- linux-2.4.21.orig/include/asm-mips/io.h	2003-02-25 14:03:12.000000000 -0800
++++ linux-2.4.21/include/asm-mips/io.h	2003-04-17 08:25:48.000000000 -0700
+@@ -332,12 +332,19 @@
+ 	SLOW_DOWN_IO;							\
+ } while(0)
+ 
+-#define outw_p(val,port)						\
+-do {									\
+-	*(volatile u16 *)(mips_io_port_base + __swizzle_addr_w(port)) =	\
+-		__ioswab16(val);					\
+-	SLOW_DOWN_IO;							\
+-} while(0)
++//steve s. hacked this for hermes
++static inline void outw_p(unsigned short val, unsigned long port)
++{
++   *(volatile u16 *)(mips_io_port_base + __swizzle_addr_w(port)) = __ioswab16(val);
++   SLOW_DOWN_IO;
++}
++
++//#define outw_p(val,port)						\
++//do {									\
++//	*(volatile u16 *)(mips_io_port_base + __swizzle_addr_w(port)) =	\
++//		__ioswab16(val);					\
++//	SLOW_DOWN_IO;							\
++//} while(0)
+ 
+ #define outl_p(val,port)						\
+ do {									\
+diff -uNr --exclude=CVS linux-2.4.21.orig/include/asm-mips/system.h linux-2.4.21/include/asm-mips/system.h
+--- linux-2.4.21.orig/include/asm-mips/system.h	2003-02-25 14:03:12.000000000 -0800
++++ linux-2.4.21/include/asm-mips/system.h	2003-04-17 08:10:56.000000000 -0700
+@@ -12,6 +12,9 @@
+  *
+  * Kevin D. Kissell, kevink@mips.org and Carsten Langgaard, carstenl@mips.com
+  * Copyright (C) 2000 MIPS Technologies, Inc.
++ * 
++ * rthal modifications by: Steven Seeger (sseeger@stellartec.com) 16Apr03 (taxes done)
++ * 
+  */
+ #ifndef _ASM_SYSTEM_H
+ #define _ASM_SYSTEM_H
+@@ -25,7 +28,11 @@
+ #include <asm/ptrace.h>
+ 
+ __asm__ (
++#ifdef CONFIG_RTHAL       
++	".macro\t__hard_sti\n\t"
++#else
+ 	".macro\t__sti\n\t"
++#endif	 
+ 	".set\tpush\n\t"
+ 	".set\treorder\n\t"
+ 	".set\tnoat\n\t"
+@@ -37,10 +44,18 @@
+ 	".endm");
+ 
+ extern __inline__ void
+-__sti(void)
++#ifdef CONFIG_RTHAL
++  hard_sti(void)
++#else
++  __sti(void)
++#endif      
+ {
+ 	__asm__ __volatile__(
++#ifndef CONFIG_RTHAL
+ 		"__sti"
++#else
++		"__hard_sti"
++#endif			     
+ 		: /* no outputs */
+ 		: /* no inputs */
+ 		: "memory");
+@@ -54,7 +69,11 @@
+  * no nops at all.
+  */
+ __asm__ (
++#ifdef CONFIG_RTHAL	 
++	".macro\t__hard_cli\n\t"
++#else
+ 	".macro\t__cli\n\t"
++#endif	 
+ 	".set\tpush\n\t"
+ 	".set\tnoat\n\t"
+ 	"mfc0\t$1,$12\n\t"
+@@ -69,15 +88,24 @@
+ 	".endm");
+ 
+ extern __inline__ void
+-__cli(void)
++#ifdef CONFIG_RTHAL
++  hard_cli(void)
++#else
++    __cli(void)
++#endif      
+ {
+ 	__asm__ __volatile__(
++#ifndef CONFIG_RTHAL			     
+ 		"__cli"
++#else
++		"__hard_cli"
++#endif			     
+ 		: /* no outputs */
+ 		: /* no inputs */
+ 		: "memory");
+ }
+ 
++#ifndef CONFIG_RTHAL
+ __asm__ (
+ 	".macro\t__save_flags flags\n\t"
+ 	".set\tpush\n\t"
+@@ -104,7 +132,7 @@
+ 	"sll\t$0, $0, 1\t\t\t# nop\n\t"
+ 	"sll\t$0, $0, 1\t\t\t# nop\n\t"
+ 	"sll\t$0, $0, 1\t\t\t# nop\n\t"
+-	".set\tpop\n\t"
++        ".set\tpop\n\t"
+ 	".endm");
+ 
+ #define __save_and_cli(x)						\
+@@ -114,26 +142,47 @@
+ 	: /* no inputs */						\
+ 	: "memory")
+ 
+-__asm__ (
+-	".macro\t__save_and_sti result\n\t"
+-	".set\tpush\n\t"
+-	".set\treorder\n\t"
+-	".set\tnoat\n\t"
+-	"mfc0\t\\result, $12\n\t"
+-	"ori\t$1, \\result, 1\n\t"
+-	".set\tnoreorder\n\t"
+-	"mtc0\t$1, $12\n\t"
+-	".set\tpop\n\t"
+-	".endm");
++#else //!CONFIG_RTHAL
+ 
+-#define __save_and_sti(x)						\
+-__asm__ __volatile__(							\
+-	"__save_and_cli\t%0"						\
+-	: "=r" (x)							\
+-	: /* no inputs */						\
+-	: "memory")
++#define hard_save_flags(x) do { __hard_save_flags(&(x)); } while(0)  
++#define hard_save_flags_and_cli(x) do { __hard_save_flags_and_cli(&(x)); } while(0)
++
++extern __inline__ void __hard_save_flags(unsigned long *x)
++{
++   __asm__ __volatile__(
++			".set\tpush\n\t"
++			".set\treorder\n\t"
++			"mfc0\t%0,$12\n\t"
++			".set\tpop\n\t"
++			: "=r" (*x));
++}
++
++extern __inline__ void __hard_save_flags_and_cli(unsigned long *x)
++{
++   __asm__ __volatile__(
++			".set\tpush\n\t"
++			".set\treorder\n\t"
++			".set\tnoat\n\t"
++			"mfc0\t%0,$12\n\t"
++			"ori\t$1,%0,1\n\t"
++			"xori\t$1,1\n\t"
++			".set\tnoreorder\n\t"
++			"mtc0\t$1,$12\n\t"
++			"nop\n\t"
++			"nop\n\t"
++			"nop\n\t"
++			".set\tpop\n\t"
++			: "=r" (*x)
++			: /* no inputs */
++			: "$1", "memory");
++}
++#endif //CONFIG_RTHAL
+ 
++#ifndef CONFIG_RTHAL
+ __asm__(".macro\t__restore_flags flags\n\t"
++#else
++__asm__(".macro\t__hard_restore_flags flags\n\t"
++#endif	
+ 	".set\tnoreorder\n\t"
+ 	".set\tnoat\n\t"
+ 	"mfc0\t$1, $12\n\t"
+@@ -149,33 +198,82 @@
+ 	".set\treorder\n\t"
+ 	".endm");
+ 
+-#define __restore_flags(flags)						\
++#ifdef CONFIG_RTHAL
++#define hard_restore_flags(flags) \
+ do {									\
+ 	unsigned long __tmp1;						\
+ 									\
+ 	__asm__ __volatile__(						\
+-		"__restore_flags\t%0"					\
++		"__hard_restore_flags\t%0" \
+ 		: "=r" (__tmp1)						\
+ 		: "0" (flags)						\
+ 		: "memory");						\
+ } while(0)
+-
++#else //CONFIG_RTHAL
++#define __restore_flags(flags) \
++do {									\
++	unsigned long __tmp1;						\
++									\
++	__asm__ __volatile__(						\
++		"__restore_flags\t%0" \
++		: "=r" (__tmp1)						\
++		: "0" (flags)						\
++		: "memory");						\
++} while(0)	   
++#endif //CONFIG_RTHAL
++		
+ #ifdef CONFIG_SMP
+ 
++#ifdef CONFIG_RTHAL
++#error No RTHAL support for SMP systems. Give Steve S. an SMP system and he
++	will do it for you. :)
++#endif //CONFIG_RTHAL
++	
+ extern void __global_sti(void);
+ extern void __global_cli(void);
+ extern unsigned long __global_save_flags(void);
+ extern void __global_restore_flags(unsigned long);
+ #  define sti() __global_sti()
+ #  define cli() __global_cli()
+-#  define save_flags(x) do { x = __global_save_flags(); } while (0)
++#  define save_flags(x) do{    x = __global_save_flags();} while (0)
+ #  define restore_flags(x) __global_restore_flags(x)
+-#  define save_and_cli(x) do { save_flags(x); cli(); } while(0)
+-#  define save_and_sti(x) do { save_flags(x); sti(); } while(0)
+-
++#  define save_and_cli(x) do{    save_flags(x); cli();} while(0)
++#  define save_and_sti(x) do{    save_flags(x); sti();} while(0)
++  
+ #else /* Single processor */
+ 
+-#  define sti() __sti()
++#ifdef CONFIG_RTHAL	
++/*
++* Standard rthal defintions.
++*/
++struct rt_hal {	   
++   void *ret_from_intr;
++   unsigned int (*mips_timer_interrupt)(int irq, struct pt_regs *regs);
++   unsigned int (*mips_interrupt)(int irq, struct pt_regs *regs);
++   long long (*rtai_srq_interrupt)(unsigned int srq, unsigned int args);
++   void (*disint)(void);
++   void (*enint)(void);
++   unsigned int rtai_active;
++   unsigned long (*getflags)(void);
++   void (*setflags)(unsigned long flags);
++   unsigned long (*getflags_and_cli)(void);
++   void *irq_desc;
++   union { unsigned long long tsc; unsigned long hltsc[2]; } tsc;
++   unsigned int (*linux_mips_timer_intr)(int irq, struct pt_regs *regs);
++   unsigned int (*linux_soft_mips_timer_intr)(int irq, struct pt_regs *regs);
++};
++   
++extern struct rt_hal rthal;
++
++#define __sti() do { rthal.enint(); } while(0);
++#define __cli() do { rthal.disint(); } while(0);
++#define __save_flags(x) do { x = rthal.getflags(); } while(0);
++#define __save_and_cli(x) do { x = rthal.getflags_and_cli(); } while(0);
++#define __restore_flags(x) do { rthal.setflags(x); } while(0);
++
++#endif //CONFIG_RTHAL		     	    	     	     	     
++
++# define sti() __sti()
+ #  define cli() __cli()
+ #  define save_flags(x) __save_flags(x)
+ #  define save_and_cli(x) __save_and_cli(x)
+@@ -186,7 +284,6 @@
+ 
+ /* For spinlocks etc */
+ #define local_irq_save(x)	__save_and_cli(x)
+-#define local_irq_set(x)	__save_and_sti(x)
+ #define local_irq_restore(x)	__restore_flags(x)
+ #define local_irq_disable()	__cli()
+ #define local_irq_enable()	__sti()
+diff -uNr --exclude=CVS linux-2.4.21.orig/include/asm-mips/time.h linux-2.4.21/include/asm-mips/time.h
+--- linux-2.4.21.orig/include/asm-mips/time.h	2002-08-05 16:53:37.000000000 -0700
++++ linux-2.4.21/include/asm-mips/time.h	2003-04-17 09:01:54.000000000 -0700
+@@ -53,7 +53,14 @@
+ /*
+  * high-level timer interrupt routines.
+  */
+-extern void timer_interrupt(int irq, void *dev_id, struct pt_regs *regs);
++
++extern 
++#ifdef CONFIG_RTHAL
++unsigned int
++#else
++void
++#endif
++timer_interrupt(int irq, void *dev_id, struct pt_regs *regs);
+ 
+ /*
+  * the corresponding low-level timer interrupt routine.
+diff -uNr --exclude=CVS linux-2.4.21.orig/Makefile linux-2.4.21/Makefile
+--- linux-2.4.21.orig/Makefile	2003-03-27 06:28:53.000000000 -0800
++++ linux-2.4.21/Makefile	2003-04-16 09:05:46.000000000 -0700
+@@ -1,7 +1,7 @@
+ VERSION = 2
+ PATCHLEVEL = 4
+ SUBLEVEL = 21
+-EXTRAVERSION = -pre4
++EXTRAVERSION = -pre4-rthal5g
+ 
+ KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
+ 
+@@ -36,7 +36,7 @@
+ OBJDUMP		= $(CROSS_COMPILE)objdump
+ MAKEFILES	= $(TOPDIR)/.config
+ GENKSYMS	= /sbin/genksyms
+-DEPMOD		= /sbin/depmod
++DEPMOD		= depmod-mipsel
+ MODFLAGS	= -DMODULE
+ CFLAGS_KERNEL	=
+ PERL		= perl

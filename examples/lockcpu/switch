@@ -1,0 +1,3 @@
+sync
+rmmod switch_cpu
+insmod ./switch_cpu

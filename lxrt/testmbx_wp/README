@@ -1,0 +1,4 @@
+This examples shows how to use mailboxes send/receive_wp (what possible) as
+an easy way to log messages.
+To see what happens execute "./start_modules", to load support modules, sendlog and displog from different screens.
+When finished execute "./stop_modules", to remove support modules.

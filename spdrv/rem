@@ -1,0 +1,4 @@
+sync
+rmmod rtai_spdrv
+rmmod rtai
+sync

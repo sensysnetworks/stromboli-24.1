@@ -1,0 +1,253 @@
+diff -Naur octave-2.0.16/src/dynamic-ld.cc octave-2.0.16-patched/src/dynamic-ld.cc
+--- octave-2.0.16/src/dynamic-ld.cc	Thu Mar 11 03:54:52 1999
++++ octave-2.0.16-patched/src/dynamic-ld.cc	Mon May  7 10:30:49 2001
+@@ -76,7 +76,8 @@
+ 
+ // TRUE means that we unload .oct files when there are no functions in
+ // the symbol table that reference them.
+-static bool Vauto_unload_dot_oct_files;
++// Made global PGGC
++bool Vauto_unload_dot_oct_files;
+ 
+ typedef builtin_function * (*Octave_builtin_fcn_struct_fcn)(void);
+ 
+@@ -330,15 +331,15 @@
+     }
+ 
+   void *library = dlopen (file.c_str (), RTLD_LAZY);
+-
+-  time_t now = time (0);
++//PGGC
++  time_t now = _time (0);
+ 
+   time_t dlopen_time = now;
+ 
+   file_stat fs (file);
+-
++//PGGC
+   if (Vwarn_future_time_stamp && fs.is_newer (now))
+-    warning ("time stamp for `%s' is in the future", file.c_str ());
++	warning ("time stamp for `%s' is in the future", file.c_str ());
+ 
+   if (library)
+     {
+@@ -403,13 +404,13 @@
+     }
+ 
+   shl_t library = shl_load (file.c_str (), BIND_DEFERRED, 0L);
+-
+-  time_t now = time (0);
++//PGGC
++  time_t now = _time (0);
+ 
+   time_t shl_load_time = now;
+ 
+   file_stat fs (file);
+-
++//PGGC
+   if (Vwarn_future_time_stamp && fs.is_newer (now))
+     warning ("time stamp for `%s' is in the future", file.c_str ());
+ 
+diff -Naur octave-2.0.16/src/error.cc octave-2.0.16-patched/src/error.cc
+--- octave-2.0.16/src/error.cc	Sat Mar 28 15:32:35 1998
++++ octave-2.0.16-patched/src/error.cc	Mon May  7 11:16:00 2001
+@@ -171,6 +171,7 @@
+ {
+   va_list args;
+   va_start (args, fmt);
++//PGGC
+   verror ("warning", fmt, args);
+   va_end (args);
+ }
+@@ -307,6 +308,18 @@
+ {
+   DEFVAR (beep_on_error, 0.0, 0, beep_on_error,
+     "if true, beep before printing error messages");
++}
++
++//PGGC
++time_t _time(time_t *v)
++{
++static time_t MyTime;
++
++if (!MyTime) time(&MyTime);
++
++if (v) *v = MyTime;
++
++return (MyTime);
+ }
+ 
+ /*
+diff -Naur octave-2.0.16/src/error.h octave-2.0.16-patched/src/error.h
+--- octave-2.0.16/src/error.h	Fri Sep 25 12:46:58 1998
++++ octave-2.0.16-patched/src/error.h	Mon May  7 10:38:38 2001
+@@ -49,6 +49,10 @@
+ 
+ extern void symbols_of_error (void);
+ 
++//PGGC
++#include <time.h>
++extern time_t _time(time_t *v);
++
+ #endif
+ 
+ /*
+diff -Naur octave-2.0.16/src/input.cc octave-2.0.16-patched/src/input.cc
+--- octave-2.0.16/src/input.cc	Thu Nov  4 12:21:14 1999
++++ octave-2.0.16-patched/src/input.cc	Mon May  7 11:08:00 2001
+@@ -229,7 +229,7 @@
+ 	    case 'd':
+ 	      // Make the current time/date into a string.
+ 	      {
+-		time_t now = time (0);
++		time_t now = _time (0); //PGGC
+ 
+ 		temp = ctime (&now);
+ 
+@@ -507,17 +507,20 @@
+ {
+   char *retval = 0;
+ 
+-#if defined (HAVE_GETTIMEOFDAY)
+-  struct timeval tp;
+-#if defined  (GETTIMEOFDAY_NO_TZ)
+-  gettimeofday (&tp);
+-#else
+-  gettimeofday (&tp, 0);
+-#endif
+-  Vlast_prompt_time = (double) tp.tv_sec + tp.tv_usec / 1e6;
+-#else
+-  Vlast_prompt_time = (double) time (0);
+-#endif
++//cerr << "GETTIMEOFDAY 1" << endl; // PGGC
++
++//#if defined (HAVE_GETTIMEOFDAY)
++//  struct timeval tp;
++//#if defined  (GETTIMEOFDAY_NO_TZ)
++//  gettimeofday (&tp);
++//#else
++//  gettimeofday (&tp, 0);
++//#endif
++//  Vlast_prompt_time = (double) tp.tv_sec + tp.tv_usec / 1e6;
++//#else
++  Vlast_prompt_time = (double) _time (0); // PGGC
++//#endif
++
+ 
+   if ((interactive || forced_interactive)
+       && (! (reading_fcn_file || reading_script_file)))
+diff -Naur octave-2.0.16/src/load-save.cc octave-2.0.16-patched/src/load-save.cc
+--- octave-2.0.16/src/load-save.cc	Tue Oct 26 20:46:23 1999
++++ octave-2.0.16-patched/src/load-save.cc	Mon May  7 10:31:21 2001
+@@ -2438,7 +2438,7 @@
+ 
+     case LS_ASCII:
+       {
+-	time_t now = time (0);
++	time_t now = _time (0); // PGGC
+ 
+ 	string time_string = asctime (gmtime (&now));
+ 	time_string = time_string.substr (0, time_string.length () - 1);
+diff -Naur octave-2.0.16/src/octave.cc octave-2.0.16-patched/src/octave.cc
+--- octave-2.0.16/src/octave.cc	Thu Nov  4 12:19:01 1999
++++ octave-2.0.16-patched/src/octave.cc	Mon May  7 08:37:40 2001
+@@ -618,7 +618,6 @@
+ 
+   if (! interactive)
+     using_readline = 0;
+-
+   int retval = main_loop ();
+ 
+   if (retval == 1 && ! error_state)
+diff -Naur octave-2.0.16/src/parse.y octave-2.0.16-patched/src/parse.y
+--- octave-2.0.16/src/parse.y	Fri Jun 18 19:24:17 1999
++++ octave-2.0.16-patched/src/parse.y	Mon May  7 10:31:37 2001
+@@ -2236,7 +2236,7 @@
+ 	  id_name = id->name ();
+ 	}
+ 
+-      time_t now = time (0);
++      time_t now = _time (0);//PGGC
+ 
+       fcn->stash_function_name (id_name);
+       fcn->stash_fcn_file_name ();
+@@ -2248,7 +2248,7 @@
+ 	  string nm = fcn->fcn_file_name ();
+ 
+ 	  file_stat fs (nm);
+-
++//PGGC
+ 	  if (fs && fs.is_newer (now))
+ 	    warning ("time stamp for `%s' is in the future", nm.c_str ());
+ 	}
+diff -Naur octave-2.0.16/src/rand.cc octave-2.0.16-patched/src/rand.cc
+--- octave-2.0.16/src/rand.cc	Tue Oct 26 22:09:13 1999
++++ octave-2.0.16-patched/src/rand.cc	Mon May  7 10:28:59 2001
+@@ -127,7 +127,8 @@
+   time_t now;
+   struct tm *tm;
+  
+-  time (&now);
++  _time (&now);
++//PGGC
+   tm = localtime (&now);
+  
+   int hour = tm->tm_hour + 1;
+diff -Naur octave-2.0.16/src/time.cc octave-2.0.16-patched/src/time.cc
+--- octave-2.0.16/src/time.cc	Tue Oct 26 22:09:15 1999
++++ octave-2.0.16-patched/src/time.cc	Mon May  7 10:29:13 2001
+@@ -104,8 +104,9 @@
+   time_t now;
+   double fraction = 0.0;
+ 
+-#if defined (HAVE_GETTIMEOFDAY)
++//cerr << "GETTIMEOFDAY 0" << endl; // PGGC
+ 
++#if defined (HAVE_GETTIMEOFDAY)
+   struct timeval tp;
+ 
+ #if defined  (GETTIMEOFDAY_NO_TZ)
+@@ -120,7 +121,7 @@
+ 
+ #else
+ 
+-  now = time (0);
++    now = _time (0);
+ 
+ #endif
+  
+diff -Naur octave-2.0.16/src/toplev.cc octave-2.0.16-patched/src/toplev.cc
+--- octave-2.0.16/src/toplev.cc	Thu Oct 21 03:04:53 1999
++++ octave-2.0.16-patched/src/toplev.cc	Mon May  7 10:31:43 2001
+@@ -275,8 +275,8 @@
+   do
+     {
+       curr_sym_tab = top_level_sym_tab;
+-
+       reset_parser ();
++// cout << "yyparse" << endl; // PGGC
+ 
+       retval = yyparse ();
+ 
+diff -Naur octave-2.0.16/src/variables.cc octave-2.0.16-patched/src/variables.cc
+--- octave-2.0.16/src/variables.cc	Sat Jan 29 22:00:58 2000
++++ octave-2.0.16-patched/src/variables.cc	Mon May  7 10:31:54 2001
+@@ -437,6 +437,9 @@
+ 		  else
+ 		    fname = fcn_file_in_path (ff);
+ 
++
++//cerr << "GETTIMEOFDAY 2" << endl; // PGGC
++
+ #if defined (HAVE_GETTIMEOFDAY)
+ 		  struct timeval tv;
+ #if defined  (GETTIMEOFDAY_NO_TZ)
+@@ -446,7 +449,7 @@
+ #endif
+ 		  double now = (double) tv.tv_sec + (double) tv.tv_usec / 1e6;
+ #else
+-		  double now = (double) time (0);
++		  double now = (double) _time (0);
+ #endif
+ 		  ans->mark_fcn_file_up_to_date (now);
+ 

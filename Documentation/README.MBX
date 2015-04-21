@@ -1,0 +1,146 @@
+Mailboxes
+=========
+
+(provisional [everlasting] doc for mailbox usage)
+
+Below you'll find a short explanation of the mailbox services available in
+RTAI. The RTAI mailbox implementation is very flexible as it allows to send
+any message size by using any mailbox buffer size. Clearly you should use
+a buffer sized at least as the largest message you envisage. However if you
+expect a message larger than the average message size very rarely you can
+use a smaller buffer without much loss of efficiency. In such a way you can
+set up your own mailbox usage protocol, e.g. using fix size messages with a
+buffer that is an integer multiple of such a size guarantees that each
+message is sent/received atomically to/from the mailbox. Multiple senders
+and receivers are allowed and each will get the service it requires in
+turn, according to its priority.
+
+RTAI mailboxes use a First_In_First_Out (FIFO) messaging and no method for
+urgent delivery, i.e. Last_In_First_Out (LIFO), is provided. Allowing any
+message size to be delivered using any buffer size messes buffer management
+a lot if both FIFO and LIFO policies are allowed. It is thus simpler and
+more effective to ask the user to set up two mailboxes, one for normal and
+one for urgent delivery, and let him/her setting up his/her own policy.
+Notice that typed mailboxes (TBX) have urgent delivery instead.
+
+Naturally all the functions described below can be used symmetrically also
+from Linux processes, through the LXRT/USP modules. Thus such a service can be
+used in place of fifos. However be warned that in such a case we double the
+memcopys so that they can be sligtly less efficient, even if it is likely
+that you will not notice it for relatively short messages. We believe that
+the advantage of symmetry is so high that it is worth such a very minor
+penalty, just look at the function calls below and you get the "whys".
+
+Specific examples of mailbox usage can be found in the following subdirectories 
+of the examples directory:
+
+- jepplin: the translation to RTAI of the same example found in old NMT-RTL 
+  distributions;
+
+- mbx: a test with two sender and a receiver communicating with mailboxes of
+  size less the the messages;
+
+- mbx_del: a test to demonstrate task releasing after mailbox delation.
+
+and in LXRT:
+
+- master_buddy: the test using a master and a buddy process to demonstrate RTAI
+  usage from Linux processes shows the use of mailboxes.
+
+- many examples found in LXRT and net_rpc use hidden mailboxes to connect user 
+  interface processes to their hard real time peers.
+ 
+Both send and receive can do it: 
+	unconditionally,
+	only for the bytes that can be passed immediately,
+	only if the whole message can be passed immediately,
+	timed absolutly or relatively,
+	an overwriting form of send is also available, useful for logging.
+
+Unconditional and timed mode can be used as synchronization tools, while
+conditionall send/receive are usefull if a non blocking operation is
+desired.
+
+Here we go to see what we have:
+
+#include <rtai_sched.h>     // Maiboxes are schedulers services.
+
+MBX mbx;  in kernel space
+or 
+MBX *mbx; in LXRT/USP
+
+// Initialize a fully typed mailbox pointed by mbx with a buffer of size bytes,
+// queueing tasks according to the specified type: FIFO_Q, PRIO_Q and RES_Q.
+// Return == 0 is OK, != 0 error.
+int rt_typed_mbx_init(MBX *mbx, int size, int qtype)
+
+// Initialize the mailbox pointed by mbx with a buffer of size bytes. 
+// Compatibility call, equivalent to rt_typed_mbx_init(mbx, size, PRIO_Q)
+// Return == 0 is OK, != 0 error.
+int rt_mbx_init(MBX *mbx, int size)
+
+// Delete the mailbox pointed by mbx with a buffer of size bytes. 
+// Return == 0 is OK, != 0 error.
+int rt_mbx_delete(MBX *mbx)
+
+// Send unconditionally, i.e. return when the all message has been received or
+// an error occured, to the mailbox pointed by mbx, the message pointed by msg,
+// whose size is msg_size bytes. Returns the number of unsent bytes.
+int rt_mbx_send(MBX *mbx, void *msg, int msg_size)
+
+// Send to the mailbox pointed by mbx only the bytes that can be received 
+// immediately (wp == what possible) of the message pointed by msg, whose size
+// is msg_size bytes. Returns the number of unsent bytes.
+int rt_mbx_send_wp(MBX *mbx, void *msg, int msg_size)
+
+// Send to the mailbox pointed by mbx only if the whole msg_size bytes of the 
+// message pointed by msg can be received immediately. Returns the number of 
+// unsent bytes, i.e. either 0 or msg_size..
+int rt_mbx_send_if(MBX *mbx, void *msg, int msg_size)
+
+// Send till: the all message has been received, time has been reached, an
+// error occured; to the mailbox pointed by mbx, the message pointed by msg,
+// whose size is msg_size bytes. Returns the number of unsent bytes.
+int rt_mbx_send_until(MBX *mbx, void *msg, int msg_size, RTIME time)
+
+// Send till: the all message has been received, delay has expired, an error
+// occured; to the mailbox pointed by mbx, the message pointed by msg, whose
+// size is msg_size bytes. Returns the number of unsent bytes.
+int rt_mbx_send_timed(MBX *mbx, void *msg, int msg_size, RTIME delay)
+
+// Send to the mailbox pointed by mbx allowing overwriting what already in the
+// mailbox buffer if there is no place for the message. Useful for logging
+// purposes, think to what you get with Linux "dmesg" command. Returns 0.
+int rt_mbx_ovrwr_send(MBX *mbx, void *msg, int msg_size)
+
+// Receive unconditionally, i.e. return when the all message has been sent
+// or an error occured, to the mailbox pointed by mbx, the message pointed by
+// msg, whose size is msg_size bytes. Returns the number of undelivered bytes.
+int rt_mbx_receive(MBX *mbx, void *msg, int msg_size)
+
+// Receive from the mailbox pointed by mbx only the bytes that can be sent 
+// immediately (wp == what possible) of the message pointed by msg, whose size
+// is msg_size bytes. Returns the number of bytes not received.
+int rt_mbx_receive_wp(MBX *mbx, void *msg, int msg_size)
+
+// Receive from the mailbox pointed by mbx only if the whole msg_size bytes of
+// the message pointed by msg can be sent immediately. Returns the number of 
+// unsent bytes, i.e. either 0 or msg_size..
+int rt_mbx_receive_if(MBX *mbx, void *msg, int msg_size)
+
+// Receive unconditionally till: the all message has been sent, time has been
+// reached, an error occured; to the mailbox pointed by mbx, the message
+// pointed by msg, whose size is msg_size bytes. Returns the number of 
+// bytes not received.
+int rt_mbx_receive_until(MBX *mbx, void *msg, int msg_size, RTIME time)
+
+// Receive till: the all message has been sent, delay has expired, an
+// error occured; to the mailbox pointed by mbx, the message pointed by msg,
+// whose size is msg_size bytes. Returns the number of bytes not received.
+int rt_mbx_receive_timed(MBX *mbx, void *msg, int msg_size, RTIME delay)
+
+// Receive leaving the message available for another receive (eavedrop). Does
+// what receive_wp does while keeping the message in the mailbox buffer. 
+// Useful if one needs to just preview the mailbox content, without actually
+// receiving it.
+int rt_mbx_evdrp(MBX *mbx, void *msg, int msg_size)

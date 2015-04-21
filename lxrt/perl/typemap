@@ -1,0 +1,7 @@
+# TODO these 64 bit entities need fixing, use T_IV for now
+long long		T_IV
+RTIME			T_IV
+
+unsigned int *	T_OPAQUEPTR
+RT_TASK *		T_PTR
+SEM *			T_PTR

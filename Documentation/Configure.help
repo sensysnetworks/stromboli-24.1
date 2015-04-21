@@ -1,0 +1,267 @@
+Prompt for experimental code
+CONFIG_RTAI_EXPERIMENTAL
+  Enabling this option shows parts of RTAI which are under heavy
+  development. Don't expect them to work, but nevertheless the 
+  RTAI team will be happy to help you with your questions on the 
+  mailing list. Send suggestions and ideas to:
+
+    rtai@rtai.org
+
+  (Very cautious explanation, things might be better than expected)
+
+SMP scheduler 
+CONFIG_RTAI_SCHED_SMP
+  Enables building of the SMP (symmetrical multiprocessing)
+  scheduler. The SMP scheduler is different from other
+  schedulers in that it can execute real-time processes
+  either on any available CPU or on a user assigned CPU set. 
+  This capability causes a very slight performance loss.
+
+  Although it is most useful on SMP machines, this scheduler also
+  works on x86 UP (uniprocessor) machines. If the kernel RTAI is 
+  compiled for does not have CONFIG_SMP set, only the 8254 based 
+  SMP scheduler is built.   
+
+UP scheduler
+CONFIG_RTAI_SCHED_UP
+  The uniprocessor scheduler.  This scheduler differs from other
+  schedulers because it only supports one CPU, which makes it a
+  bit faster.
+
+MUP scheduler
+CONFIG_RTAI_SCHED_MUP
+  The multi-uniprocessor scheduler.  This scheduler differs from
+  other schedulers in that it supports real-time processed on
+  multiple CPUs, but a given process is assigned to a particular CPU.
+
+  Although it is most useful on SMP machines, this scheduler also
+  works on UP (uniprocessor) machines.
+
+Default Number of processors for SMP systems
+CONFIG_RTAI_CPUS
+  This is the default number of CPUs to be used for realtime 
+  on SMP systmes. 
+
+Enable floating point support
+CONFIG_RTAI_FPU_SUPPORT
+  Enabling this option allows you to run kernel-space real-time
+  tasks that perform floating-point operations.  Generally, this
+  is a good thing, although it increases the time needed to
+  schedule real-time tasks, because the floating point registers
+  need to be saved and restored.  If you are not using floating-point
+  code, you may wish to disable this option as an optimization.
+  You also should disable this option if your processor does not
+  support floating point instructions.
+  
+  Normally, floating-point operations are not allowed in kernel
+  code. This option only works for code in real-time tasks.
+
+  On i386, this also allows you to use MMX and other related
+  extensions.  This does not allow you to use Altivec code on
+  PowerPC.
+
+Strange APIC support
+CONFIG_RTAI_STRANGE_APIC
+  Use this if on dual processor machines local APICs are 
+  not mapped to 0 and 1. 
+
+POSIX threading API support
+CONFIG_RTAI_POSIX
+  The POSIX threading API in kernel space. Kernel modules
+  named rtai_pthread.o, rtai_pqueue.o and rtai_utils.o will 
+  be built that provides a posix wrapper to the native RTAI API.
+  Applications written for the POSIX API, should be portable 
+  to other operating systems.
+
+RT memory manager
+CONFIG_RTAI_DYN_MM
+  Enables support for dynamic memory allocation.  This support can
+  either be compiled into the schedulers (choose Y) or as a
+  standalone module (choose M).  
+
+Use vmalloc() instead of kmalloc()
+CONFIG_RTAI_MM_VMALLOC
+  The Linux kernel provides two different methods of allocating
+  memory, vmalloc() and kmalloc(), which differ by their virtual
+  memory mapping characteristics. The vmalloc() method is believed
+  to be stable on i386, but is buggy on other architectures. The
+  kmalloc() method is limited to granularity sizes of less than
+  128 kB.
+
+Fifos
+CONFIG_RTAI_FIFOS
+  Adds support for FIFOs. FIFOs are an easy way to communicate 
+  between userspace and realtime programs. 
+
+Shared Memory
+CONFIG_RTAI_SHMEM
+  Adds support for a module that allows sharing memory inter-intra
+  real time tasks and Linux processes. It can be an alternative to
+  SYSTEM V shared memory, the services are symmetricall, i.e. the
+  same calls can be used both in real time tasks, i.e. within the
+  kernel, and Linux processes.
+
+Watchdog
+CONFIG_RTAI_WATCHDOG
+  Adds support to provide protection services to RTAI thereby
+  protecting it (and the host Linux OS) against programming
+  errors in RTAI applications. 
+
+LXRT
+CONFIG_RTAI_LXRT
+  Include the LXRT subsystem for hard/firm/soft realtime in userspace. 
+  It allows using all of the RTAI APIs symmetrically in user/kernel 
+  space.
+
+NEWLXRT
+CONFIG_RTAI_NEWLXRT
+  New Linux Real Time is an integrated comprehensive way of symmetrically 
+  doing anything inter/intra user/kernel space. It schedules Linux tasks
+  and kernel threads as well as RTAI proper kernel tasks natively.
+  Kernel threads and RTAI kernel tasks work hard real time always. User
+  space task/threads can work in any mode, i.e. hard/firm/soft/no real 
+  time. More or less Linux itself is the real time OS, but with something
+  more.  See newlxrt/README for more.
+
+LXRT Octave wrapper
+CONFIG_RTAI_LXRT_OCTAVE
+  A wrapper for using GNU Octave, a language for numerical
+  computations, with LXRT.
+
+LXRT Real-Time Workshop wrapper
+CONFIG_RTAI_LXRT_RTW
+  Adds a compatibility layer for MathWorks Real-Time Workshop with
+  RTAI. This is superseded by RTAI-Lab, see READMEs in directory
+  "rtailab".
+
+rt_com LXRT
+CONFIG_RTAI_RTCOM_LXRT
+  An LXRT wrapper for the real-time serial driver.
+
+Fifos LXRT
+CONFIG_RTAI_FIFOS_LXRT
+  Adds support to use fifos in LXRT/NEWLXRT hard real time
+  user space processes.
+
+Comedi LXRT
+CONFIG_RTAI_COMEDI_LXRT
+  An LXRT wrapper for Comedi.
+  The porting of COMEDI to LXRT is done using the standard extension 
+  feature of LXRT and makes COMEDI simmetrically usable in kernel and 
+  user space within RTAI, in soft/hard real time. To use COMEDI with 
+  RTAI/LXRT you have just to have installed COMEDI and know how to use 
+  it in kernel space, whatever space you are going to work in.
+
+++ support
+CONFIG_RTAI_CPLUSPLUS
+  Enables C++ examples and new() support in the real-time memory
+  manager.
+
+New C++ interface
+CONFIG_RTAI_NEW_CPP
+  Compile the new C++ interface for RTAI. This is highly experimental at
+  the moment. If you are interested in contributing please contact 
+
+  Erwin Rol <erwin@muffin.org>
+
+Tasklets
+CONFIG_RTAI_TASKLETS
+  Plained and timed tasklets (timers) are similar to timers and
+  tasklets you have in Linux, i.e. a function that is fired when 
+  something happens, timers are predefined as firing on timed events. 
+
+User-space interrupts
+CONFIG_RTAI_USI
+  You can develop real time peripheral drivers directly in user space.
+  See usi/README.
+
+Bits
+CONFIG_RTAI_BITS
+  This module provides helper functions allowing compound 
+  synchronizations based on AND/ORs on a 32bits unsigned long. 
+  In other OSes similar objects are often referred as flags/events. 
+  Their use is similar to that of semaphores except that signal/waits 
+  are not related just to a simple counter but depends on a 
+  combinations of bits set.
+
+Typed Mailboxes
+CONFIG_RTAI_TBX
+  Typed mailboxes (TBX) are an alternative to the default RTAI 
+  ones that offers:
+   1 - Message broadcasting, that means send a message to ALL the 
+       tasks that are pending on the same TBX.
+   2 - Urgent sending of messages: these messages are not enqueued, 
+       but inserted in the head of the queue, bypassing all the other 
+       messages already present in TBX.
+   3 - The PRIORITY/FIFO wakeup policy can be set at runtime when 
+       creating the TBX.
+
+   Messages queues are POSIX queues made available for plain RTAI
+   applications.
+
+Real-Time serial driver (rt_com)
+CONFIG_RTAI_RTCOM
+  Adds support the real-time serial driver. This driver only
+  supports 8250/16450/16550A-based UARTs.
+
+Real-Time serial driver (spdrv)
+CONFIG_RTAI_SPDRV
+  This is a complete rewriting of rt_com. Changes:
+    - possibility of parametrizing the base_adr and irq of the serial ports used,
+      along with rx/tx buffer sizes, at insmod,
+    - new read/write buffer management, with the possibility of previewing 
+      what's in the receiver before reading,
+    - enhanced interrupt service management,
+    - interrupt callback function with user thresholded callbacks,
+    - info functions to check rx/tx data availability,
+    - blocking and timed out read/writes,
+  Compatibility with rt_com is provided through inlines and defines.
+
+Support for making RTAI a distributed OS
+CONFIG_RTAI_NETRPC
+  Net_rpc makes RTAI APIs symmetrically usable in a networked 
+  distributed application system, both in kernel and user space. 
+
+  With net_rpc in place you can call any RTAI function remotely 
+  and have it operate on remote objects. Distributed applications 
+  can run also on a single local node. 
+
+  To allow an easy testing and non real time usage directly, RTAI 
+  comes with a native soft real time support for NET_RPC, to work 
+  in a real hard real time networked way dowload RTNet from: 
+  http://www.rts.uni-hannover.de/rtnet/
+
+Real-Time Networking
+CONFIG_RTAI_RTNET
+  This allow configuring RTNet within the streamlined RTAI configuration
+  and making. Nonetheless EXTERNAL reminds you that a real-time 
+  networking subsystem and drivers for RTAI are available indeed, but 
+  RTNet is a a separate project. The RTAI friends that took over Dave's 
+  original RTNet and ported it to Linux-2.4.xx make it available at:
+  http://www.rts.uni-hannover.de/rtnet/
+
+Compile tests
+CONFIG_RTAI_TESTS
+  Compiles test code.
+
+Compile Examples
+CONFIG_RTAI_EXAMPLES
+  Compile the RTAI examples (look in the examples/ directory).
+
+Compile User-space Examples
+CONFIG_RTAI_LXRT_EXAMPLES
+  Compile the LXRT examples.
+
+RTnet task
+CONFIG_RTAI_RTNET_TASK
+  RTnet can process incoming network packets in a task, or directly
+  in the interrupt handler.  Enabling this option causes most network
+  related processing to be done in a task, which allows you to set the
+  priority and allows the processing to be preempted.  Disabling this
+  option causes all the network processing to occur in a real-time
+  interrupt, which has slightly lower overhead and removes the
+  dependency on the scheduler, but can cause significant interrupt
+  latencies for other interrupts.
+
+  If you are planning to use the scheduler for other purposes, it is
+  recommended that you enable this option.

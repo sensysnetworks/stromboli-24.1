@@ -1,0 +1,15 @@
+Revision history for Perl extension LXRT.
+
+0.01  Mon Jan 10 14:28:31 2000
+	- original version; created by h2xs 1.18
+0.02  Wed Mar 15 17:37:00 2000
+	- updated to work with RTAI 1.2, not backward compatible
+	- automatically installs a version.h file in ../../include
+	- automatically installs rtai/rtai_sched when loading LXRT.pm
+
+0.03  Thu May  3 15:26:05 EDT 2001 pcloutier@PoseidonControls.com
+	- Ported to RTAI-2.4.3.
+	- Fixed num2nam().
+	- Verified returned pointers are ok.
+	- Added rt_agent() and semaphore functions.
+	- Adding the other functions should be trivial.

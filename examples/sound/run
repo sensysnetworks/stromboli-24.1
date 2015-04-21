@@ -1,0 +1,21 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example is taken from a similar one available in RTLinux
+distribution and demonstrates how to pronounce "Linux" correctly!
+
+Type <return> to install the modules
+EOF
+read junk
+../../scripts/rt_modprobe ex_sound.o
+
+echo "Now start the application"
+echo "To stop the application type Ctrl-C"
+echo "Type <return> to continue"
+read junk
+
+./check
+
+../../scripts/rt_rmmod ex_sound
+

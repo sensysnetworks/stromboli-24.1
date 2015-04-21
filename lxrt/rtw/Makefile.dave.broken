@@ -1,0 +1,18 @@
+
+EXTRA_CFLAGS := -I.
+
+M_OBJS := rtc.o sysAuxClk.o
+
+A_TARG	:= check rtai_main
+
+EXTRA_USER_LDFLAGS := -lpthread
+
+ifdef TOPDIR
+include $(TOPDIR)/Rules.make
+else
+all:
+	make -C ../../ modules userspace SUBDIRS=lxrt/rtw
+endif
+
+clean:
+	rm -f *.o check rtai_main rtw_log core core.*

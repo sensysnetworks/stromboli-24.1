@@ -1,0 +1,19 @@
+****** POWERPC SPECIFIC EXAMPLES ******
+
+In this directory you'll find example modules for the PowerPC processors.
+
+o cpm_irqs: CPM interrupt dispatching with RTAI
+
+  This module demonstrates how you can dispatch CPM timer interrupts with 
+  RTAI on the MPC8xx and MPC8260. It configures and handles the CPM Timer-2 
+  interrupt.
+  
+  To build the module, type "make".
+  To run the module, type "insmod cpm_irqs.o hz=1"
+  To monitor the interrupt count, type "cat /proc/rta/rtai".
+  To remove module, type "rmmod cpm_irqs".
+
+  Note: on MPC 8xx you must enable the kernel configuration option 
+        "Using multi-level CPM interrupts".
+
+Report any bugs to Wolfgang Grandegger, wg@denx.de.

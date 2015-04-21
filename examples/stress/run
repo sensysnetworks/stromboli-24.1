@@ -1,0 +1,25 @@
+#!/bin/sh
+
+echo " "
+echo "Type <return> to install the modules"
+read junk
+
+../../scripts/rt_modprobe ex_stress.o
+
+echo "Choose the application"
+echo "Type <l> and <return> to start checkl"
+echo "Type <p> and <return> to start checkp"
+echo "To stop the application type Ctrl-C"
+read ch
+if [ $ch = l ]; then
+	./checkl
+elif [ $ch = p ]; then
+	./checkp
+fi
+sleep 1
+echo " "
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_stress
+

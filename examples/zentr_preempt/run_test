@@ -1,0 +1,26 @@
+#!/usr/bin/perl -w
+#
+# Run the preemption test
+#
+
+# work out CPU clock so we can pass it to the module
+# if using a 486, use bogomips as a default
+open(CPUINFO, "/proc/cpuinfo") || die;
+while(<CPUINFO>)
+{
+    if(/^cpu MHz/) {
+        ($clkspd) = /(\d+)\./;
+	last;
+    }
+    if(/^bogomips/) {
+        ($clkspd) = /(\d+)\./;
+	last;
+    }
+}
+print"\n";
+$cmd 		= "/sbin/insmod ./ex_zenpreempt.o clkspd=$clkspd\n";
+system $cmd;
+$cmd 		= "./preempt | ./peconv\n";
+system $cmd;
+system "sync";
+system("/sbin/rmmod ex_zenpreempt");

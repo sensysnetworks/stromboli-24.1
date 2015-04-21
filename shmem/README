@@ -1,0 +1,13 @@
+Shared Memory
+=============
+
+This directory contains an RTAI specific module that allows sharing memory
+inter-intra real time tasks and Linux processes. In fact it can be an
+alternative to SYSTEM V shared memory, the services are symmetricall, i.e.
+the same calls can be used both in real time tasks, i.e. within the kernel,
+and Linux processes.
+
+The function calls for Linux processes are inlined in the file
+"rtai_shm.h".  This approach has been preferred to a library since: is
+simpler, more effective, the calls are short, simple and just a few per
+process. See the related README in directory Documentation.

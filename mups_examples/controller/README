@@ -1,0 +1,20 @@
+This directory shows how you can use the module rtai to install interrupt
+handlers that can guarantee an effective processing with a contained jitter
+and high effectivness.
+It is an improvment of the corresponding test case found under examples and
+can be used only on MPs. It requires to install just rtai, newfifos and shmem,
+no scheduler. Here you can see how to install a timer per CPU without 
+disturbing Linux, using shared memory to communicate and newfifo services to
+coordinate.
+It can be the simplest way to build high performance controllers under MP,
+as you have not to care to pend any timings to the kernel.
+It implements that same periodic controller doing a lot of floating point 
+calculations, distributed to all available cpus. The computer load it creates
+is controlled by the macros in controller.h and you can verify the jitter, even 
+without a scope, by looking at the printed messages.
+
+To use it:
+make
+./run
+   answer the requested data, then look at the screen
+./rem

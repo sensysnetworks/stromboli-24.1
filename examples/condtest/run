@@ -1,0 +1,22 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example shows how to use RTAI conditional semaphores.
+
+Type <return> to install modules
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_condtest.o
+
+
+echo "Run dmesg in another window to look at the kernel logs."
+echo "Type <return> to remove modules, wait for it to end"
+
+read junk
+
+../../scripts/rt_rmmod ex_condtest
+
+
+

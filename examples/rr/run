@@ -1,0 +1,21 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example demonstrates RR scheduling. It features NTASKS realtime tasks each 
+running for some time without releasing the CPU. The printout will show that
+they all can work alternatively because of the RR policy.
+
+Type <return> to install modules
+EOF
+
+read junk
+
+sync
+../../scripts/rt_modprobe ex_rr.o
+
+echo "Type <return> to remove modules"
+read junk
+
+sync
+../../scripts/rt_rmmod ex_rr

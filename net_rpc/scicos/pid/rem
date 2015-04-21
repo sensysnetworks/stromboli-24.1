@@ -1,0 +1,20 @@
+sync
+TASKPID=`ps -a | grep scope | awk '{ print $1 }'`
+kill -9 $TASKPID
+sync
+TASKPID=`ps -a | grep param | awk '{ print $1 }'`
+kill -9 $TASKPID
+sync
+TASKPID=`ps -a | grep standalone | awk '{ print $1 }'`
+kill -9 $TASKPID
+sync
+rmmod net_rpc
+sync
+rmmod krtnet
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched_ext
+rmmod rtai_sched
+rmmod rtai_shm
+rmmod rtai
+sync

@@ -1,0 +1,97 @@
+Multi-Uniprocessor Scheduler
+----------------------------
+
+Here you'll find an implementation of an MultiUniProcessor (MUP) realtime
+scheduler to be interfaced to the RTAI module. It is based on the local
+APIC timers. It can be profitably used on MP machines with just one CPU
+mounted on the motherboard.
+
+The MUP scheduler derives its name from the fact that real time tasks MUST
+be bounded to a single CPU at the very task initialization. They can be
+afterward moved by using the function rt_set_runnable_on_cpus(). The MUP
+scheduler can however use any inter CPUs service related to semaphores,
+messages and mailboxes. 
+
+The advantage of using the MUP scheduler comes mainly from the possibility
+of using mixed timers simultaneously, i.e. periodic and oneshot, where
+periodic timers can be based on different periods, and of possibly forcing
+critical tasks on the CPU cache. With dual SMP I cannot say that there is a
+difference in efficiency. MUP has been developped primarely for our not so
+fast, a few kHz, PWM actuators, BANG-BANG air jet thrusters, coupled to a
+periodic scheduler.
+
+All the fuctions of UP and SMP schedulers are available in the MUP
+scheduler, as well as MUP specific functions can be used under UP-SMP.
+Clearly some default action is implied if features are involved that are
+specific to any scheduler. The main difference can be seen for functions
+whose name ends with "_cpuid". Such functions imply the specification of a
+CPU number and came into play with the MUP scheduler whenever a cpuid had
+to be declared.  Typical examples are: task init and time conversions, when
+one can have to convert the time on a CPU different from the one he is
+using.
+
+Please note that there is a difference between "cpuid", i.e. the CPU
+number, and "cpu_map", i.e. 1 << cpuid. Thus if you use task init with a
+cpuid on UP-SMP schedulers you have it assigned to the only CPU available
+or mapped to the declared one, while if you just task init on MUP your task
+is assigned to the CPU loaded with less tasks, and so on. Have a look at
+rtai_sched.h to see the new functions and at the schedulers to verify the
+default actions.
+
+Be carefull in relation to time conversion under MUP with hetereogeneous timers
+otherwise you'll put on the scheduler blames that are due only to your 
+misunderstanding on how it works.
+
+Clearly no problem arises if the same kind of timers are used on all CPUs, and
+with the same period if they are periodic. However the advantage of the MUP
+scheduler is really the possibility of having a periodic and a oneshot timer,
+or two periodic timers with different periods, simultaneously, and you must
+use it for that case. Only exsercize due care while timing at initialization.
+
+For this reason some test examples have be regrouped under the directory
+"mups_examples". It contains only meaningfull examples with more than one
+task. You can run MUP specific examples with UP-SMP schedulers as well as
+all the UP-SMP examples can be run with the MUP scheduler. Using 
+
+  cat /proc/rtai/* 
+
+can help in seeing what happened. 
+
+The timing relies on the RTAI support functions:
+
+- void rt_request_apic_timers(
+    void (*handler)(void), 
+    struct apic_timer_setup_data *apic_timer_data
+  )
+
+and
+
+- void rt_free_apic_timers(void)
+
+The "struct apic_timer_setup_data { int mode, count; };" allows you to define
+the mode and count to be used for each timer as:
+
+- mode: 0 for a oneshot timing, 1 for a periodic timing;
+- count: is the period in nanosec you want on that timer. 
+
+It is in nanosec to ease your programming in relation to what said above.
+It is used only for a periodic timer as for the oneshot case the first shot
+defaults to the Linux tick. You should care of that in starting periodic
+task not in advance of that time. The start of the timing should be
+reasonably sinchronized internally. 
+
+However you must not call the above functions directly but use the usual
+start_rt_timer() which defaults to the same timer on each LOCAL APIC or
+start_rt_apic_timers() that allows you to use struct apic_timer_setup_data
+directly. Note that the latter uses nanosecs, and not internal counts, for
+the apic count. So you do not have to care for the conversion. If
+start_rt_apic_timers() is used with UP-SMP the single timer is set as
+periodic only if all the requested APIC timers are periodic with the same
+period, oneshot otherwise.
+
+It is not the only way to do the all stuff but is the one that suits our
+needs right now. Suggestions and comment to improve it are welcomed.
+
+The MUP scheduler can be used also under UP, in which case it uses the 8254
+timer.
+

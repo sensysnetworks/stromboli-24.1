@@ -1,0 +1,20 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example demonstrates the use of semaphores and message
+queues.  It is an adaption to RTAI of what is found in RTLinux
+and was developed by Jerry Epplin to show the working of his IPC
+services for RTLinux.  Its output is to the console, so running
+it in a normal xterm won't be very interesting.
+
+Type <return> to continue
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_jepplin.o
+
+echo "Wait for its end (msg: task 3 complete), then type <return> to remove modules"
+read junk
+sync
+../../scripts/rt_rmmod ex_jepplin

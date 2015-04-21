@@ -1,0 +1,12 @@
+Revision history for LabVIEW binding for RTAI/LXRT.
+
+0.01  2002 April 07
+	- startup of original version for RTAI-2.4.18 and LabVIEW 6.0.2
+
+0.02  2002 April 19
+        - after two weeks at Paolo's department, we have got the sound example
+	  running. Its completely done in LabVIEW on an 233MHz Pentium I Mobile.
+	  The LXRT interface call should meet all requirements, but a lot of
+	  wrappers still have to be done. First step to the public. Thomas. 
+	
+	

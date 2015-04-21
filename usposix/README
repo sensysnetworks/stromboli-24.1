@@ -1,0 +1,7 @@
+This directory contains 3 examples/tests showing all the APIs of the extensive
+RTAI user space support for POSIX. They are:
+- condtest, the counterpart of kernel space /examples/condtest
+- jepplin,  the counterpart of kernel space /examples/jepplin
+- mqtest,   the counterpart of kernel space /posix/test/q_test
+All examples can be compiled and tested in soft/hard real time mode by just 
+leaving/commentig the macro MAKE_IT_HARD.

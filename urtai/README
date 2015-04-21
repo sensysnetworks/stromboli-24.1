@@ -1,0 +1,29 @@
+			<*> RTAI-based bootdisk <*>
+
+What found in this directory makes it possible to build a bootdisk with RTAI 
+installed, "urtai", that means micro-RTAI.
+
+To use it just type "sh mkurtai.sh", from within this directory and let it work,
+just answer to what appears on the screen. It should be self-contained, it gets 
+everything you'll need automatically from the net:
+- linux kernel, from ftp.funet.fi (comfortable from DIAPM);
+- rtai, from www.aero.polimi.it;
+- busybox, from ftp.uclibc.org;
+- uClibc, from ftp.uclibc.org.
+Notice that all of what is needed goes here and so this directory will end up
+"somewhat" inflated. Do not be astonished to find it occupying a couple of
+hundreds megabytes more. 
+
+To use it you've to:
+- have syslinux installed on your host;
+- have a kernel configured with:
+	- loopback device support (block devices);
+	- ramdisk support (block devices);
+	- initial RAMDISK support.
+
+It is somewhat static, but it works as needed here at DIAPM. Naturally it can 
+be made even more flexible and better parameterized.
+
+Have fun, help fixing bugs and improve it.
+
+Lorenzo Dozio (dozio@aero.polimi.it).

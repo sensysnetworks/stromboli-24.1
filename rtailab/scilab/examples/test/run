@@ -1,0 +1,13 @@
+
+sync
+insmod ../../../../modules/rtai.o
+insmod ../../../../modules/rtai_shm.o
+insmod ../../../../modules/rtai_sched.o
+insmod ../../../../modules/rtai_sched_ext.o
+insmod ../../../../modules/rtai_lxrt.o
+insmod ../../../../modules/rtai_fifos.o
+insmod ../../../../modules/net_rpc.o
+../../../../net_rpc/rtnet/urtnet &
+sync
+insmod ./rt_process.o
+

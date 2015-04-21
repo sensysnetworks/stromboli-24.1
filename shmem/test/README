@@ -1,0 +1,21 @@
+This directory contains a test to show the use of shared memory.
+It is a self contained, except for kvmem.h, directory that duplicates the 
+production version with debugging print added.
+
+For testing, staying in this directory:
+- make
+- insmod rtai_shm
+- ./start  (or "insmod kalloc" followed by "./itest &")
+- ./ctest
+- ./ctest
+- ./ctest ..... you can continue with ctest
+- ./stop   (or "./ftest" followed by "rmmod kalloc")
+- rmmod rtai_shm
+- make clean
+By following what appears on the screen there should be a confirmation that it
+works (or does not?)!
+
+The above sequence is for a correct use but it contains already duplicated and
+not paired malloc/free call for testing reasons. You can try also what happens 
+by scrambling the sequence. The idea is that you should not be able to rmmod 
+rtai_shm till the areas are engaged.

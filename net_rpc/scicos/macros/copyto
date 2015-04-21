@@ -1,0 +1,5 @@
+DEST=/home/mante/scilab-2.6/contrib/codegen/macros/
+cp gen_make.sci              ${DEST}
+cp make_decl_standalone.sci  ${DEST}
+cp gen_ccode.sci	     ${DEST}
+cp make_standalone.sci       ${DEST}

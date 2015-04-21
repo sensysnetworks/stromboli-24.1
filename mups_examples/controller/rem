@@ -1,0 +1,5 @@
+sync
+rmmod controller
+rmmod rtai_shm
+../../remod
+rm logfile

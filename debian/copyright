@@ -1,0 +1,17 @@
+This package was debianized by David Schleef <ds@schleef.org> on
+Tue, 20 Mar 2001 19:36:35 -0800.
+
+RTAI CVS is located at
+
+  :pserver:cvs.rtai.org:/opt/cvsroot/rtai
+
+(password is "anoncvs")
+
+Upstream Maintainer: Paolo Mantegazza <mantegazza@aero.polimi.it>
+  Questions should be directed to the RTAI development list
+  <rtai@rtai.org>.
+
+Copyright:
+
+  LGPL, some portions GPL.
+

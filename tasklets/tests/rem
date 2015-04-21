@@ -1,0 +1,8 @@
+#!/bin/sh
+
+
+../../scripts/rt_rmmod test_ktest
+../../scripts/rt_rmmod test_kctest
+../../scripts/rt_rmmod test_kuctest
+../../scripts/rt_rmmod test_ktasklet
+

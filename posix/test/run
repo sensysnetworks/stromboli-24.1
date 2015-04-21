@@ -1,0 +1,64 @@
+#!/bin/sh
+
+MODS="\
+rtai_posixtest_vsimple_q \
+rtai_posixtest_simple_q1 \
+rtai_posixtest_simple_q2 \
+rtai_posixtest_simple_q3 \
+rtai_posixtest_q_test \
+rtai_posixtest_blq_test \
+rtai_posixtest_simple_blq \
+rtai_posixtest_toomanyqs \
+rtai_posixtest_mblq_test \
+rtai_posixtest_ptest \
+rtai_posixtest_rtaitest \
+rtai_posixtest_clockif_test \
+rtai_posixtest_mutextest \
+rtai_posixtest_mutexprio_test \
+rtai_posixtest_cond_brd_test \
+rtai_posixtest_condtest \
+rtai_posixtest_pqueuetest \
+rtai_posixtest_dyn_thread_create \
+"
+
+echo "Please run this test script in a XTERM and watch the console output"
+echo "or check the log message with 'dmesg' or 'cat /var/log/messages'." 
+echo ""
+echo "Note: If you have a very slow system the tick periods and stack"
+echo "sizes used by the example programs may not be appropriate causing"
+echo "wired system hangups and error messages."
+echo ""
+echo "Type <return> to contine"
+read junk
+
+
+echo "Loading RTAI and POSIX core module..."
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_fifos.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_utils.o
+insmod ../../modules/rtai_pthread.o
+insmod ../../modules/rtai_pqueue.o
+
+for m in $MODS; do
+
+    echo "Type <return> to load module $m.o"
+    read junk
+    insmod $m.o
+    sync
+
+    echo "Type <return> to unload module $m"
+    read junk
+    rmmod $m
+    sync
+
+done
+
+rmmod rtai_pqueue
+rmmod rtai_pthread
+rmmod rtai_utils
+rmmod rtai_sched
+rmmod rtai_fifos
+rmmod rtai
+
+

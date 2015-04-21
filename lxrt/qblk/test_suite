@@ -1,0 +1,18 @@
+export LD_LIBRARY_PATH=../lib
+sync
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt
+./test_proxy -hrt

@@ -1,0 +1,1 @@
+while "true"; do cat /proc/interrupts; sleep 1; done;

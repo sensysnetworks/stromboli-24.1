@@ -1,0 +1,109 @@
+***** SUPPORT FUNCTIONS FOR MANAGING TASKS WAKING UP ON A TIMER INTERRUPT *****
+
+Module sysAuxClk implements the functions listed below using an RTAI proper srq.
+Its primary aim is to make available the support for a few vxWorks APIs used
+in the related RTW rt_main. Whithin RTAI such a module is not strictly necessary
+as it could be easily implemented in many other ways, e.g. trivially by using
+the timer module found in tasklets or by setting up a simple periodic parent 
+timer task in kernel space that executes the required sem_signal, more on the
+latter later on.
+However a direct implementation in a timer interrupt handler is simpler, more
+effective and can be easily used with any external timer made available by most
+DAQ boards.
+This module can then be used also a stand alone general purpose support for
+similar applications. It is important to remark however that if any internal
+PC timer is used all RTAI schedulers functions but those involving timing can
+be used. In fact in such a case the scheduler is not in charge of keeping a
+countinuously running time base and does know nothing about time. If an
+external timer is used instead then no such a problem will exist.
+
+The use of RTAI support for RTW has evidenced the need of supporting also very 
+slowly paced control systems, i.e. below 100 Hz. When the 8254 timer is used 
+such a request cannot be satisfied directly since the sysAuxClock handler is 
+periodic and cannot run below 100 Hz, to keep Linux happy. Thus users have to
+arrange for an internal scaling of a frequency higher than 100 Hz by using idle
+cycles. This has often to be done directly in the Simulink model and can be a
+bit annoying. To help making it easier to use low frequences there is also the 
+possibility of using an RTAI periodic timing task. To activate such a support 
+simply insmod sysAuxClock using the following command:
+insmod sysAucClock UseTask=1.
+The default remains using the 8254 timer, slightly more effective since it 
+avoids a double task schedule. Using a timing task nicely fits the lowest
+frequencies applications by avoiding any further burden to the user and without 
+any penalty, an usec latency more will surely do no harm in such cases. A side 
+effect of such an implementation is that, being the scheduler timed by a timer 
+under its control, also its timing functions can be used. 
+
+FUNCTIONS LIST:
+
+int sysAuxClkRateSet(int ticks_per_sec)
+Sets the periodic timer (interrupt) frequency. The actual frequency implemented
+can differ slightly from the requested one and is returned for a possible check.
+
+int sysAuxClkRateGet(void)
+Simply returns the timer interrupt frequency in use.
+
+int sysAuxClkConnect(void *fun, int sem)
+Sem is the pointer to a semaphore, a binary one is better, on which a tasks
+waits to be signalled for a periodic execution at the assigned timer interrupt
+frequency. The first argument, i.e. fun, is just for a calling compatibily with
+the same vxWorks function. Our implementation can only signal a semaphore and
+does not execute any other function. An int type for a pointer to a semaphore
+is used for the very same compatibilty reason. It returns 0 if sem is a likely
+valid pointer, -EINVAL otherwise.
+
+int sysAuxClkEnable(void)
+Enables the sem_signal call at each interrupt. Note that the very first call
+will be executed only if there is a task waiting on the connected semaphore.
+This avoid initial false overruns. It returns 0 if a likley valid sem has been
+connected, -EINVAL otherwise.
+
+void sysAuxClkDisable(void)
+Disables the timer operation, i.e. the sem_signal call to the connected 
+semaphore at each interrupt.
+
+unsigned long sysAuxClkOveruns(void)
+Returns the count of sem_signal calls executed while no task is waiting on the
+semaphore.
+
+int sysAuxClkCpuFreqMHz(void)
+Returns the CPU frequency, in MHz. Often needed for setting up timeouts to be
+used in external data acquisition.
+
+int sysAuxClkIsExt(int (*rt_timer_setup)(int, void (*)(void)))
+Informs the module that an external timer will be used. The caller passes a
+pointer to a function that will be called by sysAuxClkRateSet. If such a pointer
+is zero the internal 8254 timer will be used. This is also the default action
+if this function is never called. When the given setup function is called it
+must setup the related timer handler. Its arguments are the timer interrupt
+frequency, in Hz, and a pointer to the service function, made availble by the
+sysAuxClk module, that the timer interrupt handler must call at each interrupt. 
+Such a function will take care of signalling the connected semaphore, and must 
+be called only after setting the interrupt controllers to a state that will 
+allow further interrupts to be taken. It is better to keep interrupts disabled 
+to avoid jitter and overruns, interrupts will be enabled anyhow by the signalled
+task. See an example in rtc.c. It allows to use the PC RTC clock as an
+alternative internal timing source. Recall that it can be a rough one, since
+it can be programmed only with frequencies that are powers of 2.
+
+void *sysAuxClkSem(void *task)
+This function must be used to verify if task "task" is blocked on a semaphore.
+It returns the semaphore on which "task" is waiting, 0 if the task "task" is
+not blocked on a semaphore. Used for making soft LXRT hard real time user space
+processes from other processes, see an example of its usage in taskDelete
+(taskLib.h).
+
+int sysAuxClkRelSem(void *task)
+This function must be used to release the semaphore on which task "task" might
+be blocked, but without scheduling the task itself whose state is set to 0
+instead. It returns 0 if a semaphore has ben released, -ENODEV otherwise. Used
+for a safer cancellation of support pthreads used with LXRT, see an example of
+its usage in taskDelete (taskLib.h).
+
+All the above functions, but the last 2, can be verified by using check.c.
+For running such a test:
+
+- make
+- run
+- type what requested by check
+- CTRL-C to end it all.

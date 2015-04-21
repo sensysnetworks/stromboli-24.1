@@ -1,0 +1,28 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This test shows how you can measure the scheduling latency under
+oneshot timing.
+
+Type <return> to install modules (rtai, rtai_sched, rtai_fifos)
+EOF
+read junk
+
+../scripts/rt_modprobe latency_calibrate.o "$*"
+
+cat <<-EOF
+
+Now start the user space application (checker) which receives
+the values and prints it to the screen.
+
+To stop the application type Ctrl-C
+Type <return> to continue
+EOF
+read junk
+./check
+sleep 1
+echo " "
+echo "Type <return> to remove modules"
+read junk
+../scripts/rt_rmmod latency_calibrate

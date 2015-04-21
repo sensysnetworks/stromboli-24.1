@@ -1,0 +1,12 @@
+sync
+rmmod rtai_fifos_lxrt
+rmmod rtai_lxrt
+rmmod rtai_fifos
+rmmod rtai_sched
+rmmod rtai
+sync
+insmod ../../../../modules/rtai.o
+insmod ../../../../modules/rtai_sched.o
+insmod ../../../../modules/rtai_fifos.o
+insmod ../../../../modules/rtai_lxrt.o
+insmod ../../../../fifos_lxrt/rtai_fifos_lxrt.o

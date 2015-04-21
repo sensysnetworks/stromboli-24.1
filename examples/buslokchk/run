@@ -1,0 +1,20 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example shows measures scheduling latency at the very core of the execution
+
+Type <return> to install the modules
+EOF
+
+read junk
+
+sync
+../../scripts/rt_modprobe ex_buslokchk.o
+
+echo "Now watch for any excessive latency, it prints <elapsed ms, latency ns>"
+echo "To stop the application type <return>"
+read junk
+
+sync
+../../scripts/rt_rmmod ex_buslokchk

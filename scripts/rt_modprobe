@@ -1,0 +1,172 @@
+#!/usr/bin/perl -w
+$cmd = "/bin/sync\n";
+system $cmd;
+# vi: set ts=4:
+
+use strict;
+use Cwd;
+
+my $debug;
+#$debug = 1;
+
+sub fixpath;
+
+my @insmodlist;
+my $progdir;
+my @gmodules;
+my %gmodules;
+my $error = 0;
+
+my $INSMOD = "/sbin/insmod";
+
+# This find the directory that the script is located in
+if($0 =~ m/^\//){
+ $progdir=$0;
+}else{
+ $progdir= getcwd() . "/$0\n";
+}
+$progdir =~ s/\/[^\/]+$//;
+
+my $rtaimoddir=fixpath("$progdir/../modules");
+my $rtaisyms="$rtaimoddir/rtaisyms";
+my $schedpref="$rtaimoddir/schedpref";
+
+open(SYMS,$rtaisyms) or die("Can't find $rtaisyms\n");
+my @exportedsyms=<SYMS>;
+close(SYMS);
+
+open(RULES,$schedpref) or die("Can't find $schedpref\n");
+my @rules=<RULES>;
+close(RULES);
+
+open(KSYMS,"/proc/ksyms") or die("Can't open /proc/ksyms\n");
+my @ksyms=<KSYMS>;
+close(KSYMS);
+
+sub fixpath {
+ my $path = shift;
+ my @pathcomponents = split('/', $path);
+ my @newcomponents;
+ my $comp;
+ my $newpath;
+
+ $debug && print "@pathcomponents\n";
+
+ # dirty hack to remove initial ""
+ shift @pathcomponents;
+
+ while($comp = shift @pathcomponents){
+  if($comp eq ".."){
+   pop(@newcomponents);
+  }else{
+   push @newcomponents, $comp;
+  }
+ }
+ unshift @newcomponents, "";
+
+ $newpath = join('/', @newcomponents);
+ $debug && print "$newpath\n";
+
+ return $newpath;
+}
+
+sub modprobe {
+ my @mods;
+ my $obj=shift @_;  # first thing on the arg list is the module name
+
+ $debug && print "probing: $obj\n";
+ @mods=depmod($obj);
+ $debug && print "depmod: @mods\n";
+ if(scalar(@mods)){
+  foreach(@mods){
+   chomp;
+   modprobe($_);
+  }
+ }
+ $debug && print("modules: @gmodules\n");
+ if(defined $gmodules{"$obj"}){
+  $debug && print("already loaded $obj\n");
+ }else{
+  push @insmodlist,"$INSMOD $obj @_; ";
+  $debug && print("$INSMOD $obj @_\n");
+  $gmodules{"$obj"}=1;
+ }
+}
+
+sub depmod {
+ my @modules;
+ my @output;
+ my @undefinedsyms;
+ my $fullsym;
+ my $obj=shift @_;
+ my $s;
+
+ @output=`nm $obj`;
+
+ @modules=();
+ @undefinedsyms=grep { m/ U / && s/.* U // && !m/__this_module/; } @output;
+ foreach $s (@undefinedsyms) {
+  chomp $s;
+  if(grep { m/ $s\t/ || m/ $s$/; } @ksyms){
+   $fullsym = "vmlinux::$s";
+  }elsif(grep { m/\:\:$s$/; } @exportedsyms){
+   ($fullsym) = grep { m/\:\:$s$/; } @exportedsyms;
+  }else{
+   print "Undefined symbol $s\n";
+   $error = 1;
+  }
+  my $mod;
+  my $rule;
+
+  chomp $fullsym;
+  $mod = $fullsym;
+  $mod =~ s/\:\:.*//;
+  foreach $rule (@rules) {
+   my ($from, $to) = split(' ', $rule);
+   if($mod =~ m/^$from/){
+    $debug && print "using $to instead of $mod\n";
+    $mod = $to;
+   }
+  }
+  $debug && print "mod: $mod\n";
+  $debug && print "modules: @modules\n";
+  # hack up something to see whether $mod is the file name
+  # part of any of the pathnames in @modules
+  my $match = 0;
+  my $module;
+  foreach $module (@modules) {
+      my @pathsegs = split('/',$module);
+      $debug && print "pathsegs: @pathsegs\n";
+      my $lastseg = @pathsegs[scalar(@pathsegs)-1];
+      $debug && print "lastseg: $lastseg\n";
+      $match = ($mod eq $lastseg);
+  }
+  $debug && print "match: $match\n";
+  if($mod ne "vmlinux" && !$match) {
+   push @modules, "$rtaimoddir/$mod";
+  }
+ }
+ return @modules;
+}
+
+$error and exit(1);
+
+my $argv=shift @ARGV;  # shift off the script name
+modprobe($argv,@ARGV);
+
+if($debug){
+ print("rt_modprobe: debugging\n");
+ print("@insmodlist\n");
+}elsif($> == 0){
+ print("rt_modprobe: already root\n");
+ print("+sh -c \"@insmodlist\"\n");
+ system("sh -c \"@insmodlist\"\n");
+}elsif(system("sudo -h &>/dev/null") == 0){
+ print("rt_modprobe: using sudo\n");
+ print("+sudo sh -c \"@insmodlist\"\n");
+ system("sudo sh -c \"@insmodlist\"\n");
+}else{
+ print("rt_modprobe: using su\n");
+ print("+su -c \"@insmodlist\"\n");
+ system("su -c \"@insmodlist\"\n");
+}

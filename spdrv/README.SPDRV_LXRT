@@ -1,0 +1,22 @@
+The original contribution for extending LXRT, from Giuseppe Renoldi 
+(giuseppe@renoldi.org), strengthened the RTAI approach to symmetric usage of 
+all services in kernel-user space for soft-hard real time. 
+Giuseppe contributed also the few changes to lxrt.c and rtai_lxrt.h needed to 
+support it. His original changes have been further modified by Pierre Cloutier 
+in RTAI for Linux 2.4.xx to allow a safer addition of users extensions.
+Here you'll find the RTAI user space interface to the rtai_spdrv package to be 
+used when serial ports are required in hard-soft real time user space 
+applications. 
+The rtai_spdrv package found in this distribution is ready to be interfaced to
+your user space applications simply by including rtai_spdrv_lxrt.h in the code 
+files using it. 
+To use it you must insmod rtai, rtai_sched, rtai_lxrt, rtai_spdrv, 
+rtai_spdrv_lxrt, and any other RTAI module you need. 
+
+The available function calls are the same as those for kernel space applications
+and are listed in README.SPDRV, found in this directory.
+
+To use the all stuff do: make clean, make, from this directory.
+
+Send any comment/feedback to Giuseppe/Paolo.
+(Paolo's email: mantegazza@aero.polimi.it).

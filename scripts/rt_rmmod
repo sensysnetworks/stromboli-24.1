@@ -1,0 +1,28 @@
+#!/usr/bin/perl
+$cmd = "/bin/sync\n";
+system $cmd;
+# vi: set ts=4:
+
+my $RMMOD = '/sbin/rmmod';
+
+$argv=shift @ARGV;
+
+$cmd="\"$RMMOD -r $argv\"";
+
+if($> == 0){
+	print("already root\n");
+	print("+sh -c $cmd\n");
+	system("sh -c $cmd\n");
+}else{
+	if(system("sudo -h &>/dev/null") == 0){
+		print("using sudo\n");
+		print("+sudo sh -c $cmd\n");
+		system("sudo sh -c $cmd\n");
+	}else{
+		print("using su\n");
+		print("+su -c $cmd\n");
+		system("su -c $cmd\n");
+	}
+}
+
+

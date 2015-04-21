@@ -1,0 +1,15 @@
+#!/bin/sh
+
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+#insmod ./sysAuxClk.o
+insmod ./sysAuxClk.o UseTask=1
+sync
+./check
+sync
+rmmod sysAuxClk
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

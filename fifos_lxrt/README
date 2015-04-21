@@ -1,0 +1,40 @@
+What found here supports use of fifos in LXRT/NEWLXRT hard real time user space 
+processes. With it installed you can call:
+
+int rtf_create(unsigned int fifo, int size)
+int rtf_destroy(unsigned int fifo)
+int rtf_put(unsigned int fifo, void *buf, int count)
+int rtf_get(unsigned int fifo, void *buf, int count)
+
+int rtf_create_named_lxrt(const char *name)
+int rtf_getfifobyname_lxrt(const char *name)
+int rtf_reset_lxrt(unsigned int fifo)
+int rtf_resize_lxrt(unsigned int minor, int size)
+int rtf_sem_init_lxrt(unsigned int fifo, int value)
+int rtf_sem_post_lxrt(unsigned int fifo)
+int rtf_sem_trywait_lxrt(unsigned int fifo)
+int rtf_sem_destroy_lxrt(unsigned int fifo)
+
+in the same way you do within kernel space modules. 
+
+All the functions ending with '_lxrt' above corresponds to those having the same
+name without '_lxrt' at the end, but the latter cannot be called in hard real 
+time mode because they use Linux syscalls. Nonetheless a few of them must be 
+used in the same way as you do in modules, e.g. create, destroy, resize use 
+Linux kernel support so they they must be called when the process is not in 
+hard real time, i.e. in the same way you would have used them just in the 
+init/cleanup of modules. 
+
+Naturally it requires to have both rtai_lxrt and rtai_fifos installed. 
+It should not be needed strictly, as with LXRT/NEWLXRT there are mailboxes 
+already available that give the same services and much more. 
+Nonetheless it can be useful as it allows a normal Linux process to communicate 
+with hard real time user space tasks without the need of setting up an LXRT
+buddy. Moreover it easiest the translation of kernel space tasks using fifos 
+to user space with the least changes.
+Recall that contrary to mailboxes there is no synchronization implied in rtf_get
+and rtf_put as they never block, i.e. the standard behaviour of fifos kernel 
+APIs.
+
+Notice that it has been chosen to not integrate this services natively in the 
+rtai_fifos files since LXRT/NEWLXRT is at the moment available just for ix86.

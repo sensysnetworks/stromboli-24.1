@@ -1,0 +1,63 @@
+Extended Intertask Messaging
+============================
+
+Extended intertask messaging allows to use intertaks messages of any size,
+contrary to the corresponding existing RTAI functions which pass just 4
+bytes.  It is done similarely to the QNX way found in sched_ext and LXRT
+support, except that it follows the RTAI naming scheme and returns pointers
+to tasks.  There is thus no formal compatibility with QNX APIs even if the
+functionalities are the same. If you need fully QNX styled APIs use
+sched_ext or LXRT.
+
+RTAI proper extended intertask messages support also safe asynchronous
+sends, done through an immediate return specific rpcx call. In such a way
+the sender is sure the sent message has been received whenever it is
+running again after sending its message. An extended send can be used in
+interrupt handlers but, if the standard rt_send suffices, it is better to
+not use it in such a framework, since it causes a less efficient double
+task switch.
+
+Extended inter task messaging has been added mainly with net_rpc
+applications in mind, but is useful also for normal local applications.
+
+The available functions prototypes follow the names of already existing
+RTAI functions, except for the addition of an 'x' to indicate their
+extended capability. They should be selfexplaining and are:
+
+RT_TASK *rt_sendx(RT_TASK *task, void *smsg, int ssize)
+
+RT_TASK *rt_sendx_if(RT_TASK *task, void *smsg, int ssize)
+
+RT_TASK *rt_sendx_until(RT_TASK *task, void *smsg, int ssize, RTIME time)
+
+RT_TASK *rt_sendx_timed(RT_TASK *task, void *smsg, int ssize, RTIME delay)
+
+RT_TASK *rt_rpcx(RT_TASK *task, void *smsg, void *rmsg, int ssize, int rsize)
+
+RT_TASK *rt_rpcx_if(RT_TASK *task, void *smsg, void *rmsg, int ssize, int rsize)
+
+RT_TASK *rt_rpcx_until(RT_TASK *task, void *smsg, void *rmsg, int ssize, int rsize, RTIME time)
+
+RT_TASK *rt_rpcx_timed(RT_TASK *task, void *smsg, void *rmsg, int ssize, int rsize, RTIME delay)
+
+RT_TASK *rt_returnx(RT_TASK *task, void *msg, int size)
+
+int rt_isrpcx(RT_TASK *task)
+
+RT_TASK *rt_receivex(RT_TASK *task, void *msg, int size, int *truesize)
+
+RT_TASK *rt_receivex_if(RT_TASK *task, void *msg, int size, int *truesize)
+
+RT_TASK *rt_receivex_until(RT_TASK *task, void *msg, int size, int *truesize, RTIME time)
+
+RT_TASK *rt_receivex_timed(RT_TASK *task, void *msg, int size, int *truesize, RTIME delay)
+
+It is clearly more efficient to use their non extended relatives if you
+need to send/rpc/receive/return only up to four bytes. Notice also that you
+should not mix up the use of rt_return and rt_returnx to return something
+to an rpcx/rpc call. The rule is that extended rpcx must match extended
+returnx. Nonetheless using either an rt_returnx mated to an rt_rpc or an
+rt_return with rt_rpcx is possible but will not pass the returned values.
+So it can be usefull just to slice nanos when rt_return(x) is used for the
+sole purpose of synchonization.
+

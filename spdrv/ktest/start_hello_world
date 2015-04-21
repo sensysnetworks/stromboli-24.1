@@ -1,0 +1,23 @@
+sync
+if lsmod | grep "hello_world">/dev/null ; then
+    rmmod hello_world
+fi
+if lsmod | grep "rtai_spdrv">/dev/null ; then
+    rmmod rtai_spdrv
+fi
+if lsmod | grep "rtai_sched">/dev/null ; then
+    rmmod rtai_sched
+fi
+if lsmod | grep "rt_mem_mgr">/dev/null ; then
+    rmmod rt_mem_mgr
+fi
+if lsmod | grep "rtai">/dev/null ; then
+    rmmod rtai
+fi
+sync
+insmod rtai
+#insmod rt_mem_mgr
+insmod rtai_sched
+./freeports
+insmod ../rtai_spdrv.o
+insmod hello_world.o

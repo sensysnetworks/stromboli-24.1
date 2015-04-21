@@ -1,0 +1,190 @@
+
+Support for National Instruments PCI E Series boards
+under RTAI-LXRT/Simulink/RTW.
+
+
+
+!!!!!ATTENTION!!!!!
+===================
+
+This driver is obsolete.
+Please use ni_pci stuff.
+See README.ni_pci.
+
+
+
+
+
+Driver
+======
+
+The driver is implemented as two loadable kernel modules
+(ni_e.c and ni_e_lxrt.c). The second one, with the set
+of inline functions in ni_e_lxrt.h, allows the usage of
+the kernel routines also from user space LXRT apps
+(NI E Series LXRT extension) and in particular from
+Simulink RTW environment.
+The driver has been written following the instructions
+covered in the PCI E Series Register-Level Programmer
+Manual. 
+
+Status
+=====
+
+The current driver supports only a small subset of
+PCI E Series boards.
+
+It has been tested with
+- PCI-6071E
+- PCI-6025E
+- PCI-MIO-16-E-4
+
+It should work also with
+- PCI-MIO-16-E-1
+
+SubDevices supported
+====================
+
+- Analog Input
+- Analog Output
+- Digital Output
+- Digital Input
+
+Files
+=====
+
+- Makefile
+
+- ni_e.c
+	basic kernel module functionalities
+- ni_e.h
+	typedefs, data structures and defines
+- ni_e_regs.h
+	list of registers
+- ni_e_lxrt.c
+	RTAI/LXRT kernel module interface
+- ni_e_lxrt.h
+	RTAI/LXRT exported functions
+
+- ni_e.mdl
+	Simulink library
+- ni_e_test.mdl
+	simple Simulink board test
+- ni_e_dio_mcb.m
+	Matlab maskable callback for digital I/O subdev
+	(82C55 and DAQ-STC options)
+
+- ni_e_ai.c
+	Simulink RTW Analog Input block implementation
+- ni_e_ao.c
+	Simulink RTW Analog Output block implementation
+- ni_e_do.c
+	Simulink RTW Digital Output block implementation
+- ni_e_di.c
+	Simulink RTW Digital Input block implementation
+- ni_e_ai.mexglx
+- ni_e_ao.mexglx
+- ni_e_do.mexglx
+- ni_e_di.mexglx
+	Matlab MEX files
+
+- run_ni_e
+	script to insert LXRT/RTW modules
+- stop_ni_e
+	script to remove LXRT/RTW modules
+
+Location of files into the RTAI tree
+====================================
+
+lxrt/rtw/run_ni_e
+	 stop_ni_e
+lxrt/rtw/drivers/Makefile
+		 ni_e.c
+		 ni_e.h
+		 ni_e_regs.h
+		 ni_e_lxrt.c
+		 ni_e_lxrt.h
+		 ni_e.mdl
+		 ni_e_dio_mcb.m
+		 ni_e_ai.*
+		 ni_e_ao.*
+		 ni_e_do.*
+		 ni_e_di.*
+lxrt/rtw/examples/ni_e_test.mdl
+
+Usage
+=====
+
+1) From lxrt/rtw directory compile the stuff
+	make
+
+2) Insert the module ni_e
+	insmod drivers/ni_e.o
+
+3) Insert the other RTAI modules and the NI E LXRT extension
+	./run_ni_e
+
+4) Open Matlab
+
+5) Open ni_e_test.mdl
+
+6) Compile the example with "Build Model"
+
+7) From the lxrt/rtw/examples directory run ./ni_e_test "-tf inf -w"
+
+8) Open the External Mode Control Panel form the Simulink model menu
+
+9) Connect to the target and start the real time process
+
+10) Stop the real time process
+
+11) Remove the RTAI modules and LXRT extension from lxrt/rtw directory
+	./stop_ni_e
+
+12) Remove the basic ni_e module
+	rmmod ni_e
+
+Library ni_e.mdl
+================
+
+The ni_e.mdl Simulink library contains
+the blocks for I/O operations on the supported
+boards.
+
+Block for Analog Input ('ni_e_ai') with seven parameters:
+- Number of channels (consecutive...)
+- Channel type (differential, NRSE, RSE)
+- Gain (see board features to get the suitable values)
+- Polarity (bipolar/unipolar)
+- Dither enable (ON/OFF)
+- PC timer (YES/NO)
+	NOTE : set the PC timer on YES
+- Sampling time in seconds
+
+Block for Analog Output ('ni_e_ao') with five parameters:
+- DAC channel
+- DAC reference (internal +-10V or external)
+- Channel polarity (unipolar/bipolar)
+- PC timer (YES/NO)
+	NOTE : set the PC timer on YES
+- Sampling time in seconds
+
+Block for Digital Output ('ni_e_do') with six parameters:
+- Select/deselect 82C55 digital I/O support
+- 82C55 port
+- Number of channels within the selected port
+- Select/deselect DAQ-STC digital I/O support
+- DAQ-STC digital I/O line
+- Sampling time in seconds
+
+Block for Digital Input ('ni_e_di') with six parameters:
+- Select/deselect 82C55 digital I/O support
+- 82C55 port
+- Number of channels within the selected port
+- Select/deselect DAQ-STC digital I/O support
+- DAQ-STC digital I/O line
+- Sampling time in seconds
+
+
+Please report any bug and/or comment to
+Lorenzo Dozio (dozio@aero.polimi.it).

@@ -1,0 +1,275 @@
+# Copyright 1994-2000 The MathWorks, Inc.
+#
+# Original File    : grt_unix.tmf   $Revision: 1.1.1.1 $
+#
+# Has become       : grt_rtai.tmf
+#
+# 2001 - Modified and adapted to RTAI by Giuseppe Quaranta
+#        (quaranta@aero.polimi.it)
+#
+# Abstract:
+#	Real-Time Workshop template makefile for building a UNIX-based
+#	stand-alone generic real-time version of Simulink model using
+#	generated C code.
+#
+# 	This makefile attempts to conform to the guidelines specified in the
+# 	IEEE Std 1003.2-1992 (POSIX) standard. It is designed to be used
+#       with GNU Make which is located in matlabroot/rtw/bin.
+#
+# 	Note that this template is automatically customized by the Real-Time
+#	Workshop build procedure to create "<model>.mk"
+#
+#       The following defines can be used to modify the behavior of the
+#	build:
+#	  OPT_OPTS       - Optimization options. Default is -O. To enable 
+#                          debugging specify as OPT_OPTS=-g. 
+#                          Because of optimization problems in IBM_RS, 
+#                          default is no-optimization. 
+#	  OPTS           - User specific compile options.
+#	  USER_SRCS      - Additional user sources, such as files needed by
+#			   S-functions.
+#	  USER_INCLUDES  - Additional include paths
+#			   (i.e. USER_INCLUDES="-Iwhere-ever -Iwhere-ever2")
+#
+#       This template makefile is designed to be used with a system target
+#       file that contains 'rtwgensettings.BuildDirSuffix' see grt.tlc
+
+#------------------------ Macros read by make_rtw ------------------------------
+#
+# The following macros are read by the Real-Time Workshop build procedure:
+#
+#  MAKECMD         - This is the command used to invoke the make utility
+#  HOST            - What platform this template makefile is targeted for
+#                    (i.e. PC or UNIX)
+#  BUILD           - Invoke make from the Real-Time Workshop build procedure
+#                    (yes/no)?
+#  SYS_TARGET_FILE - Name of system target file.
+
+MAKECMD         = make
+HOST=UNIX
+BUILD=yes
+SYS_TARGET_FILE = grt_rtai.tlc
+
+#---------------------- Tokens expanded by make_rtw ----------------------------
+#
+# The following tokens, when wrapped with "|>" and "|<" are expanded by the
+# Real-Time Workshop build procedure.
+#
+#  MODEL_NAME      - Name of the Simulink block diagram
+#  MODEL_MODULES   - Any additional generated source modules
+#  MAKEFILE_NAME   - Name of makefile created from template makefile <model>.mk
+#  MATLAB_ROOT     - Path to were MATLAB is installed.
+#  S_FUNCTIONS     - List of S-functions.
+#  S_FUNCTIONS_LIB - List of S-functions libraries to link. 
+#  SOLVER          - Solver source file name
+#  NUMST           - Number of sample times
+#  TID01EQ         - yes (1) or no (0): Are sampling rates of continuous task
+#                    (tid=0) and 1st discrete task equal.
+#  NCSTATES        - Number of continuous states
+#  COMPUTER        - Computer type. See the MATLAB computer command.
+#  BUILDARGS       - Options passed in at the command line.
+#  MULTITASKING    - yes (1) or no (0): Is solver mode multitasking
+#  EXT_MODE        - yes (1) or no (0): Build for external mode
+#  MAT_FILE        - yes (1) or no (0): generate a model.mat file?
+
+
+MODEL           = |>MODEL_NAME<|
+MODULES         = |>MODEL_MODULES<|
+MAKEFILE        = |>MAKEFILE_NAME<|
+MATLAB_ROOT     = |>MATLAB_ROOT<|
+S_FUNCTIONS     = |>S_FUNCTIONS<|
+S_FUNCTIONS_LIB = |>S_FUNCTIONS_LIB<|
+SOLVER          = |>SOLVER<|
+NUMST           = |>NUMST<|
+TID01EQ         = |>TID01EQ<|
+NCSTATES        = |>NCSTATES<|
+COMPUTER        = |>COMPUTER<|
+BUILDARGS       = |>BUILDARGS<|
+MULTITASKING    = |>MULTITASKING<|
+EXT_MODE        = |>EXT_MODE<|
+BASE_PRIORITY   = |>BASE_PRIORITY<|
+STACK_SIZE      = |>STACK_SIZE<|
+MAT_FILE        = |>MAT_FILE<|
+
+LINUX_HOME = /usr/src/linux
+RTAI_HOME  = /home/rtai
+RTW_R      = $(MATLAB_ROOT)/rtw/c
+RTAI_RTW   = $(RTAI_HOME)/lxrt/rtw
+DRIVERS_HOME = $(RTAI_RTW)/drivers
+
+#--------------------------- Tool Specifications -------------------------------
+
+include $(MATLAB_ROOT)/rtw/c/tools/unixtools.mk
+#
+# .mat File Logging
+#NOTE: by default, the .mat file is created in the root directory of the
+#      host file system that VxWorks was booted from.
+ifeq ($(MAT_FILE),1)
+  LOG_SRC   = rtwlog.c
+  LOG_OPTS  = -DMAT_FILE "-DSAVEFILE=$(MODEL).mat"
+endif
+#
+
+
+#------------------------------ Include Path -----------------------------------
+
+MATLAB_INCLUDES = \
+	-I$(MATLAB_ROOT)/simulink/include \
+        -I$(MATLAB_ROOT)/extern/include \
+	-I$(RTW_R)/src \
+	-I$(RTW_R)/libsrc \
+	-I$(RTW_R)/tornado
+ 
+USER_INCLUDES = -I$(LINUX_HOME)/include \
+	-I$(RTAI_HOME)/include -I$(RTAI_HOME)/lxrt/rtw  -I$(DRIVERS_HOME)
+
+# Additional file include paths
+ADD_INCLUDES = \
+|>START_EXPAND_INCLUDES<|       -I|>EXPAND_DIR_NAME<| \
+|>END_EXPAND_INCLUDES<|
+
+INCLUDES = -I. -I.. $(MATLAB_INCLUDES) $(ADD_INCLUDES) $(USER_INCLUDES) \
+        $(INSTRUMENT_INCLUDES)
+	 
+
+
+#----------------------------- External mode -----------------------------------
+# Uncomment -DVERBOSE to have information printed to stdout (or specify
+# OPTS=-DVERBOSE).
+ifeq ($(EXT_MODE),1)
+  EXT_SRC     = ext_svr.c updown.c  ext_svr_transport.c
+  EXT_CC_OPTS = -DEXT_MODE  -D$(COMPUTER) #-DVERBOSE
+  EXT_LIB     =
+  ifeq ($(COMPUTER),IBM_RS)
+    EXT_CC_OPTS += -DIBM_RS
+  endif
+  ifeq ($(COMPUTER),SOL2)
+    EXT_LIB = -lsocket -lnsl
+  endif
+  ifeq ($(COMPUTER),SUN4)
+    EXT_CC_OPTS += -DSUN4
+  endif
+endif
+
+#-------------------------------- C Flags --------------------------------------
+
+
+# Optimization Options
+OPT_OPTS = -O2 
+
+
+# General User Options
+OPTS =
+DEB_OPT =  -DDBGPRT
+
+# Compiler options, etc:
+CC_OPTS = -Wall $(DEB_OPT) $(OPT_OPTS) $(OPTS) $(ANSI_OPTS) $(EXT_CC_OPTS) \
+	$(LOG_OPTS)
+
+CPP_REQ_DEFINES = -DMODEL=$(MODEL) -DRT -DNUMST=$(NUMST) \
+                  -DTID01EQ=$(TID01EQ) -DNCSTATES=$(NCSTATES) -DUNIX \
+                  -DMT=$(MULTITASKING) -DVXWORKS
+
+CFLAGS = -DRT $(CC_OPTS) $(CPP_REQ_DEFINES) $(INCLUDES) $(NOVERSION) \
+	-ffast-math -c 
+
+RT_MAIN_DEFINES = -DBASE_PRIORITY=$(BASE_PRIORITY) -DSTACK_SIZE=$(STACK_SIZE)
+LDFLAGS   = -static 
+
+RTWLIB  = librtw.a   
+LIBS    = -lpthread -lm $(EXT_LIB) $(S_FUNCTIONS_LIB)
+
+#----------------------------- Source Files ------------------------------------
+
+REQ_SRCS  = $(MODEL).c $(MODULES) rtai_main.c rt_sim.c \
+	rt_main.c rt_nonfinite.c $(EXT_SRC) $(LOG_SRC)
+
+
+
+USER_OBJS       = 
+LOCAL_USER_OBJS = $(notdir $(USER_OBJS))
+
+SRCS      = $(REQ_SRCS) $(S_FUNCTIONS) $(SOLVER)
+OBJS      = $(SRCS:.c=.o) $(USER_OBJS)
+LINK_OBJS = $(SRCS:.c=.o) $(LOCAL_USER_OBJS)
+
+PROGRAM = ../$(MODEL)
+
+
+#--------------------------------- Rules ---------------------------------------
+
+$(PROGRAM) : $(OBJS) $(RTWLIB)
+	gcc  $(LDFLAGS) -o $@ $(LINK_OBJS) $(RTWLIB) $(LIBS)
+	@echo "### Created executable: $(PROGRAM)"
+
+%.o : %.c
+	gcc -c  $(CFLAGS) $<
+
+%.o : $(DRIVERS_HOME)/%.c
+	gcc -c  $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/rtw/c/grt/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/rtw/c/src/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(RTAI_RTW)/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/rtw/c/tornado/%.c
+	gcc -c $(CFLAGS) $(RT_MAIN_DEFINES) $<
+
+|>START_EXPAND_RULES<|%.o : |>EXPAND_DIR_NAME<|/%.c
+        $(CC) -c $(CFLAGS) $<
+
+|>END_EXPAND_RULES<|
+
+%.o : $(MATLAB_ROOT)/rtw/c/libsrc/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/toolbox/comm/commsfun/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/toolbox/dspblks/dspmex/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/toolbox/fixpoint/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/toolbox/fuzzy/fuzzy/src/%.c
+	gcc -c $(CFLAGS) $<
+
+%.o : $(MATLAB_ROOT)/simulink/src/%.c
+	gcc -c $(CFLAGS) $<
+
+
+$(RTWLIB) :  $(MAKEFILE) rtw_proj.tmw
+	@echo "Creating $@ from $(RTW_R)/libsrc/*.c"
+	@\rm -f $@
+	@for file in $(RTW_R)/libsrc/*.c; do \
+	  echo "$(CC) -c $(CFLAGS) $$file"; \
+	  $(CC) -c $(MATLAB_INCLUDES) $(CFLAGS) $$file; \
+	  ofile=`echo $$file | sed -e 's/\.c/\.o/g' -e 's|/.*/||g'`; \
+	  ar r $@ $$ofile; \
+	  \rm -f $$ofile; \
+	done
+
+#----------------------------- Dependencies ------------------------------------
+
+$(OBJS) : $(MAKEFILE) rtw_proj.tmw
+
+purge : clean
+	@echo "### Deleting the generated source code for $(MODEL)"
+	@\rm -f $(MODEL).c $(MODEL).h $(MODEL).prm $(MODEL).reg $(MODEL).rtw \
+	        $(MODULES) rtw_proj.tmw $(MAKEFILE)
+
+clean :
+	@echo "### Deleting the objects and $(PROGRAM)"
+	@\rm -f  $(LINK_OBJS) $(PROGRAM)
+
+cleanlib :
+	@echo "### Deleting the librtw.a"
+	@\rm -f librtw.a 
+
+# EOF: grt_rtai.tmf

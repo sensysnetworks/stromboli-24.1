@@ -1,0 +1,196 @@
+#!/bin/sh
+
+#
+# Find the RTAI base technology.
+#
+eval `grep '^EXTRAVERSION =' $LINUXDIR/Makefile | sed -e 's, ,,g'`
+case "$EXTRAVERSION" in
+  *rthal*)
+    define_bool CONFIG_RTAI_RTHAL y
+    define_bool CONFIG_RTAI_ADEOS n
+    ;;
+  *adeos*)
+    define_bool CONFIG_RTAI_ADEOS y
+    define_bool CONFIG_RTAI_RTHAL n
+    ;;
+  *) 
+    echo "*** The RTAI kernel patch has not yet been applied to your kernel!"
+    echo "*** Please do this before continuing..."
+    exit 1
+esac
+
+define_bool CONFIG_RTAI m
+
+define_bool CONFIG_RTAI_MOUNT_ON_LOAD y
+
+if [ $(echo $UTS_VERSION | grep -c '^2\.2') = '1' ]
+then
+	define_bool CONFIG_RTAI_LINUX22 y
+	define_bool CONFIG_RTAI_LINUX24 n
+else
+	define_bool CONFIG_RTAI_LINUX22 n
+	define_bool CONFIG_RTAI_LINUX24 y
+fi
+
+
+#
+# Experimental stuff which is not yet meant for production use 
+#
+mainmenu_option next_comment
+comment 'Code maturity level options'
+bool 'Prompt for experimental code' CONFIG_RTAI_EXPERIMENTAL
+endmenu
+
+#
+# Schedulers
+#
+mainmenu_option next_comment
+comment 'Schedulers'
+
+if [ "$CONFIG_SMP" != y ];then
+	dep_tristate 'UP scheduler' CONFIG_RTAI_SCHED_UP $CONFIG_RTAI
+fi
+if [ "$CONFIG_X86" = y ];then
+	dep_tristate 'SMP scheduler' CONFIG_RTAI_SCHED_SMP $CONFIG_RTAI
+else
+	define_bool CONFIG_RTAI_SCHED_SMP n
+fi
+if [ "$CONFIG_X86" = y ];then
+	dep_tristate 'MUP scheduler' CONFIG_RTAI_SCHED_MUP $CONFIG_RTAI
+else
+	define_bool CONFIG_RTAI_SCHED_MUP n
+fi
+if [ "$CONFIG_RTAI_SCHED_SMP" = m -o "$CONFIG_RTAI_SCHED_MUP" = m ]; then
+	int '  Default No of Processors for SMP systems' CONFIG_RTAI_CPUS 2 
+fi 
+endmenu
+
+#
+# Features
+#
+mainmenu_option next_comment
+comment 'Features'
+
+#bool 'Compile programs to be executed without installing' CONFIG_RTAI_INPLACE
+
+if [ "$CONFIG_M386" = y  -o "$CONFIG_8xx" = y -o "$CONFIG_MELAN" = y ];then
+	comment 'Floating point support disabled (kernel reports non-FPU processor)'
+	define_bool CONFIG_RTAI_FPU_SUPPORT n
+else
+	bool 'Enable floating point support' CONFIG_RTAI_FPU_SUPPORT
+fi
+
+if [ "$CONFIG_RTAI_FPU_SUPPORT" = y -o "$CONFIG_ARM" = y ];then
+	dep_tristate 'RTAI math library support' CONFIG_RTAI_LIBM $CONFIG_RTAI
+fi
+
+if [ "$CONFIG_RTAI_FPU_SUPPORT" = n -a "$CONFIG_ARM" = y ];then
+	dep_tristate 'RTAI Softfloat support ' CONFIG_RTAI_SFLIB $CONFIG_RTAI
+fi
+
+if [ "$CONFIG_TRACE" = y ];then
+	define_bool CONFIG_RTAI_TRACE y
+fi
+
+if [ "$CONFIG_X86" = y ]; then
+	bool 'Strange APIC support' CONFIG_RTAI_STRANGE_APIC
+fi
+
+if [ "$CONFIG_UCLINUX" = y ]; then
+	bool 'True Periodic Timer' CONFIG_RTAI_TIMER_TRUE_PERIODIC
+fi
+
+endmenu
+
+#
+# Subsystems
+#
+mainmenu_option next_comment
+comment 'Subsystems'
+
+dep_tristate 'RT memory manager' CONFIG_RTAI_DYN_MM
+if [ "$CONFIG_RTAI_DYN_MM" != n ];then
+# Right now, vmalloc() only seems to work on i386
+	if [ "$CONFIG_X86" = y ];then
+		bool '  Use vmalloc() instead of kmalloc()' CONFIG_RTAI_MM_VMALLOC
+	else
+		define_bool CONFIG_RTAI_MM_VMALLOC n
+	fi
+fi
+
+dep_tristate 'FIFOs' CONFIG_RTAI_FIFOS $CONFIG_RTAI
+dep_tristate 'Shared Memory' CONFIG_RTAI_SHMEM $CONFIG_RTAI
+dep_tristate 'POSIX API' CONFIG_RTAI_POSIX $CONFIG_RTAI
+dep_tristate 'Watchdog' CONFIG_RTAI_WATCHDOG $CONFIG_RTAI
+
+if [ "$CONFIG_X86" = y ]; then
+	dep_tristate 'LXRT - Realtime in User Space' CONFIG_RTAI_LXRT $CONFIG_RTAI
+	if [ "$CONFIG_RTAI_LXRT" = m ]; then
+		define_bool CONFIG_RTAI_LXRT_KTRD y
+		define_bool CONFIG_RTAI_LXRT_NOKTRD n
+	fi
+	dep_tristate 'NEWLXRT - Native Linux Hard Realtime (NEW)' CONFIG_RTAI_NEWLXRT $CONFIG_RTAI
+	if [ "$CONFIG_RTAI_NEWLXRT" = m ]; then
+		define_bool CONFIG_RTAI_NEWLXRT_NOBUDDY y
+		define_bool CONFIG_RTAI_NEWLXRT_BUDDY n
+	fi
+	if [ "$CONFIG_RTAI_LXRT" = m -o "$CONFIG_RTAI_NEWLXRT" = m ]; then
+#		dep_tristate '  LXRT Octave wrapper' CONFIG_RTAI_LXRT_OCTAVE $CONFIG_RTAI_LXRT
+		tristate '  LXRT Real-Time Workshop wrapper (OBSOLETE)' CONFIG_RTAI_LXRT_RTW
+		dep_tristate '  LXRT rt_com wrapper' CONFIG_RTAI_RTCOM_LXRT $CONFIG_RTAI_RTCOM
+		dep_tristate '  LXRT FIFOs wrapper' CONFIG_RTAI_FIFOS_LXRT $CONFIG_RTAI_FIFOS
+		dep_tristate '  LXRT COMEDI wrapper (NEW)' CONFIG_RTAI_COMEDI_LXRT $CONFIG_RTAI_SHMEM
+	fi
+	dep_tristate 'C++ support' CONFIG_RTAI_CPLUSPLUS $CONFIG_RTAI
+	if [ "$CONFIG_RTAI_EXPERIMENTAL" = y -a "$CONFIG_RTAI_CPLUSPLUS" != n ]; then
+		bool       '  New rtai_cpp interface (EXPERIMENTAL)' CONFIG_RTAI_NEW_CPP
+	fi
+	dep_tristate 'Tasklets' CONFIG_RTAI_TASKLETS $CONFIG_RTAI
+	if [ "$CONFIG_RTAI_LXRT" = m -o "$CONFIG_RTAI_NEWLXRT" = m ]; then
+		dep_tristate 'User-space interrupts (NEW)' CONFIG_RTAI_USI $CONFIG_RTAI_TASKLETS $CONFIG_RTAI
+	fi
+	dep_tristate 'Bits' CONFIG_RTAI_BITS $CONFIG_RTAI
+	dep_tristate 'Typed mailboxes and messages queues' CONFIG_RTAI_TBX $CONFIG_RTAI
+else
+	define_bool CONFIG_RTAI_LXRT n
+	define_bool CONFIG_RTAI_NEWLXRT n
+	define_bool CONFIG_RTAI_CPLUSPLUS n
+fi
+
+if [ "$CONFIG_X86" = y ]; then
+	dep_tristate 'Real-Time serial driver (rt_com)' CONFIG_RTAI_RTCOM $CONFIG_RTAI
+	dep_tristate 'Real-Time serial driver (spdrv) (NEW)' CONFIG_RTAI_SPDRV $CONFIG_RTAI
+fi
+if [ "$CONFIG_8xx" = y ]; then
+	dep_tristate 'Real-Time serial driver (spdrv) (NEW)' CONFIG_RTAI_SPDRV $CONFIG_RTAI
+fi
+dep_tristate 'Distributed Realtime (net_rpc)' CONFIG_RTAI_NETRPC $CONFIG_RTAI
+if [ "$CONFIG_RTAI_EXPERIMENTAL" = y ]; then
+	dep_tristate 'Real-Time networking (rtnet) (EXTERNAL)' CONFIG_RTAI_RTNET $CONFIG_RTAI
+	dep_bool 'Do network processing in a task (OBSOLETE)' CONFIG_RTAI_RTNET_TASK $CONFIG_RTAI_RTNET
+fi
+
+endmenu
+
+#
+# Tests and Examples
+#
+mainmenu_option next_comment
+comment 'Tests and Examples'
+bool 'Compile examples in kernel space' CONFIG_RTAI_EXAMPLES
+if [ "$CONFIG_RTAI_LXRT" = m -o "$CONFIG_RTAI_NEWLXRT" = m ]; then
+	bool 'Compile examples in user space' CONFIG_RTAI_LXRT_EXAMPLES
+fi
+bool 'Compile tests' CONFIG_RTAI_TESTS 
+endmenu
+
+#
+# ARM specific stuff
+#
+mainmenu_option next_comment
+comment 'RTAI ARM version'
+if [ "$CONFIG_ARM" = y ];then
+	bool 'Use old RTAI' CONFIG_RTAI_ARM_OLD
+fi
+endmenu
+

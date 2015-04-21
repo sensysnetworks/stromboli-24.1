@@ -1,0 +1,7 @@
+This directory implements an emulation of the few basic rtnet functions needed 
+for the implemetation of net_rpc. The real net operations are afforded by Linux
+through its sockets in user space. A kind of toy that nicely illustrates the 
+use and power of RTAI proper sysreqs, but makes net_rpc not truly real time.
+Let's hope that a viable rtnet implementation for Linux 2.4.xx will be available
+soon.
+			Is Dave listening :-)?

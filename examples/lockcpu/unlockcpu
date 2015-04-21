@@ -1,0 +1,6 @@
+sync
+rmmod switch_cpu
+sleep 1
+rmmod lock_module
+rmmod rtai_sched
+rmmod rtai

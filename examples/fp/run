@@ -1,0 +1,26 @@
+#!/bin/sh
+
+echo " "
+echo "This example demonstrates the support of floating point operations"
+echo "in real-time tasks by calculating a sine, that can be seen"
+echo "wave squared on a scope connected to the parallel port."
+echo "Since it interrupts a front linux process (check),"
+echo "that is carrying out a floating point summation,"
+echo "it is possible to verify the appropriate working of fpu support"
+echo "and fp save/restores."
+echo "Type <return> to install the modules (rtai, rtai_sched, rtai_fifos)"
+read junk
+
+../../scripts/rt_modprobe ex_fp.o
+
+echo "Now start the application"
+echo "To stop the application type Ctrl-C and RETURN"
+echo "Type <return> to continue"
+read junk
+./check
+echo " "
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_fp
+

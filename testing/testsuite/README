@@ -1,0 +1,18 @@
+RTAI Testsuite
+--------------
+
+The testsuite uses 'sudo' to run commands like 'insmod', 'modprobe' etc. An
+easy (but unsecure!) way to allow this is adding something like
+
+	username  ALL= NOPASSWD: ALL
+
+to /etc/sudoers, which lets you execute all commands as root, without
+asking for a password.   
+
+Please note that this is highly insecure, as you are allowed to execute
+every command with root permissions! Don't use this on production machines
+or on systems which are used for 'normal' work. You have been warned!
+
+We probably need a more universal way to load non-installed modules.
+Something like rt_modprobe, but without perl :^)
+

@@ -1,0 +1,25 @@
+This example introduces the basic frame of a generalized, per process, UNIX 
+server to be used by hard real time LXRT applications that want to access Linux 
+services.
+Clearly at the very moment they use this server they are timed by Linux. So
+they cannot satisfy hard real timing constraints anymore, even if they remain 
+under control of the LXRT scheduler and Linux cannot schedule them directly.
+There is clearly a partial loss of efficiency with respect to plain Linux
+usage. In fact I (Paolo) do not like such a solution very much and prefer an 
+application specific server. However users that want to have it simple will be 
+eased a lot, especially during development. That's why it is here.
+
+This example clearly shows the power of remote procedure call as a unified
+inter tasks communication and synchronization mechanism. There are clearly two
+switches per Linux service request, a standard microkernel way of working.
+That, plus the need of copying some data, is responsable for most of the
+penalty you have to pay for using this server. The response feeling is not
+so bad anyhow. Those knowing QNX should have it easily understood what it is
+like.
+
+Once more if you want it faster use your own server, and recall that Linux
+should not be your main concern while you are running hard real time in user
+space. It should be needed just for some support services to be taken in
+intervals when hard real time is not requested.
+
+It is just a baby's birth, now he must grow up.

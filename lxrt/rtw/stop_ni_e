@@ -1,0 +1,8 @@
+sync
+
+#rmmod rt_ni_e_timer
+rmmod sysAuxClk
+rmmod ni_e_lxrt
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

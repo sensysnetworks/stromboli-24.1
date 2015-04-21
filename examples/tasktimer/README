@@ -1,0 +1,11 @@
+****** TASKTIMER EXAMPLE ******
+
+This does the same thing as the timer example, but using tasks instead.
+To run it type:
+
+make clean
+make
+./run
+
+Run ./todisk in another shell.
+In place of ./todisk you can use ./loop that keep reapiting.

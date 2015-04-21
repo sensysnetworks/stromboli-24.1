@@ -1,0 +1,192 @@
+
+Support for National Instruments PCI boards
+under RTAI-LXRT/Simulink/RTW.
+
+Driver
+======
+
+The driver is implemented as two loadable kernel modules
+(ni_pci.c and ni_pci_lxrt.c). The second one, with the set
+of inline functions in ni_pci_lxrt.h, allows the usage of
+the kernel routines also from user space LXRT apps
+(NI PCI LXRT extension) and in particular from
+Simulink RTW environment.
+The driver has been written following the instructions
+covered in the PCI E Series Register-Level Programmer
+Manual.
+
+Status
+=====
+
+The current driver supports only a small subset of
+PCI E Series boards.
+
+It has been tested with
+- PCI 6071E
+- PCI 6025E
+- PCI MIO-16-E-4
+- PCI 6713
+
+It should work also with
+- PCI-MIO-16-E-1
+- PCI 6023E
+- PCI 6024E
+- PCI 6711
+
+The driver supports multiple NI boards simultaneously.
+The specific board access is addressed by an index.
+The utility 'ni_pci_list' gives you a list of supported
+NI boards found in your system and the relative index
+number. This value must be used to access the board
+from Simulink RTW block masks (see below ni_pci.mdl library).
+
+SubDevices supported
+====================
+
+- Analog Input
+- Analog Output
+- Digital Output
+- Digital Input
+
+Files
+=====
+
+- Makefile
+
+- ni_pci.c
+	basic kernel module functionalities
+- ni_pci.h
+	typedefs, data structures, list of registers
+- ni_pci_lxrt.c
+	RTAI/LXRT kernel module interface
+- ni_pci_lxrt.h
+	RTAI/LXRT exported functions
+- ni_pci_list.c
+	list the supported NI boards and corresponding indeces
+
+- ni_pci.mdl
+	Simulink library
+- ni_pci_test.mdl
+	simple Simulink board test
+- ni_pci_dio_mcb.m
+	Matlab maskable callback for digital I/O subdev
+	(82C55 and DAQ-STC options)
+
+- ni_pci_ai.c
+	Simulink RTW Analog Input block implementation
+- ni_pci_ao.c
+	Simulink RTW Analog Output block implementation
+- ni_pci_do.c
+	Simulink RTW Digital Output block implementation
+- ni_pci_di.c
+	Simulink RTW Digital Input block implementation
+- ni_pci_ai.mexglx
+- ni_pci_ao.mexglx
+- ni_pci_do.mexglx
+- ni_pci_di.mexglx
+	Matlab MEX files
+
+- run_ni_pci
+	script to insert LXRT/RTW modules
+- stop_ni_pci
+	script to remove LXRT/RTW modules
+
+Location of files into the RTAI tree
+====================================
+
+lxrt/rtw/run_ni_pci
+	 stop_ni_pci
+lxrt/rtw/drivers/Makefile
+		 ni_pci.c
+		 ni_pci.h
+		 ni_pci_lxrt.c
+		 ni_pci_lxrt.h
+		 ni_pci_list.c
+		 ni_pci.mdl
+		 ni_pci_dio_mcb.m
+		 ni_pci_ai.*
+		 ni_pci_ao.*
+		 ni_pci_do.*
+		 ni_pci_di.*
+lxrt/rtw/examples/ni_pci_test.mdl
+
+Usage
+=====
+
+1) From lxrt/rtw directory compile the stuff
+	make
+
+2) Insert the module ni_e
+	insmod drivers/ni_pci.o
+
+3) Insert the other RTAI modules and the NI PCI LXRT extension
+	./run_ni_pci
+
+4) Run the list utility to get the indeces of the supported
+   NI boards found in your system
+	./drivers/ni_pci_list
+
+4) Open Matlab
+
+5) Open ni_pci_test.mdl and change the parameters as you want
+
+6) Compile the example with "Build Model"
+
+7) From the lxrt/rtw/examples directory run ./ni_pci_test "-tf inf -w"
+
+8) Open the External Mode Control Panel form the Simulink model menu
+
+9) Connect to the target and start the real time process
+
+10) Stop the real time process
+
+11) Remove the RTAI modules and LXRT extension from lxrt/rtw directory
+	./stop_ni_pci
+
+12) Remove the basic ni_e module
+	rmmod ni_pci
+
+Library ni_pci.mdl
+==================
+
+The ni_pci.mdl Simulink library contains
+the blocks for I/O operations on the supported
+boards.
+
+Block for Analog Input ('ni_pci_ai') with seven parameters:
+- Board index (as obtained from ni_pci_list)
+- Number of channels (consecutive...)
+- Channel type (differential, NRSE, RSE)
+- Gain (see board features to get the suitable values)
+- Polarity (bipolar/unipolar)
+- Dither enable (ON/OFF)
+- Sampling time in seconds
+
+Block for Analog Output ('ni_pci_ao') with five parameters:
+- Board index (as obtained from ni_pci_list)
+- DAC channel
+- DAC reference (internal +-10V or external)
+- Channel polarity (unipolar/bipolar)
+- Sampling time in seconds
+
+Block for Digital Output ('ni_pci_do') with six parameters:
+- Board index (as obtained from ni_pci_list)
+- Select/deselect 82C55 digital I/O support
+- 82C55 port
+- Number of channels within the selected port
+- Select/deselect DIO module digital I/O support
+- DIO module digital I/O line
+- Sampling time in seconds
+
+Block for Digital Input ('ni_pci_di') with six parameters:
+- Board index (as obtained from ni_pci_list)
+- Select/deselect 82C55 digital I/O support
+- 82C55 port
+- Number of channels within the selected port
+- Select/deselect DIO module digital I/O support
+- DIO module digital I/O line
+- Sampling time in seconds
+
+
+Please report any bug and/or comment to
+Lorenzo Dozio (dozio@aero.polimi.it).

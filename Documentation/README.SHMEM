@@ -1,0 +1,91 @@
+Shared Memory
+=============
+
+This directory contains an RTAI specific module that allows sharing memory
+inter-intra real time tasks and Linux processes. In fact it can be an
+alternative to SYSTEM V shared memory, the services are symmetricall, i.e.
+the same calls can be used both in real time tasks, i.e. within the kernel,
+and Linux processes.
+
+The function calls for Linux processes are inlined in the file
+"rtai_shm.h".  This approach has been preferred to a library since: is
+simpler, more effective, the calls are short, simple and just a few per
+process.
+
+They are:
+
+  #include <rtai_shm.h>
+  unsigned long name;
+  void *adr;
+  int size;
+
+Call to allocate memory:
+
+  adr = rtai_malloc_adr(adr, name, size);   // in user space
+  adr = rtai_malloc(name, size);   	  // in user space
+  adr = rtai_kmalloc(name, size);    	  // in kernel (module) space
+
+Call to free memory:
+
+  rtai_free(name, adr);  //in user space
+  rtai_kfree(name);      //in kernel (module) space
+
+The first allocation does a real allocation, any subsequent call to
+allocate with the same name from Linux processes just maps the area to the
+user space, or return the related pointer to the already allocated space in
+kernel space.  Analogously the freeing calls have just the effect of
+unmapping till the last is done, as that is the one the really frees any
+allocated memory. Clearly cooperating users have to use the same "name".
+
+This implementation is based on Linux "drivers/char/bttv.c". The original
+idea of implementing shared memory by copying a few basic functions from
+Linux bttv.c is due to Tomasz (Tomek) Motylewski
+(motyl@stan.chemie.unibas.ch).  Since bttv.c is now simpler and clearer
+than it was before there is no more any need to follow, and depend, on
+Tomek's mbuff way of doing it. In fact RTAI shared memory is based on the
+(almost) verbatim copy of the needed bttv.c functions, as found in
+rtai_bttv.h in this directory.  RTAI shared memory implementation always
+made it easier for users to code the related services by using calls
+similar to Unix OS services.
+
+
+A couple of technicalities
+--------------------------
+
+- I kept Tomek's idea to use the char misc_device, Linux seems to install
+  by default on major = 10, with minor = 254. You can change it to your
+  preferred value by changing the macro RTAI_SHM_MISC_MINOR in rtai_shm.c. It
+  is however important to note that RTAI shared memory, whatever the CPU
+  architecture in use, is not implemented as a device driver but as an RTAI
+  specific system call.  It is registered at insmod so you should be warned
+  if the value is inappropriate for your environment. 
+
+- I used a fixed array list of allocated areas, instead of a list of
+  pointers, as the related operations are not critical. You can make it to
+  suite the size of your needs by changing the macro MAX_SLOTS in
+  rtai_shm.c.
+
+As explained above the allocated area is identified by an unsigned long. To
+use alphanumeric mnemonic terms a couple of very simple functions are
+available to translate a SIX CHARACTERs (or shorter) string into an unsigned
+long and back, both in kernel and user space. They are:
+
+  unsigned long nam2num(char *name);
+  void num2nam(unsigned long num, char *name);
+
+So if you like to use them you can do:
+
+  adr = rtai_malloc(nam2num("myNAME"), size);
+
+or
+
+  rtai_free(nam2num("myNAME"), adr);
+
+Allowed characters are:
+
+- English letters (case insensitive);
+- 10 digits;
+- underscore (_) and another character of your choice. The latter will be 
+  always converted back to a $ by num2nam.
+
+Paolo Mantegazza (mantegazza@aero.polimi.it).

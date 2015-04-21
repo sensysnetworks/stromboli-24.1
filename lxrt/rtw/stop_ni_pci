@@ -1,0 +1,11 @@
+#!/bin/sh
+
+sync
+
+rmmod sysAuxClk
+rmmod ni_pci_lxrt
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+
+sync

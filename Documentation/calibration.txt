@@ -1,0 +1,34 @@
+Dynamic CPU frequency and bus frequency calibration
+===================================================
+
+This replaces the CPU_FREQ and APIC_FREQ #defines in rtai.h with values
+obtained dynamically when the RTAI modules are installed. It is no
+longer necessary to recompile RTAI for different computers of differing
+specifications. The same binaries will now automatically calibrate
+themselves to the computer when they are installed.
+
+- good for binary distributions
+- good for a host target development environment
+
+The CPU frequency calibration by default uses Linux's value (which for
+Pentiums is obtained dynamically at boot time by calibrating the TSC
+against the 8254 timer). Alternatively the cpu_freq_calibration utility
+can be run for 20 seconds or so to obtain a more accurate value. This
+calibrated value can be made to override the default value by using an
+insmod command line parameter...
+
+insmod rtai CpuFreq=<calibrated_value>
+
+...or by editing the CALIBRATED_CPU_FREQ define in include/asm/rtai.h
+
+The APIC frequency (usually only relevant for SMP machines) by default
+is read from the APIC timer directly. Alternatively the
+apic_freq_calibration utility can be run for 20 seconds or so to obtain
+a more accurate value. This calibrated value can be made to override the
+default value by using an insmod command line parameter...
+
+insmod rtai ApicFreq=<calibrated_value>
+
+...or by editing the CALIBRATED_APIC_FREQ define in include/asm/rtai.h
+
+Ian Soanes (ians@lineo.com)

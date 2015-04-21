@@ -1,0 +1,33 @@
+
+	FLOW OF CONTEXT OF EXECUTION - CASE RECEIVER IS RECEIVED BLOCKED
+
+This one pager explains what happens in the kernel when a user space 
+program SND uses the LXRT rt_rpc() call to communicate with user space 
+task RCV:
+
+rt_rpc()
+	soft int      -> Linux
+	switch from Linux to RTAI
+	execute rt_rpc()
+	rt_schedule() -> RCV
+	rt_receive() completes, SND becomes RETURN blocked
+	rt_receive() returns from RTAI, pends srq on RCV
+	rt_schedule() -> Linux (SND)
+	SND becomes TASK_INTERRUPTIBLE
+	schedule()    -> RCV (srq handler wakes it up)
+	rt_receive() returns to user space
+.
+rt_return()
+        soft int      -> Linux
+        switch from Linux to RTAI
+	execute rt_return()
+        rt_schedule() -> RCV,  SND becomes READY, so is RCV
+	rt_return() returns from RTAI
+        rt_schedule() -> SND
+	rt_rpc() returns from RTAI, pends srq on SND
+        rt_schedule() -> Linux
+        rt_return() returns to user space
+ 	schedule()    -> SND (srq handler wakes it up)
+	rt_rpc() returns to user space
+
+./PGGC

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example tests tasklets with the firing of a periodic and a
+oneshot timer in kernel space.  The oneshot is reloaded at each
+firing so that it appears as working periodically. Moreover in
+the middle of the execution the period of the periodic timer is
+changed. See utest.c and urun for the very same test in user
+space.
+
+Press <enter> to execute
+EOF
+read junk
+
+../../scripts/rt_modprobe test_ktest.o

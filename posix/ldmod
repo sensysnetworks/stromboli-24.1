@@ -1,0 +1,4 @@
+sync
+insmod modules/rtai_utils.o
+insmod modules/rtai_pthread.o
+insmod modules/rtai_pqueue.o

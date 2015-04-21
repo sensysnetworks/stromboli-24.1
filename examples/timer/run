@@ -1,0 +1,27 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example shows how you can use RTAI to install interrupt
+handlers that can guarantee an effective processing with a
+contained jitter and high effectivness.  It implements a periodic
+timer doing a lot of floating point calculations, distributed to
+all available CPUs.  The computer load it creates is controlled
+by the macros TICK and LOOPS and you can verify the jitter, even
+without a scope, by looking at the printed messages, once every
+SECS (another macro).
+
+Type <return> to install modules
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_timer.o
+
+echo " "
+echo "Now look at the syslog to see the output."
+echo "Type <return> to remove modules" 
+
+read junk
+
+../../scripts/rt_rmmod ex_timer
+

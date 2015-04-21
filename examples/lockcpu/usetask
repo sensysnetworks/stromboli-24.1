@@ -1,0 +1,4 @@
+rm -f lock_module.o
+ln -s lock_task.o lock_module.o
+rm -f lock_proc
+ln -s lock_process lock_proc;

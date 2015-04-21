@@ -1,0 +1,75 @@
+
+                        RTAI LXRT qBlk's (queue blocks)
+                        ===============================
+
+What are queue blocks?
+
+qBlk's are simple structures that contain a pointer to a function and
+the time at which the function must be executed. The qBlk's are linked into
+a list and a family of functions are provided to manage the whole thing.
+
+The functions are of the type void (*handler)(void *data, int event) and
+therefore the simple structures also include the arguments data and
+event. The application may or may not use any of the arguments.
+
+qBlk's are usually managed within the task. When a qBlk executes it is
+guaranteed that it can manipulate the task data atomically.
+
+qBlk's use a dynamically allocated root structure called the tick queue. The
+tick queue is created with the rt_InitTickQueue() call. This call is required
+in all cases. 
+
+The tick queue can reference both static and dynamic qBlk's. Plain RTAI kernel
+real time task can use both static and dynamic qBlk's. LXRT soft and HRT
+tasks must use dynamic qBlk's only. qBlk's are always managed and executed 
+in plain RTAI hard real time context even if the code is actually in user
+space.   
+
+Dynamic qBlk's are oneshot object. You initialise them from a pool of free
+qBlk's and they are automatically returned to the poll before they are
+executed. The only way to get a dynamic qBlk to repeat is to schedule it with
+the rt_qBlkRepeat() function. In fact, rt_qBlkWait() forces a singleshot
+execution.
+
+rt_qDynInit() takes the qBlk from the free list if one is available. Otherwise
+it calls rt_malloc() to create one. At completion time, the dynamic qBlk
+is returned to the free list which gets cleared by calling rt_qDynFree().
+Do not attempt to free the memory yourself. Use rt_qDynFree(-1) to empty
+the free list completely.
+
+For LXRT soft and HRT tasks, the qBlk function can re-enter LXRT as long
+as the function type (as defined in struct rt_fun) is not greater than 1.
+This constraint will probably disappear eventually. 
+ 
+File qblk.h documents all the qBlk primitive functions. The examples show
+how to set things up. More needs to be said about the high level
+synchronisation functions:
+
+The application has nothing to do but wait for the execution of all pending
+qBlk's: call rt_qLoop().
+
+The application may have pending qBlk's and wants to be able to receive 
+messages and/or proxies from other tasks: call rt_qReceive(). This mechanism
+is power in that a server can be RECEIVED blocked and schedule the execution
+of qBlk functions at the same time. 
+
+The application needs to manage the synchronisation itself as other things
+may be more important than the pending qBlk's. Call rt_qStep(). The return
+value tells you whether or not a qBlk is pending and, if so, when it
+should be executed.
+
+The application was doing something very important and now needs to
+execute and release all expired qBlk's in the Tick Queue. Call rt_qSync().
+QBLKs that expire during this process will also be completed.
+
+It is also possible to create hooks to which qBlk's can be linked and scheduled
+later on. This feature can be used to implement a bottom half like mechanism
+to execute less important functions at a more appropriate time. qBlk's can
+be used by a real time interrupt handler provided it uses the tick queue
+of a cooperating real time task. 
+
+There exist a nice word document written in french that documents qBlk's
+more. Email me if you would like to get a copy. 
+
+
+pcloutier@PoseidonControls.com

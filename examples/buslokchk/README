@@ -1,0 +1,28 @@
+****** BUS LOCK CHECK ******
+
+More and more motherboards are being sold that have some optimizations at the
+bus level locking the bus, maybe up to few millisecs. Even without judging if
+such a way of working is acceptable, maybe it makes it appear to improve
+overall average performances in general applications, it surely dooms real 
+time usage.
+What RTAI users see are large scheduling jitters and they start hinting at bugs
+that likely do not exist. 
+This check is aimed at helping in tracking such a problem. It measures interrupt
+latency by using the TSC on the timer interrupt, machines without it do not 
+have such a problem for sure. 
+The only module implied is rtai.c, there is thus no scheduling but just
+interrupt dispatching, that should have latencies in the range of 20/30 us 
+worst case. So if you'll see something too much higher play with its 
+configuration parameters, with those of Linux as well, to end in buying 
+another board eventually.
+Excess latencies are echoed from within the interrupt handler directly when a
+certain threshold is exceeded. It can be set by the user by changing the macro
+THRESHOLD, in nanos. The timer inturrupt ticking is controlled by the macro 
+PERIOD, in nanos.
+It is possible to check it also on a scope by defining the macro PARPORT, that
+sets the address of the parallel port, see the code.
+
+To run it do:
+make clean
+make
+./run

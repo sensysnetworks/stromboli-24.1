@@ -1,0 +1,1 @@
+../mbplot -t 30000 "plot '<tail -1000 foo' using 1:$1"    

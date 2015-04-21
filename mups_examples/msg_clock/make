@@ -1,0 +1,5 @@
+	insmod dispclk
+	insmod cmdcrn
+	insmod cmdclk
+	insmod clock
+	./keybrd

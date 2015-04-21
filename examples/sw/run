@@ -1,0 +1,22 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example features NTASKS realtime tasks running periodically.
+On each period one of them sets a bit on the parallel port,
+another one resets it. By choosing an appropriate timings
+one can produce a rectangular wave on the parallel port
+which can be watched on an oscilloscope plugged into it.
+
+Type <return> to install modules
+EOF
+read junk
+
+../../scripts/rt_modprobe ex_sw.o $*
+
+echo "Program is running"
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_sw
+

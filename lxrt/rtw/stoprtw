@@ -1,0 +1,5 @@
+sync
+/sbin/rmmod sysAuxClk
+/sbin/rmmod rtai_lxrt
+/sbin/rmmod rtai_sched
+/sbin/rmmod rtai

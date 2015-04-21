@@ -1,0 +1,4 @@
+sync
+rmmod ex_edf
+rmmod rtai_sched
+rmmod rtai

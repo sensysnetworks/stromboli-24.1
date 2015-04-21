@@ -1,0 +1,225 @@
+Library {
+  Name			  "intelligent"
+  Version		  4.00
+  LibraryLinkDisplay	  "none"
+  CovSaveName		  "covdata"
+  CovNameIncrementing	  off
+  CovHtmlReporting	  on
+  BlockNameDataTip	  off
+  BlockParametersDataTip  off
+  BlockDescriptionStringDataTip	off
+  ToolBar		  off
+  StatusBar		  off
+  BrowserShowLibraryLinks off
+  BrowserLookUnderMasks	  off
+  Created		  "Fri Jun  1 16:07:52 2001"
+  Creator		  "quaranta"
+  UpdateHistory		  "UpdateHistoryNever"
+  ModifiedByFormat	  "%<Auto>"
+  LastModifiedBy	  "quaranta"
+  ModifiedDateFormat	  "%<Auto>"
+  LastModifiedDate	  "Thu Jun  7 14:13:32 2001"
+  ModelVersionFormat	  "1.%<AutoIncrement:5>"
+  ConfigurationManager	  "none"
+  SimParamPage		  "Solver"
+  AlgebraicLoopMsg	  "warning"
+  MinStepSizeMsg	  "warning"
+  UnconnectedInputMsg	  "warning"
+  UnconnectedOutputMsg	  "warning"
+  UnconnectedLineMsg	  "warning"
+  InheritedTsInSrcMsg	  "warning"
+  SingleTaskRateTransMsg  "none"
+  MultiTaskRateTransMsg	  "error"
+  IntegerOverflowMsg	  "warning"
+  CheckForMatrixSingularity "none"
+  UnnecessaryDatatypeConvMsg "none"
+  Int32ToFloatConvMsg	  "warning"
+  SignalLabelMismatchMsg  "none"
+  LinearizationMsg	  "none"
+  VectorMatrixConversionMsg "none"
+  SfunCompatibilityCheckMsg "none"
+  BlockPriorityViolationMsg "warning"
+  ArrayBoundsChecking	  "none"
+  ConsistencyChecking	  "none"
+  Profile		  off
+  SimulationMode	  "normal"
+  RTWRetainRTWFile	  off
+  RTWMakeCommand	  "make_rtw"
+  RTWGenerateCodeOnly	  off
+  TLCProfiler		  off
+  TLCDebug		  off
+  TLCCoverage		  off
+  ExtModeMexFile	  "ext_comm"
+  ExtModeBatchMode	  off
+  ExtModeTrigType	  "manual"
+  ExtModeTrigMode	  "normal"
+  ExtModeTrigPort	  "1"
+  ExtModeTrigElement	  "any"
+  ExtModeTrigDuration	  1000
+  ExtModeTrigHoldOff	  0
+  ExtModeTrigDelay	  0
+  ExtModeTrigDirection	  "rising"
+  ExtModeTrigLevel	  0
+  ExtModeArchiveMode	  "off"
+  ExtModeAutoIncOneShot	  off
+  ExtModeIncDirWhenArm	  off
+  ExtModeAddSuffixToVar	  off
+  ExtModeWriteAllDataToWs off
+  ExtModeArmWhenConnect	  on
+  ExtModeLogAll		  on
+  BlockDefaults {
+    Orientation		    "right"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    NamePlacement	    "normal"
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+    ShowName		    on
+  }
+  AnnotationDefaults {
+    HorizontalAlignment	    "center"
+    VerticalAlignment	    "middle"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  LineDefaults {
+    FontName		    "Helvetica"
+    FontSize		    9
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  System {
+    Name		    "intelligent"
+    Location		    [440, 346, 709, 537]
+    Open		    on
+    ModelBrowserVisibility  off
+    ModelBrowserWidth	    200
+    ScreenColor		    "white"
+    PaperOrientation	    "landscape"
+    PaperPositionMode	    "auto"
+    PaperType		    "usletter"
+    PaperUnits		    "inches"
+    ZoomFactor		    "100"
+    AutoZoom		    on
+    ReportName		    "simulink-default.rpt"
+    Block {
+      BlockType		      "S-Function"
+      Name		      "A/D"
+      Ports		      [0, 1]
+      Position		      [40, 20, 100, 50]
+      AncestorBlock	      "mq3/A//D"
+      FunctionName	      "adint"
+      Parameters	      "n_ch,fs_ch,ts"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "A/D"
+      MaskDescription	      "Analog Digital Converter"
+      MaskPromptString	      "Input Channels:|First Channel:|Sampling Time:"
+      MaskStyleString	      "popup(1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16),p"
+"opup(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15),edit"
+      MaskTunableValueString  "on,on,on"
+      MaskCallbackString      "||"
+      MaskEnableString	      "on,on,on"
+      MaskVisibilityString    "on,on,on"
+      MaskToolTipString	      "on,on,on"
+      MaskVariables	      "n_ch=@1;fs_ch=@2;ts=@3;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1|1|"
+      MaskVariableAliases     ",,"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "D/A"
+      Ports		      [1]
+      Position		      [130, 20, 190, 50]
+      AncestorBlock	      "mq3/D//A"
+      FunctionName	      "daint"
+      Parameters	      "n_ch,ts"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "D/A"
+      MaskDescription	      "Digital Analog Converter"
+      MaskPromptString	      "Output Channels:|Sampling Time:"
+      MaskStyleString	      "popup(1|2),edit"
+      MaskTunableValueString  "on,on"
+      MaskCallbackString      "|"
+      MaskEnableString	      "on,on"
+      MaskVisibilityString    "on,on"
+      MaskToolTipString	      "on,on"
+      MaskVariables	      "n_ch=@1;ts=@2;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1|"
+      MaskVariableAliases     ","
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DI"
+      Ports		      [0, 1]
+      Position		      [130, 85, 190, 115]
+      AncestorBlock	      "mq3/DI"
+      FunctionName	      "diint"
+      Parameters	      "n_ch,ts,tr"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "DI"
+      MaskDescription	      "Digital Input"
+      MaskPromptString	      "Input Channels:|Sampling Time:|Threshold:"
+      MaskStyleString	      "popup(1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16),e"
+"dit,edit"
+      MaskTunableValueString  "on,on,on"
+      MaskCallbackString      "||"
+      MaskEnableString	      "on,on,on"
+      MaskVisibilityString    "on,on,on"
+      MaskToolTipString	      "on,on,on"
+      MaskVariables	      "n_ch=@1;ts=@2;tr=@3;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1||"
+      MaskVariableAliases     ",,"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DO"
+      Ports		      [1]
+      Position		      [40, 85, 100, 115]
+      AncestorBlock	      "mq3/DO"
+      FunctionName	      "doint"
+      Parameters	      "n_ch,ts,tr"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "DO"
+      MaskDescription	      "Digital Output"
+      MaskPromptString	      "Output channels:|Sampling Time:|Threshold:"
+      MaskStyleString	      "popup(1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16),e"
+"dit,edit"
+      MaskTunableValueString  "on,on,on"
+      MaskCallbackString      "||"
+      MaskEnableString	      "on,on,on"
+      MaskVisibilityString    "on,on,on"
+      MaskToolTipString	      "on,on,on"
+      MaskVariables	      "n_ch=@1;ts=@2;tr=@3;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1||"
+      MaskVariableAliases     ",,"
+    }
+  }
+}

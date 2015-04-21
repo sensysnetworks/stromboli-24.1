@@ -1,0 +1,229 @@
+
+-include .buildvars
+
+# Makefile for modbuild
+
+.EXPORT_ALL_VARIABLES:
+CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
+	else if [ -x /bin/bash ]; then echo /bin/bash; \
+	else echo sh; fi ; fi)
+TOPDIR := $(shell if [ "$$PWD" != "" ]; then echo $$PWD; else pwd; fi)
+
+HPATH		= $(TOPDIR)/include
+FINDHPATH	= $(HPATH)
+
+HOSTCC		=gcc
+HOSTCFLAGS	=-Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
+
+CFLAGS := -I $(TOPDIR)/include -I . $(CFLAGS)
+
+ifeq ($(ARCH),m68knommu)
+CFLAGS := -fomit-frame-pointer $(CFLAGS)
+endif
+
+USER_CFLAGS	:= -Wall -Wstrict-prototypes -O2 -I$(HPATH) -I.
+USER_LDFLAGS    := -L$(TOPDIR)/lxrt/lib
+USER_LIBS       := 
+
+ifeq ($(ARCH),m68knommu)
+USER_CFLAGS    := -m5200 $(USER_CFLAGS)
+USER_LDFLAGS    := -m5200 $(USER_LDFLAGS)
+endif
+
+# deprecated
+CFLAGS_FP := $(CFLAGS) $(CFLAGS_FP_ADD)
+
+CXXFLAGS_ADD := -Wall -O2 -Wstrict-prototypes
+CXXFLAGS_ADD += -fno-exceptions -fno-rtti -mhard-float -fno-strength-reduce
+
+CXXFLAGS  = $(CFLAGS) $(CXXFLAGS_ADD)
+#CXXFLAGS  = $(USER_CFLAGS) $(CXXFLAGS_ADD)
+
+USER_CXXFLAGS := $(USER_CFLAGS) $(CXXFLAGS_ADD)
+
+#
+# Include the make variables (CC, etc...)
+#
+
+#AS              = $(CROSS_COMPILE)as
+#LD              = $(CROSS_COMPILE)ld
+#CC              = $(CROSS_COMPILE)gcc
+CXX             = $(CROSS_COMPILE)g++
+CPP             = $(CC) -E
+AR              = $(CROSS_COMPILE)ar
+NM              = $(CROSS_COMPILE)nm
+STRIP           = $(CROSS_COMPILE)strip
+OBJCOPY         = $(CROSS_COMPILE)objcopy
+OBJDUMP         = $(CROSS_COMPILE)objdump
+MAKEFILES       = $(TOPDIR)/.config
+GENKSYMS        = /sbin/genksyms
+MODFLAGS        = -DMODULE
+PERL            = perl
+
+export  VERSION PATCHLEVEL SUBLEVEL EXTRAVERSION KERNELRELEASE ARCH \
+	CONFIG_SHELL TOPDIR HPATH HOSTCC HOSTCFLAGS CROSS_COMPILE AS LD CC \
+	CPP AR NM STRIP OBJCOPY OBJDUMP MAKE MAKEFILES GENKSYMS MODFLAGS PERL
+
+
+CONFIG_SHELL := sh
+
+PROJECTRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
+
+-include $(LINUXDIR)/.config
+
+ifeq (.config,$(wildcard .config))
+include .config
+ifeq (.depend,$(wildcard .depend))
+include .depend
+all2:	modules
+else
+all2:	depend modules
+endif
+else
+all2:	config
+endif
+
+ifeq ($(CONFIG_RTAI_INPLACE),y)
+USER_LDFLAGS    += -Wl,-rpath,$(TOPDIR)/lxrt/lib
+endif
+
+# This is only barely correct.  FPU_SUPPORT indicates that we support
+# saving and restoring FP context.  If the target processor doesn't
+# have an FPU, then that's a different problem.
+ifeq ($(CONFIG_RTAI_FPU_SUPPORT),y)
+CFLAGS_FP_ADD := -ffast-math -mhard-float
+else
+CFLAGS_FP_ADD := -ffast-math -msoft-float
+endif
+
+ifeq ($(ARCH),cris)
+CFLAGS_FP_ADD := -ffast-math
+endif
+
+-include arch/$(ARCH)/Makefile
+-include arch/Makefile.noarch
+
+menuconfig:
+	$(CONFIG_SHELL) ./configure --menu
+
+config:
+	$(CONFIG_SHELL) ./configure
+
+oldconfig:
+	$(CONFIG_SHELL) ./configure --old
+
+MODULES		= $(wildcard modules/*.o)
+MODULES_PCMCIA	= $(filter %_cs.o, $(MODULES))
+MODULES_MISC	= $(filter-out %_cs.o, $(MODULES))
+ifdef CROSS_COMPILE
+# Use depmod perl script from busybox for cross development
+DEPMOD		= $(TOPDIR)/scripts/depmod.pl \
+		  -b $(INSTALL_MOD_PATH)/lib/modules > \
+		  $(INSTALL_MOD_PATH)/lib/modules/$(KERNELRELEASE)/modules.dep
+else
+DEPMOD		= /sbin/depmod -b $(INSTALL_MOD_PATH)/ -a $(KERNELRELEASE)
+endif
+
+install:
+	install -d $(INSTALL_MOD_PATH)/lib/modules/$(KERNELRELEASE)/$(project)
+	install $(MODULES_MISC) $(INSTALL_MOD_PATH)/lib/modules/$(KERNELRELEASE)/$(project)
+	install -m 644 modules/rtaisyms $(INSTALL_MOD_PATH)/lib/modules/$(KERNELRELEASE)/
+	@-$(DEPMOD) 2> /dev/null || true
+	@if [ -f $(INSTALL_MOD_PATH)/etc/modules.conf ]; then \
+	  if ! grep 'prune rtaisyms' $(INSTALL_MOD_PATH)/etc/modules.conf > /dev/null; then \
+	    echo; \
+	    echo "WARNING:"; \
+	    echo "You are missing the line 'prune rtaisyms' in $(INSTALL_MOD_PATH)/etc/modules.conf,"; \
+	    echo "which means that each time depmod is run, it will print the warning:"; \
+	    echo "  depmod: /lib/modules/$(KERNELRELEASE)/rtaisyms is not an ELF file"; \
+	    echo; \
+	  fi; \
+	fi
+
+
+ifeq ($(CONFIG_MODVERSIONS),y)
+MODFLAGS += -DMODVERSIONS -include $(LINUXDIR)/include/linux/modversions.h
+endif
+
+
+MODULEDIRS = $(patsubst %, _mod_%, $(SUBDIRS))
+modules: $(MODULEDIRS)
+
+$(MODULEDIRS):
+	-mkdir -p modules
+	$(MAKE) -C $(patsubst _mod_%, %, $@) CFLAGS="$(CFLAGS) $(MODFLAGS)" MAKING_MODULES=1 modules
+	@test \! x$(CONFIG_RTAI_ADEOS) = x -a -r /lib/modules/$(KERNELRELEASE)/kernel/drivers/adeos/adeos.o && \
+	cp /lib/modules/$(KERNELRELEASE)/kernel/drivers/adeos/adeos.o modules/ || true
+	cd modules;../scripts/rt_depmod *.o >rtaisyms
+
+dep-files: scripts/mkdep include/$(project)/version.h new-genksyms links proj-deps
+#	scripts/mkdep init/*.c >.depend
+	echo >.depend
+	scripts/mkdep `find $(FINDHPATH) -follow -name \*.h ! -name modversions.h -print` > .hdepend
+#	set -e; for i in $(SUBDIRS); do $(MAKE) -C $$i fastdep ;done
+# let this be made through the fastdep rule in Rules.make
+	$(MAKE) $(patsubst %,_sfdep_%,$(SUBDIRS)) _FASTDEP_ALL_SUB_DIRS="$(SUBDIRS)"
+
+include/$(project)/version.h: ./Makefile
+	@echo \#define $(PROJECT)_RELEASE \"$(PROJECTRELEASE)\" > .ver
+	@echo \#define $(PROJECT)_VERSION_CODE `expr $(VERSION) \\* 65536 + $(PATCHLEVEL) \\* 256 + $(SUBLEVEL)` >> .ver
+	@echo '#define $(PROJECT)_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))' >>.ver
+	@mv -f .ver $@
+
+links:
+	rm -f include/asm; ln -s asm-$(ARCH) include/asm
+
+MODVERFILE :=
+
+new-genksyms:
+
+depend dep: dep-files $(MODVERFILE)
+ifeq ($(ARCH),arm)
+	@rm -f $(TOPDIR)/include/asm-arm/arch
+	@ln -sf arch-$(MACHINE) $(TOPDIR)/include/asm-arm/arch
+	@rm -f $(TOPDIR)/arch/arm/mach
+	@ln -sf mach-$(MACHINE) $(TOPDIR)/arch/arm/mach
+endif
+
+clean:
+	rm -f core `find . -name '*.[oas]'`
+	rm -f `find . -name '.*.flags' -print`
+	set -e; for i in $(SUBDIRS); do $(MAKE) -C $$i subclean ;done
+	$(MAKE) -C scripts/lxdialog clean
+	rm -f modules/rtaisyms
+
+distclean:	clean
+	rm -f .hdepend `find . -name .depend -print` .tmpconfig.h
+	rm -f `find . -type l`
+	rm -f `find . \( -name '*.orig' -o -name '*.rej' -o -name '*~' \
+		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
+		-o -name '.*.rej' -o -name '.SUMS' -o -size 0 \) -print` TAGS
+	#-rm -rf modules
+	rm -f .config .uts_version .config.old .buildvars include/config.h
+	rm -f scripts/mkdep
+	rm -f include/$(project)/version.h
+	rm -f include/asm/calib.h
+	rm -f include/asm include/asm-arm/arch arch/arm/mach
+	rm -f modules/rtaipref
+	rm -f modules/schedpref
+	rm -f modules/lxrtpref
+	rm -f lxrt/.dfile
+	rm -f newlxrt/scheduler/.dfile
+
+include $(TOPDIR)/Rules.make
+
+phony:
+
+.PHONY: phony all2 menuconfig config oldconfig install modules $(MODULEDIRS) \
+	dep-files links new-genksyms depend dep clean distclean
+
+#
+# This generates dependencies for the .h files.
+#
+
+scripts/mkdep: scripts/mkdep.c
+	$(HOSTCC) $(HOSTCFLAGS) -o scripts/mkdep scripts/mkdep.c
+
+scripts/split-include: scripts/split-include.c
+	$(HOSTCC) $(HOSTCFLAGS) -o scripts/split-include scripts/split-include.c
+

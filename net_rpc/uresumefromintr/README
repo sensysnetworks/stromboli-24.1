@@ -1,0 +1,19 @@
+This test shows the use of RTAI distributed processing in user space.
+It implements the resumefromintr example, found both in kernel space examples 
+and in LXRT, on one/two machines, thus showing the possibility of resuming a 
+remote task from within an interrupt handler using a non blockin asynchronous
+RPC, i.e. either RT_sem_signal or RT_task_resume.
+To be noticed: the use of a remote semaphore and the trick of touching the 
+priority of the interrupted task. It should be a good test for checking the 
+non blocking remote call method. Having a semaphore located on the interrupt 
+handler node, on which the remote task is waiting, would be much much simpler.
+
+To run it on a single machine do:
+
+make
+./run
+./rem, after ending it by pressing ENTER.
+
+To run it on different machines comment out the line executing the process to 
+be run on onother node, in file run, and set the appropriate dotted decimal 
+notation IP address of the speaker task on its command line.

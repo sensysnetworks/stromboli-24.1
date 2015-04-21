@@ -1,0 +1,20 @@
+sync
+rmmod rt_agent
+rmmod rtai_shm
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_shm.o
+insmod ../../modules/rtai_lxrt.o
+insmod ./rt_agent.o
+./sender &
+./receiver
+sync
+rmmod rt_agent
+rmmod rtai_shm
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai

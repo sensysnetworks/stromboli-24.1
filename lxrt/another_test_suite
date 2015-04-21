@@ -1,0 +1,64 @@
+#!/bin/sh
+#LXRT testing script (C) Pierre Cloutier <pcloutier@PoseidonControls.com> LGPLv2
+./ldmod
+sync
+cd forked
+./rt_process
+cd ../forked-lib
+./rt_process
+cd ../threads
+./rt_process
+cd ../two
+./testa &
+./testb
+sleep 1
+cd ../pressa
+./run
+sleep 1
+cd ../master_buddy
+./run
+sleep 1
+cd ../rt_agent
+./run
+sleep 1
+cd ../latency_calibration
+./run
+sleep 1
+./check
+sleep 1
+cd ../sem_clock
+./run
+sleep 1
+./keybrd
+cd ../msg_clock
+./run
+sleep 1
+./keybrd
+cd ../sound
+sleep 1
+./run
+cd ../fifosound
+sleep 1
+./run
+sleep 1
+cd ../soundmsg
+sleep 1
+./run
+cd ../unix
+./run
+rm ./rtfile
+cd ../hs
+./run
+sleep 1
+cd ../switches
+./run2
+sleep 1
+cd ../ipc
+./run
+sleep 1
+cd ../resumefromintr
+./run
+rmmod handler
+cd ../hardsig
+./run
+cd -

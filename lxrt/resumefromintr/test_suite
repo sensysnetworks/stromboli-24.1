@@ -1,0 +1,23 @@
+sync
+insmod ./handler.o
+./rt_process t=2 
+./rt_process t=2
+./rt_process t=2
+./rt_process t=2
+./rt_process t=2
+./rt_process t=2 -semaforo
+./rt_process t=2 -semaforo
+./rt_process t=2 -semaforo
+./rt_process t=2 -semaforo
+./rt_process t=2 -semaforo
+./rt_process t=2 -bug
+./rt_process t=2 -bug
+./rt_process t=2 -bug
+./rt_process t=2 -bug
+./rt_process t=2 -bug
+./rt_process t=2 -semaforo -bug
+./rt_process t=2 -semaforo -bug
+./rt_process t=2 -semaforo -bug
+./rt_process t=2 -semaforo -bug
+./rt_process t=2 -semaforo -bug
+rmmod handler

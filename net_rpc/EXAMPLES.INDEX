@@ -1,0 +1,22 @@
+ktest: shows the use of RTAI distributed processing in kernel space. It is 
+       based on the "jepplin" test found in the kernel examples of RTAI.
+
+utest: shows the use of RTAI distributed processing in user space. It is 
+       based on the "jepplin" test found in the kernel examples of RTAI.
+
+uasync: checks the use of async calls by receiving on a remote mailbox, to 
+        which another task writes integer numbers, with an immediate return.
+
+uresumefromintr: implements the resumefromintr example, found both in kernel 
+                 space examples and in LXRT, on one/two machines, showing the
+                 possibility of resuming a remote task from within an interrupt
+                 handler using blocking asynchronous RPCs.
+
+sound: implements the sound example, found both in kernel space examples and 
+       in LXRT, so you can have it played everywhere under control of a remote 
+       process; the sound track is passed between tasks by using a mailbox.
+
+soundmsg: implements the sound example, found both in kernel space examples and 
+          in LXRT, so you can have it played everywhere under control of a 
+          remote process; the sound track is passed between tasks by using 
+          intertask messages.

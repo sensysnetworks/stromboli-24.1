@@ -1,0 +1,21 @@
+Patches
+=======
+
+Beginning with this release there is also a MIPS port within RTAI. MIPS and
+PPC kernel are not paced as the ix86 one. Moreover there can be differences
+depending on specific boards and makers in the game. 
+
+This distribution tries to help, this is the reason of its uge size, but it
+is possible some problems will remain for your specific use. 
+
+So read: 
+
+- README.MIPS
+- README.ARM
+- README.powerpc 
+- patches/README 
+
+for first hands infos. If it is not clear yet ask the coordinators of the
+related architectures.
+
+Paolo.

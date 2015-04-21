@@ -1,0 +1,6 @@
+Uniprocessor Scheduler
+----------------------
+
+Here you'll find an implementation of an UP realtime scheduler to be
+interfaced to the RTAI module. Do not use it on a MP machine.
+

@@ -1,0 +1,18 @@
+
+sync
+
+/sbin/rmmod rtai_comedi_lxrt
+
+/sbin/rmmod ni_pcimio
+/sbin/rmmod 8255
+/sbin/rmmod mite
+
+/sbin/rmmod kcomedilib
+/sbin/rmmod comedi
+
+/sbin/rmmod rtai_shm
+/sbin/rmmod rtai_lxrt
+/sbin/rmmod rtai_sched
+/sbin/rmmod rtai
+
+sync

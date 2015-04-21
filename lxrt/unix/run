@@ -1,0 +1,12 @@
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai_shm
+rmmod rtai
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_shm.o
+insmod ../../modules/rtai_lxrt.o
+./test
+rm -f rtfile

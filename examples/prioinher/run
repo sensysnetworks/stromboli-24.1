@@ -1,0 +1,30 @@
+#!/bin/sh
+
+if [ "$1" != "" ];then
+	semtype="SemType=$1"
+fi
+
+echo " "
+echo "This example demonstrates that the resource semaphore priority"
+echo "inheritance is working correctly."
+echo "Its output is to the console, so running it in a normal xterm"
+echo "wouldn't be very interesting."
+echo "Type <return> to continue"
+read junk
+echo "Example 1, type <return> to continue"
+read junk
+../../scripts/rt_modprobe ex_prinh1.o $semtype
+echo " "
+echo "Type <return> to remove modules"
+read junk
+../../scripts/rt_rmmod ex_prinh1
+
+
+echo "Example 2, type <return> to continue"
+read junk
+../../scripts/rt_modprobe ex_prinh2.o $semtype
+echo " "
+echo "Type <return> to remove modules"
+read junk
+../../scripts/rt_rmmod ex_prinh2
+

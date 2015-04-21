@@ -1,0 +1,20 @@
+sync
+TASKPID=`ps -a | grep task_code | awk '{ print $1 }'`
+kill $TASKPID
+sync
+TASKPID=`ps -a | grep start_task | awk '{ print $1 }'`
+kill $TASKPID
+sync
+TASKPID=`ps -a | grep comnode | awk '{ print $1 }'`
+kill $TASKPID
+sync
+rmmod scrambler
+rmmod net_rpc
+sync
+rmmod krtnet
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai_shm
+rmmod rtai
+sync

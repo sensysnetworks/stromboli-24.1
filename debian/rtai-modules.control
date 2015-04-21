@@ -1,0 +1,17 @@
+Source: rtai
+Priority: extra
+Maintainer: David Schleef <ds@schleef.org>
+Build-Depends: debhelper (>> 2.0.0)
+Standards-Version: 3.5.6
+
+Package: rtai-modules-$KVERS
+Section: admin
+Architecture: any
+Recommends: rtai-base
+Description: RTAI kernel modules
+ RTAI.
+
+ This package provides the source code for the RTAI kernel modules.
+ The kernel source, with the necessary RTAI patch applied, is required
+ to compile these modules.
+

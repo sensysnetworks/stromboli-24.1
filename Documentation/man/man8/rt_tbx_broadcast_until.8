@@ -1,0 +1,76 @@
+.TH RT_TBX_BROADCAST_UNTIL 8 "January 2001" RTAI "Typed Mailbox Functions"
+.SH NAME
+rt_tbx_broadcast_until, rt_tbx_broadcast_timed \- send message unconditionally to all the tasks waiting on the same tbx
+with timeout control
+.SH SYNOPSIS
+.B #include <rtai_sched.h>
+.sp
+.BI "int rt_tbx_broadcast_until(TBX " *tbx ", void " *msg ", int " msg_size ", RTIME " time ");"
+.br
+.BI "int rt_tbx_broadcast_timed(TBX " *tbx ", void " *msg ", int " msg_size ", RTIME " delay ");"
+.SH DESCRIPTION
+.B rt_tbx_broadcast_until 
+and 
+.B rt_tbx_broadcast_timed 
+send a message 
+.I msg 
+of 
+.I msg_size 
+bytes to the typed mailbox 
+.I tbx. 
+The caller will be blocked until the whole message is sent to all the tasks waiting on
+.I tbx. 
+the timeout expires or an error occurs. 
+Also the receiving tasks are kept blocked until all of them have received the message, then 
+they are awakened in FIFO or priority order depending on the flags given when calling 
+.I rt_tbx_init(8)
+The caller is no blocked if there are no waiting tasks to awake.
+.I time 
+is an absolute value. 
+.I delay 
+is relative to the current time.
+.SH RETURN VALUES
+The number of awakened tasks is returned in case of message regularly sent, otherwise 
+0 is returned. On failure a negative value is returned as described below.
+.SH ERRORS
+.B -EINVAL
+.I tbx
+points to an invalid typed mailbox.
+.B -EMSGSIZE
+.I msg_size
+is bigger than the size of the entire mailbox.
+
+
+
+
+
+
+
+
+
+.SH DESCRIPTION
+.B rt_tbx_broadcast
+sends a message 
+.I msg 
+of 
+.I msg_size 
+bytes to the typed mailbox 
+.I tbx. 
+The caller will send the message if (a)there is enough free room in the 
+.I tbx. 
+immediately and (b)there are tasks waiting on
+.I tbx. 
+These tasks are kept blocked until all of them have received the message, then they are
+awakened in FIFO or priority order depending on the flags given when calling 
+.I rt_tbx_init(8)
+.SH RETURN VALUES
+The number of awakened tasks is returned in case of message regularly sent, otherwise 
+0 is returned. On failure a negative value is returned as described below.
+.SH ERRORS
+.B -EINVAL
+.I tbx
+points to an invalid typed mailbox.
+.B -EMSGSIZE
+.I msg_size
+is bigger than the size of the entire mailbox.
+

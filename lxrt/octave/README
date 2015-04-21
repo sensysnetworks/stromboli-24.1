@@ -1,0 +1,76 @@
+
+LXRT API for OCTAVE
+-------------------
+
+Octave is a very high-level numerical analysis language. It provides
+a convenient command line interface for solving linear and nonlinear
+problems numerically, and for performing other numerical experiments.
+It may also be used as a batch-oriented language.
+
+Octave include a number of built-in data types, including real and
+complex scalars and matrices, character strings, and a data structure
+type.
+
+Octave features among other things Matrix Manipulation, Arithmetic, Linear
+Algebra, Nonlinear Equations, Quadrature, Differential Equations, Optimization, 
+Polynomial Manipulations, Control Theory, Signal Processing, Image Processing,
+Audio Processing and a whole lot more.
+
+Octave can dynamically load and execute functions written in C++. We can exploit
+this capability with the shared library liblxrt and call the RTAI/LXRT API directly
+from an Octave session, script or function. This is what this example does.
+
+For now, we only have a demontration of concept feasibilty.
+ 
+
+Octave 2.0.16 Configuration:
+----------------------------
+
+To run the example in this directory, your version of Octave must support dynamic
+linking.  To find out if it does type the command `octave_config_info "dld"' at the
+Octave prompt. If the command returns ans = 1 you're ok. Otherwise, recompile octave
+with the configure options --enable-shared. Sources can be found at www.octave.org.
+
+To use LXRT's HRT mode you must apply the supplied patch and recompile Octave.
+Also, you must make sure that all the functions you will use while in HRT mode are pre-loaded
+before you enter HRT mode.
+
+New in Octave 2.1.34
+--------------------
+
+Function source("script.m") does the pre-loadind. Builtin function preload does
+the same for oct functions. "preload" is not available for octave 2.0.16.
+
+Liblxrt:
+--------
+
+You must also add the path where liblxrt can be found in /etc/ld.so.conf and run
+ldconfig.
+
+
+To run  the example:
+--------------------
+
+cd ..
+./ldmod
+cd octave
+./test.m HRT
+
+File test.m will complain if you do not provide at least one argument. Try ./test.m .
+to run it in soft real time mode.
+
+Future direction:
+-----------------
+
+Octave is a CPU (and certainly memory) intensive program that does not do much
+IO. Most of the IO it does has to do with finding the *.m and *.opt files in its
+search path. One strategy to run Octave in HRT mode is to first grow and lock
+the heap and then "pre-load" everything in its internal symbol table.
+With all the functions pre-loaded and the memory locked Octave can enter HRT mode
+and provide a powerfull tool to implement complex control algorithms in a snap.
+
+Have fun,
+
+
+Pierre Cloutier
+<pcloutier@PoseidonControls.com>

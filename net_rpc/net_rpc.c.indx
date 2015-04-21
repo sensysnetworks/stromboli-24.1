@@ -1,0 +1,1046 @@
+/*
+COPYRIGHT (C) 2001  Paolo Mantegazza (mantegazza@aero.polimi.it),
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
+*/
+
+
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/config.h>
+#include <linux/version.h>
+#include <linux/timer.h>
+
+#include <rtai_sched.h>
+#include <rtai_lxrt.h>
+#include <rtnet.h>
+#include <net_rpc.h>
+
+#define LOCALHOST   "127.0.0.1"
+#define BASEPORT    5000
+#define STACK_SIZE  2000
+
+static int MaxStubs = MAX_STUBS;
+MODULE_PARM(MaxStubs, "i");
+
+static int MaxSocks = MAX_SOCKS;
+MODULE_PARM(MaxSocks, "i");
+
+static int StackSize = STACK_SIZE;
+MODULE_PARM(StackSize, "i");
+
+static char *ThisNode = LOCALHOST;
+MODULE_PARM(ThisNode, "s");
+
+#define MAX_DFUN_EXT  16
+static void *rt_net_rpc_fun[];
+static unsigned long long (**rt_net_rpc_fun_ext[MAX_DFUN_EXT])(int, ...) = { (void *)rt_net_rpc_fun, };
+
+static unsigned long this_node;
+
+struct portslot_t { struct portslot_t *p; int indx, sock; unsigned long long owner; SEM sem; void *msg; int task; struct sockaddr_in addr; };
+static spinlock_t portslot_lock = SPIN_LOCK_UNLOCKED;
+static volatile int portslotsp;
+static struct portslot_t *portslot;
+
+static RT_TASK *stub;
+
+static inline struct portslot_t *get_portslot(void)
+{
+	unsigned long flags;
+	struct portslot_t *p;
+
+	flags = rt_spin_lock_irqsave(&portslot_lock);
+	p = portslot[portslotsp++].p;
+	rt_spin_unlock_irqrestore(flags, &portslot_lock);
+	return p;
+}
+
+static inline void gvb_portslot(struct portslot_t *portslotp)
+{
+	unsigned long flags;
+
+	flags = rt_spin_lock_irqsave(&portslot_lock);
+	portslot[--portslotsp].p = portslotp;
+	rt_spin_unlock_irqrestore(flags, &portslot_lock);
+}
+
+#define ADRSZ  sizeof(struct sockaddr_in)
+
+#define TIMER_FREQ 20
+static struct timer_list timer;
+static SEM timer_sem;
+static spinlock_t req_rel_lock = SPIN_LOCK_UNLOCKED;
+
+static void timer_fun(unsigned long none)
+{
+	if (timer_sem.count < 0) {
+		rt_sem_broadcast(&timer_sem);
+	}
+	timer.expires = jiffies + (HZ + TIMER_FREQ/2 - 1)/TIMER_FREQ;
+	add_timer(&timer);
+}
+
+struct req_rel_msg { int op, port; unsigned long long owner; };
+
+static void net_rcv_req_rel_port(int sock, struct portslot_t *notused)
+{
+	int i;
+	unsigned long flags;
+	struct sockaddr_in addr;
+	struct req_rel_msg msg;
+
+	i = ADRSZ;
+	if (rt_recvfrom(sock, &msg, sizeof(msg), 0, (struct sockaddr *)&addr, &i) == sizeof(msg)) {
+		if (msg.op) {
+			i = msg.op - BASEPORT;
+			if (i > 0 && i < MaxStubs) {
+	        		flags = rt_spin_lock_irqsave(&req_rel_lock);
+				if (portslot[i].owner == msg.owner) {
+					portslot[i].owner = 0;
+					msg.port = msg.op;
+				} else {
+					msg.port = !portslot[i].owner ? msg.op : -ENXIO;
+				}
+        			rt_spin_unlock_irqrestore(flags, &req_rel_lock);
+			} else {
+				msg.port = -ENXIO;
+			}
+			goto ret;
+		}
+		for (i = 1; i < MaxStubs; i++) {
+			if (portslot[i].owner == msg.owner) {
+				msg.port = BASEPORT + i;
+				goto ret;
+			}	
+		}	
+        	flags = rt_spin_lock_irqsave(&req_rel_lock);
+		for (i = 1; i < MaxStubs; i++) {
+			if (!portslot[i].owner) {
+				portslot[i].owner = msg.owner;
+        			rt_spin_unlock_irqrestore(flags, &req_rel_lock);
+				msg.port = BASEPORT + i;
+				goto ret;
+			}	
+		}	
+       		rt_spin_unlock_irqrestore(flags, &req_rel_lock);
+		msg.port = -ENXIO;
+		goto ret;
+	}
+	msg.port = -EBADRQC;
+ret:	rt_sendto(sock, &msg, sizeof(msg), 0, (struct sockaddr *)&addr, ADRSZ);
+}
+
+int rt_send_req_rel_port(unsigned long node, int op, unsigned long id)
+{
+	int i;
+	struct portslot_t *portslotp;
+	struct req_rel_msg msg;
+
+	if (!node || (op && (op < MaxStubs || op >= MaxSocks))) {
+		return -EINVAL;
+	}
+        portslot[0].addr.sin_addr.s_addr = node;
+	msg.op    = op ? ntohs(portslot[op].addr.sin_port) : 0;
+	msg.port  = 0;
+	msg.owner = OWNER(this_node, id ? id : (unsigned long)rt_whoami());
+	(portslotp = get_portslot())->msg  = &msg;
+	for (i = 0; i < TIMER_FREQ && !msg.port; i++) {
+		rt_sendto(portslotp->sock, &msg, sizeof(msg), 0, (struct sockaddr *)&portslot[0].addr, ADRSZ);
+		rt_sem_wait(&timer_sem);
+	}
+	gvb_portslot(portslotp);
+	if (msg.port > 0) {
+		if (op) {
+			portslot[op].task  = 0;
+			gvb_portslot(portslot + op);
+			return op;
+		} else {
+			portslotp = get_portslot();
+			portslotp->addr                 = portslot[0].addr;
+			portslotp->addr.sin_port        = htons(msg.port);
+		       	portslotp->addr.sin_addr.s_addr = node;
+			portslotp->task = 1;
+			return portslotp->indx;
+		}
+	}
+	return msg.port ? msg.port : -ETIMEDOUT;
+}
+
+RT_TASK *rt_find_asgn_stub(unsigned long long owner, int asgn)
+{
+	int i;
+	unsigned long flags;
+
+	for (i = 1; i < MaxStubs; i++) {
+		if (portslot[i].owner == owner) {
+			return (RT_TASK *)portslot[i].task;
+		}	
+	}	
+	if (asgn) {
+		flags = rt_spin_lock_irqsave(&req_rel_lock);
+		for (i = 1; i < MaxStubs; i++) {
+			if (!portslot[i].owner) {
+				portslot[i].owner = owner;
+				rt_spin_unlock_irqrestore(flags, &req_rel_lock);
+				return (RT_TASK *)portslot[i].task;
+			}	
+		}	
+		rt_spin_unlock_irqrestore(flags, &req_rel_lock);
+	}	
+	return 0;
+}
+
+int rt_rel_stub(unsigned long long owner)
+{
+	int i;
+	unsigned long flags;
+
+	for (i = 1; i < MaxStubs; i++) {
+       		flags = rt_spin_lock_irqsave(&req_rel_lock);
+		if (portslot[i].owner == owner) {
+			portslot[i].owner = 0;
+			rt_spin_unlock_irqrestore(flags, &req_rel_lock);
+			return 0;
+		}	
+		rt_spin_unlock_irqrestore(flags, &req_rel_lock);
+	}	
+	return -ESRCH;
+}
+
+static void net_rcv_rpc(int sock, struct portslot_t *portslotp)
+{
+	int addrlen;
+
+	addrlen = ADRSZ;
+	if (rt_recvfrom(sock, portslotp->msg, MAX_MSG_SIZE, 0, (struct sockaddr *)&portslotp->addr, &addrlen) > 0) {
+		RT_TASK *task;
+		task = (RT_TASK *)portslotp->task;
+		task->priority = task->base_priority = *((int *)portslotp->msg);
+		rt_sem_signal(&portslotp->sem);
+	}
+}
+
+static void stub_fun(struct portslot_t *portslotp) 
+{
+	char msg[MAX_MSG_SIZE];
+	struct sockaddr *addr;
+	RT_TASK *task;
+	SEM *sem;
+        struct par_t { int priority, argsize, rsize, fun_ext_timed; long long type; int a[1]; } *par;
+	int *a, wsize, w2size, sock;
+	long long type;
+
+	a = (par = portslotp->msg = msg)->a;
+	addr = (struct sockaddr *)&portslotp->addr;
+	task = (RT_TASK *)portslotp->task;
+	sem  = &portslotp->sem;
+	sock = portslotp->sock;
+
+	while (1) {
+		rt_sem_wait(sem);
+		type = par->type;
+		if (par->rsize) {
+			a[USP_RBF1(type) - 1] = (int)((char *)a + par->argsize);
+		}
+		if (NEED_TO_W(type)) {
+			wsize = USP_WSZ1(type);
+			wsize = wsize ? a[wsize - 1] : (USP_WSZ1LL(type) ? sizeof(long long) : sizeof(int));
+		} else {
+			wsize = 0;
+		}
+		if (NEED_TO_W2ND(type)) {
+			w2size = USP_WSZ2(type);
+			w2size = w2size ? a[w2size - 1] : (USP_WSZ2LL(type) ? sizeof(long long) : sizeof(int));
+		} else {
+			w2size = 0;
+		}
+
+		{
+			struct msg_t { int wsize, w2size; unsigned long long retval; char msg_buf[wsize], msg_buf2[w2size]; } arg;
+			if (wsize > 0) {
+				arg.wsize = wsize;
+				a[USP_WBF1(type) - 1] = (int)arg.msg_buf;
+			} else {
+				arg.wsize = 0;
+			}
+			if (w2size > 0) {
+				arg.w2size = w2size;
+				a[USP_WBF2(type) - 1] = (int)arg.msg_buf2;
+			} else {
+				arg.w2size = 0;
+			}
+                        if ((wsize = TIMED(par->fun_ext_timed) - 1) >= 0) {
+                                *((long long *)(a + wsize)) = nano2count(*((long long *)(a + wsize)));
+                        }
+			arg.retval = rt_net_rpc_fun_ext[EXT(par->fun_ext_timed)][FUN(par->fun_ext_timed)](a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]);
+			rt_sendto(sock, &arg, sizeof(struct msg_t), 0, addr, ADRSZ);
+		}
+	}
+}
+
+static char trashmsg[MAX_MSG_SIZE];
+
+static void net_rcv_rtr(int sock, struct portslot_t *portslotp)
+{
+	if (portslotp->task > 0) {
+		rt_recvfrom(sock, portslotp->msg, MAX_MSG_SIZE, 0, NULL, NULL);
+		rt_sem_signal(&portslotp->sem);
+		return;
+	} 
+	if (portslotp->task < 0) {
+		rt_recvfrom(sock, trashmsg, MAX_MSG_SIZE, 0, NULL, NULL);
+		rt_sem_signal(&portslotp->sem);
+		return;
+	} 
+	if (!portslotp->task) {
+		rt_recvfrom(sock, portslotp->msg, MAX_MSG_SIZE, 0, NULL, NULL);
+		return;
+	} 
+}
+
+int rt_port_is_busy(unsigned long node, int port)
+{
+	struct portslot_t *portslotp;
+	portslotp =  portslot + (port > 0 ? port : -port);
+	return portslotp->task < 0 && !portslotp->sem.count;
+}
+
+static unsigned long long rt_net_rpc(unsigned long node, int fun_ext_timed, long long type, void *args, int argsize)
+{
+	char msg[MAX_MSG_SIZE];
+	struct reply_t { int wsize, w2size; unsigned long long retval; char msg[1]; } *reply;
+	int rsize, port;
+	struct portslot_t *portslotp;
+
+	if ((port = PORT(fun_ext_timed)) > 0) {
+		if ((portslotp = portslot + port)->task < 0) {
+			rt_sem_wait(&portslotp->sem);
+			portslotp->task = 1;
+		}
+		portslotp->msg = msg;
+	} else {
+		if ((portslotp = portslot - port)->task < 0) {
+			if (!rt_sem_wait_if(&portslotp->sem)) {
+				return 0;
+			}
+		} else {
+			portslotp->task = -1;
+		}
+	}
+	if (NEED_TO_R(type)) {			
+		rsize = USP_RSZ1(type);
+		rsize = rsize ? ((int *)args)[rsize - 1] : (USP_RSZ1LL(type) ? sizeof(long long) : sizeof(int));
+	} else {
+		rsize = 0;
+	}
+	{
+		struct msg_t { int prio; int argsize, rsize, fun_ext_timed; long long type; char args[argsize]; char msg[rsize]; } *arg;
+
+		arg = (void *)msg;
+		arg->prio    = rt_whoami()->priority;
+		arg->argsize = argsize;
+		arg->rsize   = rsize;
+		arg->fun_ext_timed = fun_ext_timed;
+		arg->type    = type;
+		memcpy(arg->args, args, argsize);
+		if (rsize > 0) {			
+			memcpy(arg->msg, (int *)((int *)args + USP_RBF1(type) - 1)[0], rsize);
+		}
+		rt_sendto(portslotp->sock, msg, sizeof(struct msg_t), 0, (struct sockaddr *)&portslotp->addr, ADRSZ);
+	}
+	if (port > 0) {
+		rt_sem_wait(&portslotp->sem);
+		if ((reply = (void *)msg)->wsize) {
+			memcpy((char *)(*((int *)args + USP_WBF1(type) - 1)), reply->msg, reply->wsize);
+		}
+		if (reply->w2size) {
+			memcpy((char *)(*((int *)args + USP_WBF2(type) - 1)), reply->msg + reply->wsize, reply->w2size);
+		}
+		return reply->retval;
+	}
+	return 0;
+}
+
+unsigned long ddn2nl(const char *ddn)
+{
+	int p, n, c;
+	union { unsigned long l; char c[4]; } u;
+
+	p = n = 0;
+	while ((c = *ddn++)) {
+		if (c != '.') {
+			n = n*10 + c - '0';
+		} else {
+			if (n > 0xFF) {
+				return 0;
+			}
+			u.c[p++] = n;
+			n = 0;
+		}
+	}
+	u.c[3] = n;
+
+	return u.l;
+}
+
+unsigned long rt_set_this_node(const char *ddn, unsigned long node)
+{
+	return this_node = ddn ? ddn2nl(ddn) : node;
+}
+
+static struct rt_fun_entry rt_usr_net_rpc_fun[] = {
+        { 1LL, rt_net_rpc           },
+	{ 1LL, rt_send_req_rel_port },
+	{ 0LL, ddn2nl               },
+	{ 0LL, rt_set_this_node     },
+	{ 0LL, rt_find_asgn_stub    },
+	{ 0LL, rt_rel_stub          },
+	{ 0LL, rt_port_is_busy      },
+};
+
+static RT_TASK *rt_base_linux_task;
+
+int init_module(void)
+{
+	int i;
+        RT_TASK *rt_linux_tasks[NR_RT_CPUS];
+
+        rt_base_linux_task = rt_get_base_linux_task(rt_linux_tasks);
+        if(rt_base_linux_task->task_trap_handler[0]) {
+                if(((int (*)(void *, int))rt_base_linux_task->task_trap_handler[0])(rt_usr_net_rpc_fun, NET_RPC_IDX)) {
+			printk("LXRT EXTENSION SLOT FOR DSCHED (%d) ALREADY USED\n", NET_RPC_IDX);
+                        return -EACCES;
+                }
+        }
+	if (!(stub = kmalloc(MaxStubs*sizeof(RT_TASK), GFP_KERNEL))) {
+		printk("KMALLOC FAILED ALLOCATING STUBS\n");
+	}	
+	MaxSocks += MaxStubs;
+	if (!(portslot = kmalloc(MaxSocks*sizeof(struct portslot_t), GFP_KERNEL))) {
+		printk("KMALLOC FAILED ALLOCATING PORT SLOTS\n");
+	}	
+	this_node = ddn2nl(ThisNode);
+
+	memset(&portslot[0].addr, 0, sizeof(struct sockaddr_in));
+	portslot[0].addr.sin_family      = AF_INET;
+	portslot[0].addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	for (i = 0; i < MaxSocks; i++) {
+		portslot[i].indx = i;
+		portslot[i].p = portslot + i;
+		portslot[0].addr.sin_port = htons(BASEPORT + i);
+		portslot[i].addr = portslot[0].addr;
+		portslot[i].sock = rt_socket(AF_INET, SOCK_DGRAM, 0);
+		rt_bind(portslot[i].sock, (struct sockaddr *)&portslot[i].addr, ADRSZ);
+		portslot[i].msg = NULL;
+		portslot[i].owner = 0;
+		portslot[i].task = 0;
+		rt_typed_sem_init(&portslot[i].sem, 0, BIN_SEM | FIFO_Q);
+		rt_socket_callback(portslot[i].sock, (void *)(i < MaxStubs ? net_rcv_rpc: net_rcv_rtr), portslot + i);
+	}
+	portslotsp = MaxStubs;
+	portslot[0].addr.sin_port = htons(BASEPORT);
+	rt_socket_callback(portslot[0].sock, (void *)net_rcv_req_rel_port, portslot);
+
+	for (i = 0; i < MaxStubs; i++) {
+		portslot[i].task = (unsigned long)&stub[i];
+		rt_task_init(&stub[i], (void *)stub_fun, (int)(portslot + i), StackSize + 2*MAX_MSG_SIZE, 0, 0, 0);
+		rt_task_resume(&stub[i]);
+	}
+
+	rt_typed_sem_init(&timer_sem, 0, BIN_SEM | FIFO_Q);
+	init_timer(&timer);
+	timer.function = timer_fun;
+	timer.expires = jiffies + (HZ + TIMER_FREQ/2 - 1)/TIMER_FREQ;
+	add_timer(&timer);
+
+	return 0 ;
+}
+
+void cleanup_module(void)
+{
+	int i;
+
+        if(rt_base_linux_task->task_trap_handler[1]) {
+                ((int (*)(void *, int))rt_base_linux_task->task_trap_handler[1])(rt_usr_net_rpc_fun, NET_RPC_IDX);
+        }
+	for (i = 0; i < MaxStubs; i++) {
+		rt_task_delete(&stub[i]);
+	}
+	for (i = 0; i < MaxSocks; i++) {
+		rt_sem_delete(&portslot[i].sem);
+		rt_close(portslot[i].sock);
+	}
+	rt_sem_delete(&timer_sem);
+	del_timer(&timer);
+	kfree(stub);
+	kfree(portslot);
+	return;
+}
+
+#define SIZARG sizeof(arg)
+
+static RT_TASK *named_task_init(const char *task_name, void (*thread)(int), int data, int stack_size, int prio, int uses_fpu, void(*signal)(void))
+{
+	RT_TASK *task;
+	unsigned long name;
+
+	if ((task = rt_get_adr(name = nam2num(task_name)))) {
+		return task;
+	}
+        if ((task = rt_malloc(sizeof(RT_TASK))) && !rt_task_init(task, thread, data, stack_size, prio, uses_fpu, signal)) {
+		if (rt_register(name, task, IS_TASK, 0)) {
+			return task;
+		}
+		rt_task_delete(task);
+	}
+	rt_free(task);
+	return (RT_TASK *)0;
+}
+
+static RT_TASK *named_task_init_cpuid(const char *task_name, void (*thread)(int), int data, int stack_size, int prio, int uses_fpu, void(*signal)(void), unsigned int run_on_cpu)
+{
+	RT_TASK *task;
+	unsigned long name;
+
+	if ((task = rt_get_adr(name = nam2num(task_name)))) {
+		return task;
+	}
+        if ((task = rt_malloc(sizeof(RT_TASK))) && !rt_task_init_cpuid(task, thread, data, stack_size, prio, uses_fpu, signal, run_on_cpu)) {
+		if (rt_register(name, task, IS_TASK, 0)) {
+			return task;
+		}
+		rt_task_delete(task);
+	}
+	rt_free(task);
+	return (RT_TASK *)0;
+}
+
+static int named_task_delete(RT_TASK *task)
+{
+	if (!rt_task_delete(task)) {
+		rt_free(task);
+	}
+	return rt_drg_on_adr(task);
+}
+
+static SEM *typed_named_sem_init(const char *sem_name, int value, int type)
+{
+	SEM *sem;
+	unsigned long name;
+
+	if ((sem = rt_get_adr(name = nam2num(sem_name)))) {
+		return sem;
+	}
+	if ((sem = rt_malloc(sizeof(SEM)))) {
+		rt_typed_sem_init(sem, value, type);
+		if (rt_register(name, sem, IS_SEM, 0)) {
+			return sem;
+		}
+		rt_sem_delete(sem);
+	}
+	rt_free(sem);
+	return (SEM *)0;
+}
+
+static int named_sem_delete(SEM *sem)
+{
+	if (!rt_sem_delete(sem)) {
+		rt_free(sem);
+	}
+	return rt_drg_on_adr(sem);
+}
+
+static MBX *typed_named_mbx_init(const char *mbx_name, int size, int qtype)
+{
+	MBX *mbx;
+	unsigned long name;
+
+	if ((mbx = rt_get_adr(name = nam2num(mbx_name)))) {
+		return mbx;
+	}
+	if ((mbx = rt_malloc(sizeof(MBX))) && !rt_typed_mbx_init(mbx, size, qtype)) {
+		if (rt_register(name, mbx, IS_MBX, 0)) {
+			return mbx;
+		}
+		rt_mbx_delete(mbx);
+	}
+	rt_free(mbx);
+	return (MBX *)0;
+}
+
+static int named_mbx_delete(MBX *mbx)
+{
+	if (!rt_mbx_delete(mbx)) {
+		rt_free(mbx);
+	}
+	return rt_drg_on_adr(mbx);
+}
+
+static void *rt_net_rpc_fun[] = {
+		rt_get_adr,
+
+		named_task_init,		//   1
+		named_task_init_cpuid,
+		named_task_delete,
+		rt_get_time_ns,
+		rt_get_time_ns_cpuid,
+		rt_get_cpu_time_ns,
+		rt_task_suspend,
+		rt_task_resume,
+		rt_sleep,
+		rt_sleep_until,
+
+		typed_named_sem_init,		//  11
+		named_sem_delete,
+		rt_sem_signal,
+		rt_sem_broadcast,
+		rt_sem_wait,
+		rt_sem_wait_if,
+		rt_sem_wait_until,
+		rt_sem_wait_timed,
+
+		rt_send,			//  19
+		rt_send_if,
+		rt_send_until,
+		rt_send_timed,
+
+		rt_rpc,				//  23
+		rt_rpc_if,
+		rt_rpc_until,
+		rt_rpc_timed,
+
+		rt_isrpc,			//  27
+
+		typed_named_mbx_init,		//  28
+		named_mbx_delete,
+		rt_mbx_send,
+		rt_mbx_send_wp,		
+		rt_mbx_send_if,
+		rt_mbx_send_until,
+		rt_mbx_send_timed,
+		rt_mbx_receive,
+		rt_mbx_receive_wp,
+		rt_mbx_receive_if,
+		rt_mbx_receive_until,
+		rt_mbx_receive_timed,
+};
+
+void *RT_get_adr(unsigned long node, int port, const char *sname)
+{
+	if (node) {
+		struct { int name; } arg = { nam2num(sname) };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_GET_ADR, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_get_adr(nam2num(sname));
+} 
+
+RT_TASK *RT_named_task_init(unsigned long node, int port, const char *task_name, void (*thread)(int), int data, int stack_size, int prio, int uses_fpu, void(*signal)(void))
+{
+	if (node) {
+		struct { const char *task_name; void (*thread)(int); int data; int stack_size; int prio; int uses_fpu; void(*signal)(void); int namelen; } arg = { task_name, thread, data, stack_size, prio, uses_fpu, signal, strlen(task_name) };
+		return (RT_TASK *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_NAMED_TASK_INIT, 0), UR1(1, 8), &arg, SIZARG);
+	}
+	return named_task_init(task_name, thread, data, stack_size, prio, uses_fpu, signal);
+}
+
+RT_TASK *RT_named_task_init_cpuid(unsigned long node, int port, const char *task_name, void (*thread)(int), int data, int stack_size, int prio, int uses_fpu, void(*signal)(void), unsigned int run_on_cpu)
+{
+	if (node) {
+		struct { const char *task_name; void (*thread)(int); int data; int stack_size; int prio; int uses_fpu; void(*signal)(void); unsigned int run_on_cpu; int namelen; } arg = { task_name, thread, data, stack_size, prio, uses_fpu, signal, run_on_cpu, strlen(task_name) };
+		return (RT_TASK *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_NAMED_TASK_INIT, 0), UR1(1, 9), &arg, SIZARG);
+	}
+	return named_task_init_cpuid(task_name, thread, data, stack_size, prio, uses_fpu, signal, run_on_cpu);
+}
+
+int RT_named_task_delete(unsigned long node, int port, RT_TASK *task)
+{
+	if (node) {
+		struct { RT_TASK *task; } arg = { task };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_NAMED_TASK_DELETE, 0), 0LL, &arg, SIZARG);
+	}
+	return named_task_delete(task);
+}
+
+RTIME RT_get_time_ns(unsigned long node, int port)
+{
+	if (node) {
+		struct { int dummy; } arg = { 0 };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_GET_TIME_NS, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_get_time_ns();
+}
+
+RTIME RT_get_time_ns_cpuid(unsigned long node, int port, int cpuid)
+{
+	if (node) {
+		struct { int cpuid; } arg = { cpuid };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_GET_TIME_NS_CPUID, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_get_time_ns_cpuid(cpuid);
+}
+
+RTIME RT_get_cpu_time_ns(unsigned long node, int port)
+{
+	if (node) {
+		struct { int dummy; } arg = { 0 };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_GET_CPU_TIME_NS, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_get_cpu_time_ns();
+}
+
+int RT_task_suspend(unsigned long node, int port, RT_TASK *task)
+{
+	if (node) {
+		struct { RT_TASK *task; } arg = { task };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_TASK_SUSPEND, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_task_suspend(task);
+}
+
+int RT_task_resume(unsigned long node, int port, RT_TASK *task)
+{
+	if (node) {
+		struct { RT_TASK *task; } arg = { task };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_TASK_RESUME, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_task_resume(task);
+}
+
+void RT_sleep(unsigned long node, int port, RTIME delay)
+{
+	if (node) {
+		struct { RTIME delay; } arg = { delay };
+		rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SLEEP, 1), 0LL, &arg, SIZARG);
+		return;
+	}
+	rt_sleep(nano2count(delay));
+} 
+
+void RT_sleep_until(unsigned long node, int port, RTIME time)
+{
+	if (node) {
+		struct { RTIME time; } arg = { time };
+		rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SLEEP_UNTIL, 1), 0LL, &arg, SIZARG);
+		return;
+	}
+	rt_sleep_until(nano2count(time));
+} 
+
+SEM *RT_typed_named_sem_init(unsigned long node, int port, const char *sem_name, int value, int type)
+{
+	if (node) {
+		struct { const char *sem_name; int value; int type; int namelen; } arg = { sem_name, value, type, strlen(sem_name) };
+		return (SEM *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_NAMED_SEM_INIT, 0), UR1(1, 4), &arg, SIZARG);
+	}
+	return typed_named_sem_init(sem_name, value, type);
+}
+
+int RT_named_sem_delete(unsigned long node, int port, SEM *sem)
+{
+	if (node) {
+		struct { SEM *sem; } arg = { sem };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_NAMED_SEM_DELETE, 0), 0LL, &arg, SIZARG);
+	}
+	return named_sem_delete(sem);
+}
+
+int RT_sem_signal(unsigned long node, int port, SEM *sem)
+{
+	if (node) {
+		struct { SEM *sem; } arg = { sem };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEM_SIGNAL, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_sem_signal(sem);
+} 
+
+int RT_sem_broadcast(unsigned long node, int port, SEM *sem)
+{
+	if (node) {
+		struct { SEM *sem; } arg = { sem };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEM_BROADCAST, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_sem_broadcast(sem);
+} 
+
+int RT_sem_wait(unsigned long node, int port, SEM *sem)
+{
+	if (node) {
+		struct { SEM *sem; } arg = { sem };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEM_WAIT, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_sem_wait(sem);
+} 
+
+int RT_sem_wait_if(unsigned long node, int port, SEM *sem)
+{
+	if (node) {
+		struct { SEM *sem; } arg = { sem };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEM_WAIT_IF, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_sem_wait_if(sem);
+} 
+
+int RT_sem_wait_until(unsigned long node, int port, SEM *sem, RTIME time)
+{
+	if (node) {
+		struct { SEM *sem; RTIME time; } arg = { sem, time };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEM_WAIT_UNTIL, 2), 0LL, &arg, SIZARG);
+	}
+	return rt_sem_wait_until(sem, nano2count(time));
+} 
+
+int RT_sem_wait_timed(unsigned long node, int port, SEM *sem, RTIME delay)
+{
+	if (node) {
+		struct { SEM *sem; RTIME delay; } arg = { sem, delay };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEM_WAIT_TIMED, 2), 0LL, &arg, SIZARG);
+	}
+	return rt_sem_wait_timed(sem, nano2count(delay));
+} 
+
+RT_TASK *RT_send(unsigned long node, int port, RT_TASK *task, unsigned int msg)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; } arg = { task, msg };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEND, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_send(task, msg);
+}
+
+RT_TASK *RT_send_if(unsigned long node, int port, RT_TASK *task, unsigned int msg)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; } arg = { task, msg };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEND_IF, 0), 0LL, &arg, SIZARG);
+	}
+	return rt_send_if(task, msg);
+}
+
+RT_TASK *RT_send_until(unsigned long node, int port, RT_TASK *task, unsigned int msg, RTIME time)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; RTIME time; } arg = { task, msg, time };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEND_UNTIL, 3), 0LL, &arg, SIZARG);
+	}
+	return rt_send_until(task, msg, time);
+}
+
+RT_TASK *RT_send_timed(unsigned long node, int port, RT_TASK *task, unsigned int msg, RTIME delay)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; RTIME delay; } arg = { task, msg, delay };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_SEND_TIMED, 3), 0LL, &arg, SIZARG);
+	}
+	return rt_send_timed(task, msg, delay);
+}
+
+RT_TASK *RT_receive(unsigned long node, int port, RT_TASK *task, unsigned int *msg)
+{
+	if (node && task) {
+		rt_receive(rt_find_asgn_stub(OWNER(node, task), 1), msg);
+		return task;
+	}
+	return rt_receive(task, msg);
+}
+
+RT_TASK *RT_receive_if(unsigned long node, int port, RT_TASK *task, unsigned int *msg)
+{
+	if (node && task) {
+		rt_receive_if(rt_find_asgn_stub(OWNER(node, task), 1), msg);
+		return task;
+	}
+	return rt_receive_if(task, msg);
+}
+
+RT_TASK *RT_receive_until(unsigned long node, int port, RT_TASK *task, unsigned int *msg, RTIME time)
+{
+	if (node && task) {
+		rt_receive_until(rt_find_asgn_stub(OWNER(node, task), 1), msg, time);
+		return task;
+	}
+	return rt_receive_until(task, msg, time);
+}
+
+RT_TASK *RT_receive_timed(unsigned long node, int port, RT_TASK *task, unsigned int *msg, RTIME delay)
+{
+	if (node && task) {
+		rt_receive_timed(rt_find_asgn_stub(OWNER(node, task), 1), msg, delay);
+		return task;
+	}
+	return rt_receive_timed(task, msg, delay);
+}
+
+RT_TASK *RT_rpc(unsigned long node, int port, RT_TASK *task, unsigned int msg, unsigned int *ret)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; unsigned int *ret; } arg = { task, msg, ret };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_RPC, 0), UW1(3, 0), &arg, SIZARG);
+	}
+	return rt_rpc(task, msg, ret);
+}
+
+RT_TASK *RT_rpc_if(unsigned long node, int port, RT_TASK *task, unsigned int msg, unsigned int *ret)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; unsigned int *ret; } arg = { task, msg };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_RPC_IF, 0), UW1(3, 0), &arg, SIZARG);
+	}
+	return rt_rpc_if(task, msg, ret);
+}
+
+RT_TASK *RT_rpc_until(unsigned long node, int port, RT_TASK *task, unsigned int msg, unsigned int *ret, RTIME time)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; unsigned int *ret; RTIME time; } arg = { task, msg, ret, time };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_RPC_UNTIL, 4), UW1(3, 0), &arg, SIZARG);
+	}
+	return rt_rpc_until(task, msg, ret, time);
+}
+
+RT_TASK *RT_rpc_timed(unsigned long node, int port, RT_TASK *task, unsigned int msg, unsigned int *ret, RTIME delay)
+{
+	if (node) {
+		struct { RT_TASK *task; unsigned int msg; unsigned int *ret; RTIME delay; } arg = { task, msg, ret, delay };
+		return (void *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_RPC_TIMED, 4), UW1(3, 0), &arg, SIZARG);
+	}
+	return rt_rpc_timed(task, msg, ret, delay);
+}
+
+int RT_isrpc(unsigned long node, int port, RT_TASK *task)
+{
+        if (node) {
+                struct { RT_TASK *task; } arg = { task };
+                return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_ISRPC, 0), 0LL, &arg, SIZARG);
+        }
+        return rt_isrpc(task);
+}
+
+RT_TASK *RT_return(unsigned long node, int port, RT_TASK *task, unsigned int result)
+{
+	if (node && task) {
+		rt_return(rt_find_asgn_stub(OWNER(node, task), 1), result);
+		return task;
+        }
+	return rt_return(task, result);
+}
+
+MBX *RT_typed_named_mbx_init(unsigned long node, int port, const char *mbx_name, int size, int qtype)
+{
+	if (node) {
+		struct { const char *mbx_name; int size; int qype; int namelen; } arg = { mbx_name, size, qtype, strlen(mbx_name) };
+		return (MBX *)(unsigned long)rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_NAMED_MBX_INIT, 0), UR1(1, 4), &arg, SIZARG);
+	}
+	return typed_named_mbx_init(mbx_name, size, qtype);
+}
+
+int RT_named_mbx_delete(unsigned long node, int port, MBX *mbx)
+{
+	if (node) {
+		struct { MBX *mbx; } arg = { mbx };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_NAMED_MBX_DELETE, 0), 0LL, &arg, SIZARG);
+	}
+	return named_mbx_delete(mbx);
+}
+
+int RT_mbx_send(unsigned long node, int port, MBX *mbx, void *msg, int msg_size)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; } arg = { mbx, msg, msg_size };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_SEND, 0), UR1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_send(mbx, msg, msg_size);
+} 
+
+int RT_mbx_send_wp(unsigned long node, int port, MBX *mbx, void *msg, int msg_size)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; } arg = { mbx, msg, msg_size };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_SEND_WP, 0), UR1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_send_wp(mbx, msg, msg_size);
+} 
+
+int RT_mbx_send_if(unsigned long node, int port, MBX *mbx, void *msg, int msg_size)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; } arg = { mbx, msg, msg_size };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_SEND_IF, 0), UR1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_send_if(mbx, msg, msg_size);
+} 
+
+int RT_mbx_send_until(unsigned long node, int port, MBX *mbx, void *msg, int msg_size, RTIME time)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; RTIME time; } arg = { mbx, msg, msg_size, time };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_SEND_UNTIL, 4), UR1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_send_until(mbx, msg, msg_size, nano2count(time));
+} 
+
+int RT_mbx_send_timed(unsigned long node, int port, MBX *mbx, void *msg, int msg_size, RTIME delay)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; RTIME delay; } arg = { mbx, msg, msg_size, delay };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_SEND_TIMED, 4), UR1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_send_timed(mbx, msg, msg_size, nano2count(delay));
+} 
+
+int RT_mbx_receive(unsigned long node, int port, MBX *mbx, void *msg, int msg_size)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; } arg = { mbx, msg, msg_size };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_RECEIVE, 0), UW1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_receive(mbx, msg, msg_size);
+} 
+
+int RT_mbx_receive_wp(unsigned long node, int port, MBX *mbx, void *msg, int msg_size)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; } arg = { mbx, msg, msg_size };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_RECEIVE_WP, 0), UW1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_receive_wp(mbx, msg, msg_size);
+} 
+
+int RT_mbx_receive_if(unsigned long node, int port, MBX *mbx, void *msg, int msg_size)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; } arg = { mbx, msg, msg_size };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_RECEIVE_IF, 0), UW1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_receive_if(mbx, msg, msg_size);
+} 
+
+int RT_mbx_receive_until(unsigned long node, int port, MBX *mbx, void *msg, int msg_size, RTIME time)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; RTIME time; } arg = { mbx, msg, msg_size, time };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_RECEIVE_UNTIL, 4), UW1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_receive_until(mbx, msg, msg_size, nano2count(time));
+} 
+
+int RT_mbx_receive_timed(unsigned long node, int port, MBX *mbx, void *msg, int msg_size, RTIME delay)
+{
+	if (node) {
+		struct { MBX *mbx; void *msg; int msg_size; RTIME delay; } arg = { mbx, msg, msg_size, delay };
+		return rt_net_rpc(node, PACKPORT(port, NET_RPC_EXT, NET_MBX_RECEIVE_TIMED, 4), UW1(2, 3), &arg, SIZARG);
+	}
+	return rt_mbx_receive_timed(mbx, msg, msg_size, nano2count(delay));
+} 

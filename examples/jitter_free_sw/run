@@ -1,0 +1,23 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example features NTASKS realtime tasks running periodically
+in oneshot mode.  On each period one of them sets a bit on the
+parallel port, the other resets it.  By choosing appropriate
+timings, one can produce a rectangular wave on the parallel port
+which can be watched on an oscilloscope plugged into it.
+
+Type <return> to continue
+EOF
+
+read junk
+sync
+
+../../scripts/rt_modprobe ex_jitterfree.o
+
+echo "Program is running"
+echo "Type <return> to remove modules"
+read junk
+
+../../scripts/rt_rmmod ex_jitterfree

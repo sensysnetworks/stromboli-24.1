@@ -1,0 +1,34 @@
+rt_com
+======
+
+This is a serial port driver for RT-Linux. It allows RT-threads to
+communicate via serial ports.
+
+Documentation is in rtldoc format and available in the doc/ directory.
+
+To compile and install the driver, use
+
+    make install
+
+After compilation insmod the module and you are ready to go.
+
+There are some test-modules in the test/ directory.
+
+Send any comments on this driver to the rt_com mailing lists
+<rt-com-devel@lists.sourceforge.net> or <rt-com-user@lists.sourceforge.net>,
+and, if appropriate, to the Real-Time Linux drivers mailing list at 
+<drivers@realtimelinux.org>. 
+Patches are wellcome, please include a description with them.
+
+This driver was originally written by Jens Michaelsen and send to the
+RT-Linux mailing list.  rt_com_posix.c is provided by Michael Barabanov
+<baraban@fsmlabs.com>
+
+Jochen Küpper
+<Jochen@Jochen-Kuepper.de>
+
+P.S. (by Paolo Mantegazza)
+Rt_com is no more maintained by Jochen, Dave (Schleef) has taken the
+related burden and is cohoperating with Giuseppe (Renoldi) to keep it in
+good shape. What found in rtai-24.1.8 onward reflects such a state of
+affairs already.

@@ -1,0 +1,22 @@
+#!/bin/sh
+
+sync
+echo " "
+echo "TBX demo 1"
+echo "output goes to console"
+echo "Type <return> to install the modules"
+read junk
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../rtai_tbx.o
+sync
+insmod ./rtai_tbxtest_1.o
+echo "Now start the application"
+echo "Type <return> to remove modules"
+read junk
+sync
+rmmod rtai_tbxtest_1
+rmmod rtai_tbx
+rmmod rtai_sched
+rmmod rtai

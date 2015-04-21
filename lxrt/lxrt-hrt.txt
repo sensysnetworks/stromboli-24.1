@@ -1,0 +1,320 @@
+
+                   RTAI LXRT soft and real time modes
+                   ==================================
+
+The symmetrical API concept
+---------------------------
+
+Paolo Mantegazza's objective when he started to think about LXRT was 
+to implement in user space the message handling and remote procedural
+call functions that are integrated to the RTAI schedulers.
+
+Programmers familiar with RTAI would then be able to do IPC in user space
+without having to master all the details and intricacies of System V IPC
+and libc5/libc6. This way staff and students could focus on their research 
+in the field of aerospace and spend less time learning Unix. 
+
+The next step was simple, albeit ingenious. Given that RTAI messaging
+functions would be available in user space, it would be usefull if the 
+functions internals allowed to cross the kernel/user space boundary. 
+This way, a user space program could send a message to a kernel
+task and vice versa using the same function call prototype. 
+
+The initial development of the LXRT module implemented all the RTAI 
+scheduler services in user space with very few exceptions and changes
+to the API functions prototypes. Moreover, the problem of crossing the
+kernel/user space boundary was surmounted and the API functions could
+be used inter and intra space for both kernel and user space.
+ 
+The internals of the first LXRT implementation
+----------------------------------------------
+
+A number of problems were resolved in the first LXRT implementation of
+the symmetrical API. Let's follow the flow of control as if we were actually
+making a call from user space:
+
+First, it is necessary to create a RTAI real time task agent. The agent
+will enter the real time space and actually execute the native API functions
+if and when required. The user call rt_task_init() creates the agent. In a
+similar way, The user call rt_task_delete() releases the resources required
+to instantiate the real time agent. The agent real time task structure,
+stack and messaging buffers are allocated dynamically.
+
+Usually real time kernel tasks have statically declared task structures
+and it is therefore easy to share pointers to those structures. Any task
+can initiate a messaging procedure if the name of the variable that declares
+the global task structure of the receiver is known. Clearly, user space
+programs would have to use a different approach. A name registry algorithm
+was developped and enables kernel and user space programs to register a unique
+name up to six characters long. Any task that knows a registered name
+can find the address of the real time task structure of the registered task
+and therefore can initiate a messaging procedure with it. The registry
+algorithm also supports mail boxes, semaphores and proxies.
+
+A simple approach using static inline functions in header file rtai_lxrt.h
+was used to copy the function arguments onto the stack before executing
+the software interrupt. With the help of macros most of the API functions
+where quickly implemented with two lines of code each in user space.
+The register arguments of the system call encode the size of the argument
+structure (on the stack) as well as the function ID number and a pointer to
+the argument structure.
+
+LXRT has first installed an interrupt handler that saves the world on entry,
+calls lxrt_handler() after pushing the register arguments onto the stack,
+and restores the world on exit at the end of the system call.
+
+Once in the Linux context, the function ID number is decoded and used as an
+index into a matrix of structures that contain the pointer to the native
+API function as well as information as to what to do next. About 20%
+of the native functions do not need to enter the real time RTAI context.
+In that case the arguments are copied from the user space stack with
+copy_from_user() and the native function simply called.
+
+When a context
+switch is required, LXRT calls lxrt_resume() to prepare the agent before
+the context switch can be accomplished. Function arguments may have to be
+copied from user space to message buffers using dedicated pointers in the
+real time task structure. The stack of the agent has to be initialised 
+and the address of the native API function copied onto it among other things.
+The context switch will transfer control to the stub function
+lxrt_rtai_fun_call() that will in turn disable global interrupts, call the
+native API function and then automatically call rt_suspend().
+Function rt_suspend() always calls rt_schedule() to
+force a context switch and may also pend a Linux service request to wakeup
+the kernel component of the user space program if need be. After having done
+this initialisation, emuser_trxl() is called to do the context switch.
+
+The user program wakes up in RTAI hard real time mode executing the desired
+native API function. At this point two things can happen. The program
+could exit the function immediately and start unwinding things to go back
+to user space, or, the function could decide to block and call rt_schedule()
+to switch to another task. 
+
+In the first case, the native API function exits and the stub function 
+calls rt_schedule(). At some point in time, the RTAI scheduler restarts Linux.
+The user program wakes up in kernel mode and continues to execute lxrt_resume().
+Global interrupts are reenabled and, if required, data is copied back to user
+space. The system call then completes and control returns to user space.
+
+In the second case the agent is blocked in the real time kernel when the RTAI
+scheduler restarts Linux. The user program wakes up in kernel mode,
+reenables global interrupts and immediately suspends itself by calling
+schedule(). Linux then continues with another process.
+
+At some point in time, the user program eventually exits the native API
+function. The stub function described above calls rt_suspend(). A service
+request to wakeup the kernel component of the user space program is pended
+before the rt_schedule() call to do a context switch. This forces the execution
+of the required wake_up_interruptible() in the Linux context before the current
+process actually resumes. A Linux context switch occurs and our user program
+wakes up again in lxrt_resume() and completes the system call as described
+above for the first case.   
+
+The need to cleanup at process termination time
+-----------------------------------------------
+
+The objective behind LXRT-INFORMED is to have a system that can recover
+after the crash of a linux task with a real time LXRT component:
+        . Delete the related rt_task and kfree it's allocated memory.
+        . Delete resources registered by the linux task like MBX's and SEM's,
+        . Unblock rt_tasks that are SEND, RPC, or RETURN blocked on it.
+
+
+For now I assume that any linux task that registers with LXRT should have
+changed it's scheduling policy to SCHED_FIFO or SCHED_RR. Not to do so seems
+absurd to me and that's why the callback function filters out ordinary Linux
+tasks.
+
+        . SRV does a divide by zero error in us,
+        . throw SIGINT at SRV with kill -s INT pid,
+        . throw SIGINT at SRV from rt,
+        . Hit Control C,
+        . SRV exits without deleting a SEM,
+        . SRV exits without deleting the rt_task,
+        . SRV exits without deleting anything,
+        . SRV does a divide by zero in us while a rt_task is RPC blocked on CLT,        . Control C while a rt_task is RPC blocked on CLT,
+        . SRV does a divide by zero in us while a rt_task is RPC blocked on SRV
+
+What happens to the registered resources if the Linux task crashes?
+
+The "informed" version of LXRT has setup a pointer to a callback
+function in the do_exit() code of the Linux kernel. The callback
+is used to free the resources that where registered by the real time task.
+It also deletes the real time task and unblocks any other task
+that may have been SEND, RPC, RETURN or SEM blocked on the real time task.
+
+What about mail boxes?
+
+The mail box IPC approach is connection less. In other words, it is not
+possible for a zombie real time task to detect that another task is
+MBX blocked specifically for a message from him. The solution here is to
+use the rt_mbx_receive_timed() with a timeout value and verify the return
+value to detect the error.
+  
+
+Extending LXRT to implement QNX style IPC primitives and proxies
+----------------------------------------------------------------
+
+
+Extending LXRT to implement a hard real time mode in user space
+---------------------------------------------------------------
+
+
+Extending LXRT to implement a hard real time mode in user space
+---------------------------------------------------------------
+        
+
+Extending LXRT to implement queue blocks (qBlk's)
+-------------------------------------------------
+
+
+Extending RTAI and LXRT to support exception handling
+-----------------------------------------------------
+
+
+Performance and benchmarks
+--------------------------
+
+Intertask communications with LXRT are about 36% faster than with old FIFO's.
+Testing Linux<->Linux communications with int size msg and rep's on a P233
+I got these numbers:
+
+        LXRT       12,000 cycles RTAI-0.9x :-)
+        LXRT       13,000 cycles RTAI-0.8
+        Fifo       19,000 cycles RTAI-0.8
+        Fifo new   22,300 cycles RTAI-0.8 10% more cycles, a lot more utility
+        SRR        14,200 cycles QNX 4 Send/Receive/Reply implemented with a
+                                 Linux module without a real time executive.
+
+
+
+
+
+
+
+LXRT is a module that allows the symmetrical use of all the services made
+ available by RTAI kernel modules including the schedulers in user space,
+ both for soft and hard real time.
+
+That implies you can use any of the API functions 
+functions in whether your program runs in the kernel or user space or both.
+
+More precisely, you
+can freely use RTAI services, about 150 functions, including
+task scheduling, flexible timings, semaphores, mailboxes, inter-task messages,
+remote procedure calls, QNX like synchronous IPC, proxies and qBlk's 
+(queue blocks) in whatever space to work. 
+
+Thus RTAI can become an
+alternative way also for programming standard user space
+applications, exploiting both Linux and RTAI services.
+
+
+A definite advantage given by LXRT is that one can start
+developing his/her application safely in user space, test it in
+soft real time, go to hard real time if required, and finally to
+kernel space for top performances.
+
+Hard real time LXRT in user space allows full kernel preemption
+and the only penalty you pay is a slightly increased overhead,
+jitter and latency remaining very close to the kernel ones. All of
+it comes without (almost) touching the kernel, just 4 lines of
+code. For sure it is a far easier approach than having a herd of
+fancy preemption points scattered around the kernel code.
+
+There is a constraint that must be satisfied to implement hard
+real time in user space: you cannot use Linux kernel services. It
+is not a heavy burden as, thanks to the wealth of RTAI inter task
+communication services, it is trivial to mate each hard real time
+process to a "buddy server" that takes up all the kernels services
+on behalf of its hard real time master. Such a policy could be the
+one to be chosen also when one is working with any native hard
+real time operating system available on the market. Note that,
+having done it independently from the kernel, if, and when, plain
+Linux will ever reach hard LXRT performances, it will imply just
+that LXRT developers will be relieved from the burden of
+maintaining it. Any existing RTAI application in user space will
+be untouched and RTAI will still remain a valuable tool to make
+your work easier.
+
+LXRT has been wholly developed at DIAPM. However its hard real
+time support is jointly copyrighted with Pierre Cloutier  and
+Steve Papacharalambous, as they played a substantial part in
+making its initial draft, setup by Paolo Mantegazza, work. It
+should be remarked that Pierre Cloutier has also implemented, and
+is still improving, a more robust and user friendly version of
+LXRT, he called LXRT-INFORMED. It will eventually become a full
+substitute of LXRT, that will remain just as an initial
+development tool for implementing new features.
+
+LXRT creates a real time task (i.e. the buddy) with
+rt_task_init(). The buddy's job is to execute the real
+time services for you. So you can start a timer
+(start_rt_timer()), mark the task as periodic with
+rt_task_make_periodic(), sleep for a while with
+rt_sleep(), wait on a semaphore
+(rt_sem_wait()), and so on. To delete the buddy, just
+call rt_task_delete().
+
+To distinguish a hard real time process from a LXRT firm real time
+process, the user simply calls
+rt_make_hard_real_time(), whereas by using
+rt_make_soft_real_time() he/she can return to
+standard Linux task switching. The soft interrupts are kept
+disabled for hard real time user space processes. This way, hard
+real time tasks and interrupts can preempt user space tasks, but
+these ones cannot be preempted neither by Linux hard interrupt nor
+by Linux processes.
+
+The reader is invited to have a look at the RTAI documentation and
+manual, as well as to the wealth of LXRT examples, found in the
+RTAI distribution for more detailed information and for a check of
+its performances.
+
+The new development version of RTAI (24.1.xx), aimed at the
+approaching 2.4.xx kernel, contains also the tasklets module, which 
+adds an interesting new feature along the line of a symmetric usage of 
+all its services inter-intra kernel and user space, both for soft and
+hard real time applications. In such a way one has an even wider
+spectrum of development and implementation lanes, allowing maximum
+flexibility with uncompromized performances.
+
+The new services provided by taskletst can be useful when you have 
+many tasks, both in kernel and user space,
+that must be executed in soft/hard real time, but do not need any
+RTAI scheduler service that could lead to a task block. Such tasks
+are called tasklets and can be of two kinds: normal tasklets and
+timed tasklets (timers). Tasklets should be used whenever the
+standard hard real time tasks available with RTAI and LXRT
+schedulers can be a waist of resources and the execution of
+simple, possibly timed, functions can be more than enough.
+Instances of such applications are timed polling and simple
+Programmable Logic Controllers (PLC) like sequences of services.
+Obviously there are many other instances that can make it
+sufficient the use of tasklets, either normal or timers. In
+general such an approach can be a very useful complement to fully
+featured tasks in controlling complex machines and systems, both
+for basic and support services.
+
+Timed tasklets executes their function either in oneshot or
+periodic mode, on the base of their time deadline and according to
+their, user assigned, priority. Instead plain tasklets are just
+functions whose execution is simply triggered by calling a given
+service function at due time, either from a kernel task or
+interrupt handler requiring, or in charge of, their execution when
+they are needed. Since only non blocking RTAI scheduler services
+can be used in any tasklet functions, user and kernel space
+tasklets applications can cooperate and
+synchronize by using shared memory. Note that the very name
+tasklets remind to a kind of light soft/hard real
+time server that can partially substitute RTAI and LXRT in simple
+non blocking applications.
+
+To initialize in kernel space a timed tasklet to be used in user
+space, you have to call rt_init_timer(), while
+rt_insert_timer() inserts it in the list of timers to
+be processed by a timers manager task. For a normal tasklet, the
+corresponding functions are rt_init_tasklet() and
+rt_insert_tasklet, while for its execution just call
+rt_tasklet_exec().
+

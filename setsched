@@ -1,0 +1,74 @@
+#!/bin/sh
+
+case $1 in
+up)
+	SUFX=up;
+	SUFY=old;
+	;;
+smp)
+	SUFX=smp;
+	SUFY=old;
+	;;
+smpapic)
+	SUFX=smp;
+	SUFY=old;
+	;;
+smp8254)
+	SUFX=smp_8254;
+	SUFY=old;
+	;;
+mup)
+	SUFX=mup;
+	SUFY=old;
+	;;
+newlxrt)
+	SUFX=newlxrt;
+	SUFY=new;
+	;;
+*)
+	SUFX=up;
+	SUFY=old;
+	;;
+esac
+SCHED=rtai_sched_$SUFX.o
+echo
+echo -n "Attempting to set scheduler to '$SCHED'..."
+
+if [ ! -e modules/rtai_sched_$SUFX.o ]; then
+	echo
+	echo
+	echo "Couldn't link 'rtai_sched_$SUFX.o' to 'rtai_sched.o'."
+	echo "Seems like the scheduler you are chosing was not compiled."
+	echo "Are you trying to make an UP scheduler for an SMP kernel?" 
+	echo
+	exit
+fi  
+
+echo rtai_sched rtai_sched_$SUFX.o >modules/schedpref
+
+rm -f modules/rtai_sched.o
+
+ln -sf rtai_sched_$SUFX.o modules/rtai_sched.o
+
+echo "done."
+LXRT=rtai_lxrt_$SUFY.o
+echo
+echo -n "Attempting to set lxrt in use to '$LXRT'..."
+
+if [ ! -e modules/rtai_lxrt_$SUFY.o ]; then
+	echo
+	echo
+	echo "Couldn't link 'rtai_lxrt_$SUFY.o' to 'rtai_lxrt.o'."
+	echo "Seems like the lxrt module you are chosing was not compiled."
+	echo
+	exit
+fi  
+
+echo rtai_lxrt rtai_lxrt_$SUFY.o >modules/lxrtpref
+
+rm -f modules/rtai_lxrt.o
+
+ln -sf rtai_lxrt_$SUFY.o modules/rtai_lxrt.o
+
+echo "done."
+echo

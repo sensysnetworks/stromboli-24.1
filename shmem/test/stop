@@ -1,0 +1,5 @@
+rmmod kalloc
+./ftest
+sleep 1
+rmmod rtai_shm
+rmmod rtai

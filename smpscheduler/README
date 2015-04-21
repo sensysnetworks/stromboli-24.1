@@ -1,0 +1,39 @@
+SMP Scheduler
+-------------
+
+Here you'll find an implementation of an SMP realtime scheduler to be
+interfaced to the RTAI module. It can use either the 8254 or the local APIC
+timer. Be warned that the APIC based scheduler cannot be used for UP,
+unless you have the local APIC enabled, i.e. an SMP machine with just one
+CPU mounted on the motherboard.
+
+It is a fully symmetric scheduler, where at task init all real time tasks
+default to using any available cpu.
+
+However you can chose either forcing a task to a single cpu or to let it
+use any subset of those available by calling the function
+rt_set_runnable_on_cpus(). That function set the task structure variable
+"runnable_on_cpus" with the bit map of the usable CPUs, which is defaulted
+to "cpu_present_map", meaning that any available cpu can be used, at task
+initialization. Thus a user can statically optimize is application if
+he/she believes that it can be possible.
+
+For the APIC timer based scheduler if you want to statically optimize the
+load distribution by binding tasks to specific cpus it can be usefull to
+use rt_get_timer_cpu() just after having started the timer with
+start_rt_timer(), to know which cpu is using its local APIC timer to pace
+the scheduler.  
+
+Alterantively you can force which APIC timer to use by calling:
+start_rt_timer_cpuid(), that allows you a direct choice of the timing CPU.
+Note that for the oneshot case that will be the main timing cpu but not the
+only one. In fact which local APIC is shot depends on the task scheduling
+out, as that will determine the next shooting. 
+
+For the 8254 timer based scheduler a statically optimized load distribution
+could bind the 8254 interrupt to a specific cpu by using
+rt_assign_irq_to_cpu() and rt_reset_irq_to_sym_mode(), and then assign
+tasks in appropriate way to any CPU or CPU cluster.
+
+The 8254 timer based scheduler can be used also on truly UP. It is compiled
+on UP machines when you select the SMP scheduler in configuration. 

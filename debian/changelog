@@ -1,0 +1,6 @@
+rtai (24.1.8-cvs20020403-1) unstable; urgency=low
+
+  * Initial packaging
+
+ -- David Schleef <ds@schleef.org>  Wed,  3 Apr 2002 13:49:18 -0800
+

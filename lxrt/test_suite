@@ -1,0 +1,25 @@
+#!/bin/sh
+#LXRT testing script (C) Pierre Cloutier <pcloutier@PoseidonControls.com> LGPLv2
+./ldmod
+insmod ../modules/leds_lxrt.o
+sync
+export LD_LIBRARY_PATH=../lib
+cd ipc
+./srv &
+./clt
+./srv &
+./clt
+cd ../qblk
+./test_sft
+./test_hrt
+./test_proxy
+./test_proxy -hrt
+cd ../traps
+./test_suite
+cd ../one
+./test_suite
+cd ../resumefromintr
+./test_suite
+rmmod leds_lxrt
+rmmod rtai_lxrt
+rmmod rtai_sched

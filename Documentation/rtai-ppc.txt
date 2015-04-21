@@ -1,0 +1,135 @@
+[ This is out of date --ds ]
+
+RTAI port to the PPC Architecture
+=================================
+
+Paolo Mantegazza worked on porting RTAI to PPC because of the interest of an
+Italian company and Zentropix.
+
+After testing RTAI on PII class CPUs the Italian company found there was no
+need for them to use the PPC as PII were cheaper and performed well enough.
+
+Zentropix remained interested and supplied a portable G3 Mac. 
+
+Paolo's interest was to put the RTHAL concept to a hard real life test and
+verify to what extent RTAI is entangled into the ix86 architecture.
+
+It took some spare time to study the CPU, using a well structured standard
+Motorola manual (The Programming Environments for 32-Bit Microprocessors),
+and Linux native code hacking and copying. After that, the beta porting
+of RTAI kernel space part, including FPU support, was done in 3 week working
+evenings and weekends only.
+
+LXRT compiles but has not been tested. HRT mode in user space never
+studied nor attempted.
+
+DIAPM do not plan to use the PPC, and therefore Paolo's interest in going
+further is limited.
+
+PPC Architecture
+----------------
+
+The Linux PPC architecture is many miles behind its ix86 brother. I hope things
+are better on other archs, they say so for alphas. I feel PPC-Linux is
+much worse than advertised, if compared to the maturity, features and progress
+of the Linux ix86 architecture.
+ 
+Relevant hardware summary:
+--------------------------
+
+PPC is a many, symmetrically usable, registers RISC CPU. It has no true stack,
+no push/pop instructions. The stack is emulated by using an index register.
+Gcc argument passing is mostly done using registers. Paolo did not check if
+asmlinkage declarations can change things. It defaults to big endian mode,
+even if it can work also in small endian mode.
+
+Its timing source is an internal counter, called decrementer, guaranteed
+to be paced at the same frequency of the CPU time base (the equivalent of
+Intel TSC). The time base pacing is a small fraction of the CPU. 
+The time base frequency does not come from slicing the CPU, but that does not
+matter much to the software. The decrementer cannot be programmed as periodic.
+It simply counts down then wraps around to full 32 bits and goes on counting
+down. At wrapping around it generates a specific interrupt. To have it
+periodic the decrementer must be reloaded so the PPC is natively a oneshot
+hardware timer to all practical effects.
+
+External interrupts have just one vector, so it is up to the irq handler to
+dispatch and find the source by interacting with PICs. Software interrupt have
+also only one source, called trap, used also for some fault specific trap.
+There is a separated supervisor specific trap for OS system calls.  
+
+Software (Linux) summary
+------------------------
+
+Because of the above, interrupts/traps dispatching is native in Linux Kernel
+and cli/sti equivalents are already in pointers to function. For an RTAIler
+that simply means that PPC Linux is natively based on the RTAI RTHAL concept.
+So there is not much to be patched. In fact RTL does no patching but Paolo did
+patch a few lines because he wanted to do a few thing differently.
+
+Some technical notes on the port
+--------------------------------
+
+It is only for UP.
+
+Almost every thing of RTAI proved easily portable as it was. It could not be
+difficult because RTHAL is in Linux already and I was used to it. The main
+thing to be adapted where:
+
+- the timer,
+
+- knowing the external interrupt source,
+
+- setting up an emulation of ix86 IDT table for soft irqs to save the RTAI
+  srq concept and flexibility. Recall it is essential for shared memory,
+  fifos and LXRT. The first two had to work for sure to allow running
+  kernel space applications.
+
+The RTAI timer is always a oneshot one. Periodic mode is simply supported
+by a fix reloading of the decrementer, after reading the time base,
+with the count required to insure the next interrupt corresponds to the fixed
+periodic tick. So all timed function always call for the decrementer update
+at each decrementer expiration. The difference being that an appropriate
+variable count is loaded in oneshot, while in periodic mode the count is
+changing just to account for the time elapsed to acknowledge the related
+interrupt.
+
+After recalling the full 32 bits wrap around, it is noted that Linux does 
+something silly. It reads the decremeter to get the counts from the interrupts,
+then keeps reading it to wait for another decrement and at that time calculates
+the new count to be loaded. It is sure that no decrementer variation will
+occur as the decrementer runs at a fraction of the CPU speed. However on
+slower CPUs, waiting for the decrementer causes the loss of some time.
+
+The RTAI way in periodic mode is simpler. You know the timer base, at each
+interrupt increment the variable keeping your time by your period to know
+the time of the next interrupt. So you set the next time base tick, read
+the actual time base make the difference and load the decrementer.
+
+Knowing the external interrupt source is done by simply using the pointer
+to the related function made available by native PPC RTHAL. Here is an RTAI
+patch as that pointer is passed to the Linux dispatcher for its soft
+interrupt. The dispatcher is in charge of finding the irq source when RTAI
+is not mounted, and the RTAI two line patch saves it from doing it uselessly
+when RTAI is mounted.
+
+Soft irqs for RTAI srq are emulated by causing a trap after loading registers
+with the interrupt number. The Linux trap handler has been patched so that it
+can understand if RTAI is mounted. In such a case it passes the trap to the
+RTAI handler that, by looking at the registers, understands if it is his or
+Linux, and then acts accordingly. Clearly in such a way one can also trap Linux
+traps the way we have done in ix86. It should be OK as shared memory and fifos
+work well that way already, and all the RTAI kernel space examples seem also
+to work well.
+
+Status of the RTAI port
+-----------------------
+
+As said LXRT compiles but does not run. You have seen how I had to change the
+related call to lxrt_resume to get the right arg. There can however be problems
+in the way the long long returned from the lxrt_handler are packed and
+recovered as they must match the endian mode.
+
+As aid I stopped working on it because of the lack of interest and I was
+already amused and satisfied with what I did. The exercise did demonstrate 
+the usefullness of the RTHAL concept.

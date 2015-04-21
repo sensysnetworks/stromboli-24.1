@@ -1,0 +1,7 @@
+#!/bin/sh
+
+sync
+/sbin/insmod ../../modules/rtai.o
+/sbin/insmod ../../modules/rtai_sched.o
+/sbin/insmod ../../modules/rtai_lxrt.o
+/sbin/insmod ./sysAuxClk.o

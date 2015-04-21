@@ -1,0 +1,5 @@
+
+prune rtaisyms
+
+alias char-major-150 rtai_fifos
+

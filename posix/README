@@ -1,0 +1,166 @@
+Implementation of the POSIX pThreads and pQueues API for Real Time Linux.
+=========================================================================
+
+COPYRIGHT (C) 1999 Zentropix LLC, 1999
+Authors: Steve Papacharalambous (stevep@zentropix.com)
+	 Trevor Woolven (trevw@zentropix.com)
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
+
+-----------------------------------------------------------------------------
+
+This is release 0.9 of RTAI pthreads, which implements the Posix
+1003.1c Application Programming Interface (API) and release 0.4 of RTAI
+pqueues, which implements the message queues section of the Posix 1003.1d API.
+
+Please note that this release has been tested as much as possible, however
+these tests were not exhaustive, especially for SMP architectures.
+Please report all bugs to the authors.
+
+RTAI pthreads provides hard real-time threads where each thread is a RTAI
+task.  All threads execute in the same address space and hence can work
+concurrently on shared data.
+
+RTAI pqueues provides kernel-safe message queues.
+
+Note also that these modules can be used interactively. 
+
+-----------------------------------------------------------------------------
+
+Requirements.
+------------
+
+- RTAI version 1.1 - available from: http://www.zentropix.com
+                                     http://www.realtimelinux.org
+                                     http://www.aero.polimi.it/projects/rtai
+                                     http://www.rtai.org
+
+-----------------------------------------------------------------------------
+
+Supported POSIX Calls.
+----------------------
+
+See src/README.PTHREADS and src/README.PQUEUES
+
+-----------------------------------------------------------------------------
+
+Limitations.
+------------
+
+See src/README.PTHREADS and src/README.PQUEUES
+
+-----------------------------------------------------------------------------
+
+The test directory contains a number of test/example programs.
+
+-----------------------------------------------------------------------------
+
+Installation.
+-------------
+
+Install a link from <base dir>/rtai to <base dir>/rtai<curent version>,
+for example if rtai-1.1 is the current version that is being used and
+it has been installed in: /usr/src
+
+	ln -s /usr/src/rtai-1.1 /usr/src/rtai
+
+
+This package is included in the standard RTAI distribution, and should already
+be installed.  However if this package has been obtained seperately then it
+should be installed in the base rtai directory, for example if rtai is installed
+in: /usr/src/rtai
+then:
+cd /usr/src/rtai
+tar zxvf rtai_posix-0.9.tgz
+
+
+To build the package:
+
+**** MAKE SURE that RTAI is set to the correct RTAI installation path FIRST,
+**** in the Makefiles.  One is located at the top level directory of this
+**** package and the other is in the examples subdirectory.  The default
+**** for this is set to: /usr/src/rtai
+
+
+cd /usr/src/rtai/posix
+make clean
+make all
+
+make all will also build the example/test programs in the test directory.
+make realclean will also clear the test directory.
+
+
+To build the tests/examples:
+
+1/ From the top level directory.
+
+make test
+
+
+2/ From the examples directory.
+
+make clean
+make
+
+
+To install the package:
+
+insmod /usr/src/rtai/rtai
+insmod /usr/src/rtai/posix/modules/rtai_utils.o
+insmod /usr/src/rtai/posix/modules/rtai_<xxxx>.o
+insmod /usr/src/rtai/posix/modules/rtai_pthread.o
+insmod /usr/src/rtai/posix/modules/rtai_pqueues.o
+
+
+where rtai_<xxxx>.o is one on the following schedulers:
+
+rtai_ups_sched.o		# This is for Uniprocessor platforms.
+rtai_smp_sched_apic.o		# This is for most SMP platforms.
+rtai_smp_sched_8254.o		# This is for SMP platforms without APICs.
+rtai_mup_sched.o		# This is for platforms with APICs where RT
+                                # tasks are bound to a single CPU on task
+                                # creation.
+
+The choice of scheduler depends on the final application and platform.
+
+NOTE: To determine whether there is an APIC available, type "cat /proc/cpuinfo"
+and search for "apic" in the flags field.
+
+Please note that currently the schedulers in this package MUST be used, and NOT
+the the standard RTAI schedulers in the rtai/smpscheduler, rtai/upscheduler,
+and rtai/mupscheduler.
+
+-----------------------------------------------------------------------------
+
+TODO.
+-----
+
+See src/README.PTHREADS and src/README.PQUEUES
+
+-----------------------------------------------------------------------------
+
+Acknowledgements.
+-----------------
+
+- Paolo Mantegazza (mantegazza@aero.polimi.it) for the RTAI package, and for his
+  assistance and advice with this module.
+
+- Xavier Leroy (Xavier.Leroy@inria.fr) for his Linuxthreads package which has
+  provided a valuable reference.
+
+- Victor Yodaiken (yodaiken@fsmlabs.com) and Michael Baranbanov (baraban@fsmlabs.com)
+  for the RTLinux project.
+
+-----------------------------------------------------------------------------

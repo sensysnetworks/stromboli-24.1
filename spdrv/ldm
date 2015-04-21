@@ -1,0 +1,4 @@
+sync
+insmod ../modules/rtai.o
+insmod ./rtai_spdrv.o $*
+sync

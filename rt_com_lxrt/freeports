@@ -1,0 +1,2 @@
+setserial /dev/ttyS0 uart none
+setserial /dev/ttyS1 uart none

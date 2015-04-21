@@ -1,0 +1,198 @@
+Building an ADEOS/RTHAL-enabled kernel
+================================
+
+1. Download the Linux kernel source for a supported kernel.  The
+   best choice is usually the latest kernel for which there is an
+   ADEOS/RTHAL patch in the patches/ directory. This release contains
+   patches up to Linux-2.4.20. The choice of the basic layer onto which 
+   RTAI will run is just in the decision of the patch you'll apply, 
+   following RTAI usage being the same in any case.
+
+2. Unpack the kernel source:
+
+     tar --bzip2 -xvf linux-2.4.xx.tar.bz2
+   
+   or
+     
+     tar -xzvf linux-2.4.xx.tar.gz
+
+   Note that this will unpack into a directory called "linux".  Most
+   people immediately change the name to "linux-2.4.xx", or whatever
+   the version number is.
+
+     mv linux linux-2.4.xx
+
+   From Linux 2.4.19 onward Linux expands itself into linux-2.4.xx natively.
+
+3. If you are compiling a non-x86 kernel, you probably want to apply a
+   patch for these processsors. There are separate README files for these
+   architectures.
+
+4. Apply the ADEOS/RTHAL patch for this kernel.  The names of the patches
+   are in the form patch-2.4.xx-rthalxx or patch-2.4.xx-adeos-rx, where 
+   "2.4.xx" is the kernel version the patch applies to, and the final ids
+   are the interface and version number for the patch. Interface numbers are 
+   changed when there is an incompatible change made to the patch, and the 
+   version letter is changed whenever a bugfix is made.
+
+   Apply the patch. Taken that $RTAIDIR is the directory where you have
+   extracted your RTAI sources:
+
+     patch -p1 < $RTAIDIR/rtai-24.1.9/patches/patch-2.4.xx-rthal5g
+     patch -p1 < $RTAIDIR/rtai-24.1.9/patches/patch-2.4.xx-adeos-r6
+
+   Occasionally, it is necessary to supply different patches for
+   other architectures, since there are conflicts between the standard
+   kernels and that one patched for a specific architecture. 
+
+5. Configure the kernel. For an RTHAL patched Linux remember to enable 
+   CONFIG_RTHAL, the Real-Time Hardware Abstraction Layer, in the "Processor
+   type and features" menu. 
+   For an ADEOS patched one enable ADEOS in the "General setup" menu.
+   You can have ADEOS either as a module or native within the Linux kernel.
+   ADEOS mutex support can be enabled also but it does not affect RTAI.
+   Commands to this are:
+
+     make config
+
+   or:
+
+     make menuconfig
+
+   or: 
+
+     make xconfig
+
+   See the README in the kernel source, in the section "Configuring the
+   kernel" for additional information.
+
+   One easy way to configure a kernel is to start from the configuration
+   of a previous kernel. Copy the configuration file (typically found
+   in /boot) to .config, and then run 'make oldconfig'.
+
+   Be carefull to disable "Set version information on all module symbols"
+   under the "Loadable module support" kernel configuration paragraph, to
+   avoid missing links when you'll use RTAI.
+   The kernel APM option should be also seen suspiciously, in doubt disable
+   it.
+
+6. Compile the kernel:
+
+	make bzImage	(on i386)
+	make vmlinux	(on PowerPC)
+	make modules
+
+7. Assuming everything goes correctly, install the new kernel (as root):
+
+	make install
+
+8. Configure your boot loader to boot to the new kernel. Depending on
+   your setup, this may involve editing /etc/lilo.conf and running
+   lilo. Remember to have a backup kernel.
+
+9. Reboot with the new kernel.
+
+
+Building RTAI from the distribution:
+------------------------------------
+
+10. Change directories to the RTAI source tree, and configure RTAI using:
+
+	make config
+    
+   or: 
+
+        make menuconfig
+
+    This will ask you the location of the ADEOS/RTHAL-enabled kernel source
+    that you just compiled, and then ask a bunch of configuration questions. 
+    The default answers are almost always the best selection for beginning 
+    users.
+
+    If you want to trust the configuration already found in the distribution 
+    and thus avoid answering any configuration question, simply type:
+
+	make oldconfig
+    
+    Clearly the above command can be used any time you want to configure RTAI
+    using any configuration already available, i.e. when you already have an 
+    RTAI ".config" file you like.
+
+WARNING: if you are using a dual processor board that does not map local APICs
+	 to 0/1 activate "Strange APIC support". If you are not sure on what 
+         to do activate it anyhow and make RTAI. Having STRANGE_APIC in place 
+         is always safer, it might just add a few nanos overhead. Then you can 
+	 try it the otherway and see if it works the same way. If so use RTAI 
+         without strange APIC support. Recall this is an issue to care just if 
+	 you have a dual processor.
+
+11. Compile RTAI using:
+
+	make
+
+12. Install RTAI using (as root):
+
+	make install
+	make dev
+    
+    This will install the compiled RTAI modules into the /lib/modules
+    directory, so that they can be loaded using modprobe.  If you are
+    installing the modules for your target system (as opposed to the
+    host system), you might want to specify the root directory of the
+    target filesystem like this:
+
+	make install INSTALL_MOD_PATH=/your/target/root/directory
+	make dev INSTALL_MOD_PATH=/your/target/root/directory
+
+    or like this:
+
+	export INSTALL_MOD_PATH=/your/target/root/directory
+	make install
+	make dev
+
+    Please note that RTAI installs no files besides the modules, so
+    uninstalling is trivial, if needed.
+
+
+13. You'll find all the scheduler requested in configuring RTAI in directory 
+    "modules" with the following names:
+
+	- rtai_sched_up.o, the UP scheduler:
+	- rtai_sched_smp.o, the APIC timer based SMP scheduler;
+	- rtai_sched_smp.8254.o, the 8254 timer based SMP scheduler;
+	- rtai_sched_mup.o, the MUP scheduler, always APIC based.
+	- rtai_sched_newlxrt.o, the NEWLXRT scheduler, it unifies U/MP and
+          kernel/user space by scheduling Linux tasks/kernel threads natively,
+	  along with RTAI kernel tasks, all in one. See newlxrt/README.
+
+    Clearly you could have chosen any combination of one/two/three/four/five of
+    them, by activating only a part of the available schedulers configuration
+    options when you did "make config/menuconfig" for RTAI. So you must care of
+    "insmod"ing the one appropriate to your computer configuration. However to
+    maintain some compatibility with previous RTAI releases and to allow to run
+    examples/tests you are required to run "./setsched" to link your preferred
+    scheduler to the default name "rtai_sched.o".  Note that it is compulsory,
+    if you do not do that you'll get a lot of missing links at "insmod" because
+    "setsched" cares also of linking rtai.o appropriately.
+
+    You have just to do "./setsched [up | smp | smp8254 | mup | newlxrt]" 
+    (| means OR, in the sense of "either this or that", so you must choose 
+    only one). Naturally the original names listed above remain available and 
+    you can use them for your own applications anyhow.
+
+    In any case remember to do: "./setsched [up | smp | smp8254 | mup | 
+    newlxrt]" ALWAYS as now you set also the LXRT support mating the scheduler.
+
+14. Test if your installation has been successfull by running some/all of the 
+    examples under subdirectory examples, lxrt/examples and, if you are using
+    either an SMP or the MUP scheduler, mups_examples. A README in each 
+    specific example directory explains it briefly. Note that the stuff that is
+    not compiled by "make all" under PPC is not supported yet. So it is of no
+    use trying to make it from within any specific directory, you will just
+    get a lot of compilation errors.
+
+    There are a lot of other examples available related to new functionalities.
+    See: mini_rtai_lxrt, tbx, watchdog, lxrt/aio ...
+
+Document written by Lorenzo Dozio (dozio@aero.polimi.it) and David Schleef
+<ds@schleef.org>

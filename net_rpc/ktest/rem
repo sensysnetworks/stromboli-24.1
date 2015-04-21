@@ -1,0 +1,14 @@
+sync
+rmmod task_code
+rmmod start_task
+rmmod comnode
+sync
+rmmod scrambler
+rmmod net_rpc
+rmmod krtnet
+rmmod rtai_sched_ext
+rmmod rtai_bits
+rmmod rtai_sched
+rmmod rtai_shm
+rmmod rtai
+sync

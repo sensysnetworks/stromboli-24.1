@@ -1,0 +1,47 @@
+
+RTAI Critical Code Isoaltion:
+
+This one pager is an attempt to summarise the various critical code isolation
+ techniques used in RTAI and Linux, as the better we understand this stuff,
+the more robust our code will be - it's really fundamental:   		
+
+flags = global_save_flags(&flags);
+global_cli();
+// critical code isolation in Linux. Can be preempted by RTAI.
+// On SMP, a single global lock that locks out the other CPU's.
+// Allows recursive calls within it from the same cpu.
+// Works on UP.
+global_restore_flags(flags);
+
+flags = rt_global_save_flags(&flags);
+rt_global_cli();
+// critical code isolation in RTAI. When it happens, Linux is already held.
+// On SMP, a single global lock that locks out the other CPU's.
+// Allows recursive calls within it from the same cpu.
+// Works on UP. 
+rt_global_restore_flags(flags);
+
+flags = rt_global_save_flags_and_cli();
+// critical, same as above but optimised to save the additional rt_global_cli().
+rt_global_restore_flags(flags);
+
+spin_lock_irqsave(&qipc_lock);
+// critical code isolation in Linux only, can be preempted by RTAI.
+// On SMP, locks out the other CPU's who otherwise are free to run.
+// Interrupts are disabled locally only.
+// Works on UP. 
+// The spin_lock approach must be used everywhere consistently - i.e.
+// all the concerned functions must use the same lock. 
+spin_unlock_irqrestore(&qipc_lock, flags);
+
+rt_spin_lock_irqsave(&qipc_lock);
+// critical core isolation like the Linux version but for RTAI.
+// Paolo inverted the arguments in the unlock call as a warning.
+rt_spin_unlock_irqrestore(flags, &qipc_lock);
+
+rt_global_cli();
+// critical code isolation in RTAI.
+// Disables interrupts for all CPU's.
+rt_global_sti();
+
+./PGGC

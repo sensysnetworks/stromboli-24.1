@@ -1,0 +1,6 @@
+There are now two implementations for LXRT:
+- lxrt.c.noktrd, using the bottom half approach to make a task hard real time,
+  as described in Documentation/README.LXRT;
+- lxrt.c.ktrd using kernel threads support to make a task hard real time, as
+  done in NEWLXRT.
+The choice between the two is made at menuconfig, the default being lxrt.c.ktrd.

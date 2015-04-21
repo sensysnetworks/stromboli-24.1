@@ -1,0 +1,20 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example tests plain tasklets by periodically executing a
+user space function (utasklet.c) from within a periodic kernel
+space task (ktasklet.c).
+
+Press <enter> to execute
+EOF
+read junk
+
+../../scripts/rt_modprobe ../../modules/rtai_lxrt.o
+../../scripts/rt_modprobe test_ktasklet.o
+
+./utasklet
+
+../../scripts/rt_rmmod test_ktasklet
+../../scripts/rt_rmmod rtai_lxrt
+

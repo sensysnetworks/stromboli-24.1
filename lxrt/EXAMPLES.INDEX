@@ -1,0 +1,60 @@
+forked: verifies common operations in a mix of soft and hard real time 
+        processes launched through forking.
+
+hardsig: shows the forcing of a background hard real time task to soft real
+         time from a supervisor task. After killing the supervisor the, still 
+         running in soft real time, background process can be killed by using 
+         the kill command.
+
+ipc: demonstrates the use of QNX messaging tools available in RTAI.
+
+latency_calibration: measures the difference in time between the expected 
+                     switch time and the time when a task is actually called 
+                     by the scheduler in user space.
+
+many: verifies common operations in a mix of soft and hard real time processes 
+      tasks launched through a direct batch command.
+
+master_buddy: runs through most of the available RTAI services using two Linux
+              communicating processes in soft user space.
+
+msg_clock: use of inter tasks messages to implement a digital clock, clock 
+           functions execute in hard, management in soft mode.
+
+one: verifies the basic idea of hard real time in user space using a single 
+     process.
+
+pressa: uses a timer interrupt to emulate an encoder counts measuring something,
+        when the encoder count reaches a value indicating the end of a work to  
+        be done, it is reset and a new item is worked upon till a user assigned 
+        number of items.
+
+resumefromintr: shows two ways for waking up hard real time user space process
+                directly from interrupt handlers, using both semaphore 
+                wait/signal and rt_task_resume.
+
+rt_agent: uses a periodic agent real time task that, after having done its work
+          relay data sent to him through shared memory by a sender Linux 
+          process to a receiver Linux processes, the sender is synchronized
+          to the agent real time task by using semaphores, while the receiver i
+          uses intertask messages. 
+
+sem_clock: use of semaphores to implement a digital clock, clock functions 
+           execute in hard, management in soft mode.
+
+sound: uses a user space hard real time process to produce sound on the PC 
+       speaker, getting data from a vanilla Linux preocess throug a mailbox.
+
+soundmsg: uses a user space hard real time process to produce sound on the PC 
+          speaker, getting data from a vanilla Linux preocess throug intertask
+          messages.
+
+threads: verifies common operations in a mix of soft and hard real time 
+         processes launched through a multi threaded application.
+
+two: verifies the basic idea of hard real time in user space using a soft and
+     a hard real time process.
+
+unix: shows the basic frame of a generalized, per process, UNIX server to be 
+      used by hard real time LXRT applications that want to access Linux
+      services.

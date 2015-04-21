@@ -1,0 +1,57 @@
+PowerPC port of RTAI
+====================
+
+RTAI for the 32bit PowerPC/Linux has now stabilized and it is already 
+used in various real-time applications. The acceptance is growing
+quickly, especially on embedded systems.
+
+Unfortunately, there are plenty of different PowerPC architectures,
+processors and boards around making it quite difficult to maintain 
+and validate the corresponding RTAI ports. There is not even a primary
+source of Linux for the PowerPC, e.g. the "official" Linux from Linus 
+(http://kernel.org) is usually not up-to-date for PowerPC. The current 
+situation is best explained on the following pages:
+
+   http://penguinppc.org/intro.shtml
+   http://penguinppc.org/dev/kernel.shtml
+
+Starting from RTAI 24.1.9 we are going to provide kernel patches for
+a few kernel trees and reference systems. Checkout the README file in 
+"arch/ppc/patches" for further instructions. Note: these patches might 
+not be appropriate as they are for your kernel tree but it is usually 
+not a big deal to adapt them accordingly.
+
+The list at the end of this README tells you where you can find stable 
+and tested RTAI releases for further PowerPC Linux distributions and 
+PowerPC processor boards.
+
+
+Current Implementation Status:
+-----------------------------
+
+o LXRT is not yet ported to PowerPC.
+o The Linux Trace Toolkit (LLT) is supported.
+
+
+Other stable and tested RTAI releases:
+-------------------------------------
+
+o RTAI for DENX Linux:
+
+  RTAI for MPC 7xx, 8xx, 82xx and IBM 4xx processor cards supported by 
+  DENX Software Engineering like TQM-8xx or TQM-8260 from TQ-Systems. 
+  It should work on similar boards as well.
+
+  You can find the RTAI together with the Linux releases at:
+
+    ftp.denx.de:/pub/LinuxPPC/usr/src
+
+  Please consult the README.DENX file in the top-level directory for 
+  further information.
+
+  Contact: Wolfgang Grandegger (wg@denx.de) or
+           Wolfgang Denk (wd@denx.de).
+
+  Version: RTAI 24.1.8 with Linux 2.4.4.
+
+

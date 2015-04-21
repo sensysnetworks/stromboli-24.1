@@ -1,0 +1,35 @@
+APIC Frequency Calibration
+==========================
+
+The module rt_cal allows you to check the calibration of the cpu clock.
+Just type 'make cal s="SECS=<x>"' to get it and "make stop" to stop and
+remove it. <x> is the pacing, in seconds, at which messages are issued. 
+If "s" is omitted the the default (5 s) is used.
+
+Note that on the alphanumeric screen they appear directly onto it, under X
+they do not, unless you have an xconsole installed, but can be seen by
+typing "dmesg".
+
+In about twenty seconds the frequency value displayed on the console should
+converge to at least one part in a few millions. If you keep it running
+longer you can verify that more and more digits remain stable. In about a
+couple of minutes you should get a precision to the least significant
+digit. For a very precise and safe calibration let it run longer with SECS
+set to a relatively high value to avoid annoying messages.
+
+Note that this module is also an example of how you can trap a Linux
+interrupt and then chain your handler back to Linux by using
+"rt_pend_linux_irq(irq)".
+
+We always use the most precise calibration obtainable by running rt_cal for
+an appropriate amount of time. The highest precision is needed for periodic
+timers, if you want to minimize the drift from real time. 
+
+To use it:
+
+  make clean
+  make
+  make cal
+  wait till you are happy with the converging value, then do
+  make stop
+

@@ -1,0 +1,25 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example shows how you can use RTAI to install either a real
+time task and an interrupt handler to simulate a higher tick for
+the task.  When the task is resumed by the interrupt handler, it
+communicates through a fifo, which increments a counter.
+
+Type <return> to install the modules
+EOF
+
+read junk
+
+../../scripts/rt_modprobe ex_resumefromintr.o
+
+echo "Now watch the increment of the counter"
+echo "To stop the application type Ctrl-C"
+echo "Type <return> to continue"
+read junk
+
+./check
+
+../../scripts/rt_rmmod ex_resumefromintr
+

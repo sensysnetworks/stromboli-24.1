@@ -1,0 +1,18 @@
+8254 Calibration
+================
+
+The module rt_cal, allows to check the time it takes to write two bytes to
+the 8254 timer. Such a time is required for the oneshot timer and sets the
+macro SETUP_TIME_8254 in rtai.h. It is a very simple module that just
+calls an undocumented entry in rtai.c.
+
+To use it do:
+
+  make
+  make clean
+  make cal
+
+When the calibrated value is on the screen do: 
+
+  make stop
+

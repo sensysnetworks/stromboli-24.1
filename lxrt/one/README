@@ -1,0 +1,13 @@
+This test verifies the basic idea of hard real time in user space. It can be 
+run either in soft or hard real time mode; if you have some disk activity you 
+can immediately verify the differences in latency between the two modes of 
+execution, just look at what is printed on the screen at the end of the run.
+There is also a simple use of an LXRT specific signal function for hard real
+time processes in user space.
+
+You can control period and duration through macros in test.h.
+
+To run it:
+make clean
+make
+./run

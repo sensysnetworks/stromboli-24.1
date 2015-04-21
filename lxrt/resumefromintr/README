@@ -1,0 +1,21 @@
+The running of this test is self contained. Nonetheless you need to have 
+compiled and installed: rtai.c and a scheduler appropriate to your PC.
+To have them all available just follow the usual RTAI installation procedure, 
+do "make all" and then install the needed scheduler.
+Note that "make clean"s are repeated just to make it safe, please do them at 
+least once after installing. There is the possibility of doing it all at once
+from within directory "newlxrt" by: "making cleanall", just to be sure, followed
+by "make all".
+
+This test shows two ways for waking up user space hard real time processes
+directly from interrupt handlers. The process itself can then act, partly or 
+as a whole, as an interrupt handler. Do not confuse it with bottom halves,
+it is better, more direct, effective and true real time. It is based on using 
+either suspend/resume or semaphore wait/signal.
+
+You can control period, duration and wakeup method through macros in period.h.
+
+To run it do:
+make clean
+make
+./run

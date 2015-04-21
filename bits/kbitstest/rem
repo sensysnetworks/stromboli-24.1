@@ -1,0 +1,3 @@
+#!/bin/sh
+
+../../scripts/rt_rmmod ex_bits

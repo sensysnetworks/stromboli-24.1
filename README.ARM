@@ -1,0 +1,39 @@
+ARM port of RTAI
+================
+
+The ARM-port of RTAI has now two versions. The old one which is maintained by 
+Guennadi and the new one, which is maintained by Thomas. You have to select a
+version during configure. Current default is the new version, as it is
+tested on more archs.
+
+Arch-support: 
+		Old version		New version
+clps711x	no support		stable on 2.4.17/18/19/21
+h720x		no support		stable on 2.4.19/21
+epxa		no support		stable on 2.4.19
+sa11x0		stable on 2.4.18/19	stable on 2.4.17/18/19
+pxa25x		stable on 2.4.19	?
+
+The installation procedure is more or less "as usual":
+
+For the new version:
+- Apply the correct patch from arch/arm/patches directory to your kernel. 
+  Consult arch/arm/patches/README to select the correct one.
+  Configure your kernel and switch on RTHAL.
+- In RTAI do make config, unselect smp, mup, do make dep, then make. 
+
+For the old version:
+- Apply the correct patch from patches directory to your kernel. 
+  Consult patches/README to select the correct one.
+  Configure your kernel and switch on RTHAL.
+- In RTAI do make config, unselect smp, mup, do make dep, then make. 
+
+If you've got this far, you can try your new modules. Just make sure you
+specify the linux path correctly, and then the ARCH, MACHINE, PROC, CROSS
+variables should be set up correctly.
+
+For more information please see arm-related files in the Documentation
+directory.
+
+24 July 2003 
+Thomas Gleixner / G. Liakhovetski

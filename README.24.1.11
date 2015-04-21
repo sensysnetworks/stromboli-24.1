@@ -1,0 +1,217 @@
+RTAI 24.1.11
+============
+
+This is the Realtime Application Interface (RTAI) for Linux 2.4. It
+currently supports the following architectures: 
+
+- i386
+- PowerPC
+- ARM
+- MIPS
+- m68k-nommu
+- CRIS (yet to be natively integrated into RTAI, in case of a hurry:
+        download http://www.efd.lth.se/~d98mad/rtai-24.1.9-cris.tar.gz,
+        learn how with http://www.efd.lth.se/~d98mad/rtai.html)
+
+RTAI can now work with gcc-3.xx. Such compilers are not yet the official 
+ones to be used for making Linux. In fact the Linux kernel produces a 
+flood of scaring warnings when compiled with gcc-3.xx. Thus the choice is 
+up to you but it is likely that you should avoid mixing using gcc 2.95.xx 
+and 3.2 at least.
+
+In the ./patches directory you'll find patches using the RTHAL and ADEOS 
+technologies for the Linux kernels up to 2.4.20. ADEOS is the more recent
+real time support layer and at the moment is available just for i386. To
+know more about it have a look at the help that comes with menuconfig and
+references thereof, a useful entry might be: http://www.nongnu.org/adeos/. 
+
+ADEOS/RTHAL does not affect RTAI usage. The only thing to chose is the patch
+to apply. Then you'll work the same way on either of them.
+
+RTAI is a very lively project that is being continuously enhanced. So if
+you don't find a patch for a kernel you want to use just feel free to ask
+on the mailing list (see http://www.rtai.org for details). 
+
+Some of the many functionalities found in RTAI:
+
+- Configuration based on the mechanism which is also used for the Linux
+  kernel (CML1, kbuild). See README.INSTALL for details.  
+
+- Efficient multi list (timed/ready/active tasks) schedulers.
+
+- The possibilty of chosing between FIFO and RR scheduling policies on a
+  per task basis.
+
+- Support for Rate Monotonic (RMS) and Early Deadline First (EDF)
+  scheduling.
+
+- Extended POSIX APIs and message queues, in kernel and user space, adapted 
+  to the new schedulers for improved performances.
+
+- Improved an robustified dynamic memory management used by default
+  throughout many RTAI modules, to allow dynamic creation and deletion of
+  objects in real time.
+
+- Portable fifos with extended APIs.
+
+- Semaphores can be typed as: counting, binary and resource. Resource
+  semaphores can be recursively nested and support full priority
+  inheritance, both among semaphore resources and intertask messages, for a
+  singly owned resource. Priority inheritance becomes an adaptive priority
+  ceiling when a task owns multiple resources, including messages sent to
+  him. In such a case in fact its priority is returned to its base one only
+  when all such resources are released. This is a compromise design choice
+  aimed at avoiding extensive searches for the new priority to be inheredited
+  across multiply owned resources and blocked tasks sending messages to him.
+  Such a solution will be implemented only if it will prove necessary.
+
+- Binary-counting semaphores and mailboxes can now queue tasks either in
+  FIFO or priority order, the related choice can be made dynamically at run
+  time.
+
+- Mailboxes can now use also resource queues, RES_Q, beside FIFO_Q and PRIO_Q,
+  so that priority inheritance is available also to tasks waiting on a mailbox.
+  Resource semaphores always use priority queueing.
+
+- A mailbox implementation, tbx, based on typed mailboxes, has been added. 
+  It allows urgent sends and broadcasts to all queued mailboxes,
+  (G.M. Bertani, gmbertani@yahoo.it, http://www.geocities.com/gmbertani).
+
+- A module, watchdog, is available for various watchdog protection
+  services aimed at shielding RTAI, and the host Linux OS, against
+  programming errors in RTAI applications (Ian Soanes, ians@lineo.com).
+
+- Added functions rt_sched_lock/unlock, rt_get_prio, rt_get_inher_prio, 
+  rt_change_prio, rt_task_wakeup_sleeping, rt_mbx_evdrp.
+
+- A function to choose which CPU APIC timer must be used by the SMP scheduler.
+
+- A module to implement tasklet functions, either as simple or prioritized
+  periodic/oneshot timed functions, both in kernel and user space. It can be 
+  very useful in many instances. For an explanation of this new feature see 
+  the file README in directory tasklets.
+
+- Tasklets/timer are also integrated with (NEW)LXRT.
+
+- No need to calibrate, required frequencies assigned dynamically at run time.
+  Fine calibration procedures available for those that want it better.
+
+- (NEW)LXRT, for soft hard real time in user space, is a fully informed unified 
+  environment with the possibility of both inlining and library linking. 
+  A lot of work has been poured in it. 
+  It would take too long to explain it all, look at the code. 
+
+- (NEW)LXRT can be made to not break if Linux is called in hard real time mode; 
+  it switches to soft real time returning later to hard operations.
+
+- Hooks for remote gdbegugging in place natively under conditional compilation.
+
+- AIO support module offering open/read/write/close from hard real time kernel
+  tasks, in both sync and async manner 
+
+- Availability of the nice LinuxTraceToolkit, natively integrated into RTAI 
+  modules.
+
+- Octave files directly usable in user space for real time.
+
+- Matlab/Simulink/Real_Time_Workshop automatic generation of control programs
+  supported in user space hard real time. A direct porting of what Mathworks
+  distributes for Tornado/vxWorks. (Developed no more, see RTAI-Lab below)
+
+- An helper module exists to support kernel space omly applications that need 
+  intermodule registration of objects and full QNX messaging. They can now 
+  avoid using the full LXRT just for that.
+
+- In kernel space it is now possible to use intertask messaging with
+  arbitrarely sized messages, including asynchronous send, along the lines
+  of the corresponding RTAI APIs, with equivalent QNX functionalities but
+  without full correspondence.
+
+- net_rpc is available to allow use of almost all of the RTAI services in a
+  distributed way. The net support distributed with RTAI is not yet real time 
+  but the APIs implementation is so already. For real time networking 
+  download RTNet from: http://www.rts.uni-hannover.de/rtnet/.
+
+- multi events synchronization to allow synchronizing on a the matching of
+  multiple conditions through bits masks (events).
+
+- RTAI can work on 5 architectures now: ix86 (and compatibles), PPC and ARM,
+  m68k-nommu, CRIS.
+
+- Support for vintage 386/486.
+
+- Support of non 0/1 APIC mapping.
+
+- Support for use of real time serial ports (rt_com/rt_com_lxrt) directly from 
+  user space (Giuseppe Renoldi, giuseppe@renoldi.org).
+
+- A new support for using serial ports in real time, user/kernel space (SPDRV),
+  with blocking/timedout read/write also.
+
+- NEWLXRT, i.e. LXRT without using RTAI proper tasks. It schedules anything 
+  schedulable under RTAI-LINUX, i.e: Linux tasks/kernel threads and RTAI proper
+  kernel tasks. Under NEWLXRT kernel space threads works in hard mode always. 
+  In user space Linux tasks can be soft/hard as in LXRT. Anything that ran the 
+  standard way can run under NEWLXRT (kernel/user space).
+
+- Support for writing interrupt handlers in user space (UserSpaceInterrups, 
+  USI).
+
+- Support for LABVIEW under (NEW)LXRT, in soft hard real time. It should now
+  be possible to program your hard real time application, including interrupt
+  handlers, using the visual 'G' language. 
+
+- Support for making it easy to prepare a bootable floppy that run RTAI 
+  (uRTAI, read it microRTAI).
+
+- Support for COMEDI kernel space APIs (kcomedilib) in user space under 
+  LXRT/NEWLXRT, in soft/hard real time.
+
+- RTAI-Lab to run control/simulation application automatically generated by
+  Matlab/RTW and Scilab/Scicos the way you like, i.e. alone, mixed, locally
+  remotely, monitoring signal on scopes, back logging data and changing system
+  parameter on the fly when and wherever you want. Comedi support available.
+
+The naming convention used for RTAI is the following: 
+
+  X.Y.Z
+
+The major version number, X, refers to the Linux kernel series, e.g. "24"
+is for the Linux 2.4 kernel series. The minor version number, Y, is odd for
+development series and even for stable releases; micro (Z) is the current
+release. 
+
+It is likely that field 2 will never become even. In practice full usage of
+the naming convection is postponed indefinitely.
+
+What above does not tell it all. In fact it is important to remark that now
+RTAI is far from being a single hand, or departmental (DIAPM), work.
+
+See README.COORDINATORS for a whole picture of who's who in RTAI
+development. So even if I (Paolo) still pretend that RTAI must be traced
+back to my Department (DIAPM), which remains its homeland, I like to stress
+wholeheartedly that it is now a true open source project, where many
+important new contributions have been, and are being, added by many people,
+who often contributed also substantial improvement to the core
+functionalities available since its birth.
+
+The installation procedure, from Linux 2.4.4., is based on standard
+patching.
+
+We'll be glad if you take your chances, test it, and maybe help in any
+further fix, bugs are always there. 
+
+Any help, suggestion and bug reports will be warmly welcomed by all RTAI
+developers.
+
+A common RTAI users/developpers forum is the project mailing list: 
+
+  rtai@rtai.org
+
+For more details see the homepage: 
+
+  http://www.aero.polimi.it/~rtai,
+
+or its main mirror:
+
+  http://www.rtai.org

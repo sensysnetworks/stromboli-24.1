@@ -1,0 +1,83 @@
+This README describes the RTAI SPDRV driver for the MPC 8xx boards.
+
+Please follow the steps below to install and use RTAI serial port
+driver (SPDRV) on your MPC 8xx based board:
+
+1. Disable the UART configuration for the port you would like
+   to use for RTAI in the (RTAI-patched) Linux kernel and re-make 
+   it. e.g. for SMC2 Real-Time UART:
+
+   $ cd <path-to-your-linux-kernel>
+   $ make menuconfig
+   ...
+   [ ] Use SMC2 for UART
+   ...
+   $ grep CONFIG_SMC2_UART .config
+   # CONFIG_SMC2_UART is not set
+   $ make dep
+   $ make uImage 
+
+2. Customize the SPDRV MPC 8xx header file according to UART ports
+   you want to use for RTAI. There is more information in this
+   file:
+
+   $ cd <path>/rtai-24.1.12/spdrv
+   $ vi rtai_spdrv_mpc8xx.h
+   ...
+   #define RTAI_SMC2_UART
+   ...
+
+3. Configure and make RTAI with the SPDRV driver enabled: 
+
+   $ cd <path>/rtai-24.1.12
+   $ make config
+   ...
+   Real-Time serial driver (spdrv) (NEW) (CONFIG_RTAI_SPDRV) [N/m/?] m
+   ...
+   $ make
+
+4. Load and run the simple SPDRV test module "testcom.o" on your 
+   target:
+
+   bash# cat load-spdrv
+   ### Define root directory (please adjust):
+   #
+   TARGET_ROOT=/root
+   RTAI_ROOT=$TARGET_ROOT/rtai-24.1.12
+   
+   ### Load the RTAI modules: 
+   #
+   cd $RTAI_ROOT/modules
+   insmod rtai.o
+   insmod rtai_fifos.o
+   insmod rtai_sched.o
+   
+   # Start SPDRV and test module:
+   #
+   insmod rtai_spdrv_mpc8xx.o
+   insmod $RTAI_ROOT/spdrv/ktest/test-tx.o
+
+Please have a look to the UART TX and RX modules test-tx.o, 
+test-rx.o and test-rx-thrs.o to learn how to use the SPDRV API. 
+This README describes the RTAI SPDRV driver for the MPC 8xx boards.
+
+Further Notes and Hints:
+
+- The SPDRV for MPC 8xx uses a RTAI task to service interrupts and 
+  to handle the transfers. The RTAI priority for each port can be 
+  defined via insmod parameter:
+
+  bash# insmod rtai_spdrv_mpc8xx.o spprio=100
+
+- The SCC UART ports can support full hard handshake, which is 
+  autonomously handled by the firmware running on the CPM co-
+  processor. Therefore it is not possible to toggle the control 
+  lines like RTS. CTS and DTR directly.
+
+- The CPM handles request from peripherals like SMCx and SCCx in 
+  a  prioritized order. Please have a look to the MPC 8xx user's 
+  manual for further information.
+
+Enjoy.
+
+Wolfgang (wg@denx.de)

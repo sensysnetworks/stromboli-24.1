@@ -1,0 +1,41 @@
+#!/usr/bin/perl -w
+# vi: set ts=4:
+
+if(@ARGV != 1){
+	print "usage: check_module <source.c>\n";
+	exit 1;
+}
+$csrc_filename = shift @ARGV;
+
+open(CSRC,$csrc_filename);
+@csrc=<CSRC>;
+
+
+print "I: $csrc_filename\n";
+
+if(!grep { m/MODULE_LICENSE/ } @csrc){
+	print "E: MODULE_LICENSE() missing\n";
+}
+
+if(grep { m/EXPORT_NO_SYMBOLS/ } @csrc){
+	print "exports no symbols\n";
+}else{
+	if(grep { m/EXPORT_SYMBOL/ } @csrc){
+		print "exports symbols\n";
+	}else{
+		print "E: EXPORT_SYMBOL or EXPORT_NO_SYMBOLS missing\n";
+	}
+}
+
+if(!grep { m/GNU General Public License/ } @csrc){
+	if(grep { m/GNU Lesser General Public/ } @csrc){
+		print "W: Should convert from LGPL to GPL\n";
+	}else{
+		print "E: No GPL header\n";
+	}
+}
+
+if(grep { m/include.*asm.rtai.h/ } @csrc){
+	print "W: should use <rtai.h> instead of <asm/rtai.h>\n";
+}
+

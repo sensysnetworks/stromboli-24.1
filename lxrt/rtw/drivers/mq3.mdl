@@ -1,0 +1,165 @@
+Library {
+  Name			  "mq3"
+  Version		  3.00
+  BlockDataTips		  off
+  BlockParametersDataTip  off
+  BlockAttributesDataTip  off
+  BlockPortWidthsDataTip  off
+  BlockDescriptionStringDataTip	off
+  BlockMaskParametersDataTip off
+  ToolBar		  off
+  StatusBar		  off
+  BrowserShowLibraryLinks off
+  BrowserLookUnderMasks	  off
+  Created		  "Wed May  9 17:10:27 2001"
+  Creator		  "quaranta"
+  UpdateHistory		  "UpdateHistoryNever"
+  ModifiedByFormat	  "%<Auto>"
+  LastModifiedBy	  "quaranta"
+  ModifiedDateFormat	  "%<Auto>"
+  LastModifiedDate	  "Thu May 10 18:03:22 2001"
+  ModelVersionFormat	  "1.%<AutoIncrement:4>"
+  ConfigurationManager	  "none"
+  BlockDefaults {
+    Orientation		    "right"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    NamePlacement	    "normal"
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+    ShowName		    on
+  }
+  AnnotationDefaults {
+    HorizontalAlignment	    "center"
+    VerticalAlignment	    "middle"
+    ForegroundColor	    "black"
+    BackgroundColor	    "white"
+    DropShadow		    off
+    FontName		    "Helvetica"
+    FontSize		    10
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  LineDefaults {
+    FontName		    "Helvetica"
+    FontSize		    9
+    FontWeight		    "normal"
+    FontAngle		    "normal"
+  }
+  System {
+    Name		    "mq3"
+    Location		    [139, 304, 421, 515]
+    Open		    on
+    ModelBrowserVisibility  off
+    ModelBrowserWidth	    200
+    ScreenColor		    "white"
+    PaperOrientation	    "landscape"
+    PaperPositionMode	    "auto"
+    PaperType		    "usletter"
+    PaperUnits		    "inches"
+    ZoomFactor		    "100"
+    AutoZoom		    on
+    ReportName		    "simulink-default.rpt"
+    Block {
+      BlockType		      "S-Function"
+      Name		      "A/D"
+      Ports		      [0, 1, 0, 0, 0]
+      Position		      [60, 40, 120, 70]
+      FunctionName	      "admq3"
+      Parameters	      "n_ch,fs_ch,ts"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "A/D"
+      MaskDescription	      "Analog Digital Converter"
+      MaskPromptString	      "Input Channels:|First Channel:|Sampling Time:"
+      MaskStyleString	      "popup(1|2|3|4|5|6|7|8),popup(1|2|3|4|5|6|7|8),e"
+"dit"
+      MaskTunableValueString  "on,on,on"
+      MaskCallbackString      "||"
+      MaskEnableString	      "on,on,on"
+      MaskVisibilityString    "on,on,on"
+      MaskVariables	      "n_ch=@1;fs_ch=@2;ts=@3;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1|1|"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "D/A"
+      Ports		      [1, 0, 0, 0, 0]
+      Position		      [160, 40, 220, 70]
+      FunctionName	      "damq3"
+      Parameters	      "n_ch,ts,s_up,s_lw"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "D/A"
+      MaskDescription	      "Digital Analog Converter"
+      MaskPromptString	      "Output Channels:|Sampling Time:|Upper Saturatio"
+"n:|Lower Saturation:"
+      MaskStyleString	      "popup(1|2|3|4|5|6|7|8),edit,edit,edit"
+      MaskTunableValueString  "on,on,on,on"
+      MaskCallbackString      "|||"
+      MaskEnableString	      "on,on,on,on"
+      MaskVisibilityString    "on,on,on,on"
+      MaskVariables	      "n_ch=@1;ts=@2;s_up=@3;s_lw=@4;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1|||"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DI"
+      Ports		      [0, 1, 0, 0, 0]
+      Position		      [160, 120, 220, 150]
+      FunctionName	      "dimq3"
+      Parameters	      "n_ch,ts,tr"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "DI"
+      MaskDescription	      "Digital Input"
+      MaskPromptString	      "Input Channels:|Sampling Time:|Threshold:"
+      MaskStyleString	      "popup(1|2|3|4|5|6|7|8),edit,edit"
+      MaskTunableValueString  "on,on,on"
+      MaskCallbackString      "||"
+      MaskEnableString	      "on,on,on"
+      MaskVisibilityString    "on,on,on"
+      MaskVariables	      "n_ch=@1;ts=@2;tr=@3;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1||"
+    }
+    Block {
+      BlockType		      "S-Function"
+      Name		      "DO"
+      Ports		      [1, 0, 0, 0, 0]
+      Position		      [70, 115, 130, 145]
+      FunctionName	      "domq3"
+      Parameters	      "n_ch,ts,tr"
+      PortCounts	      "[]"
+      SFunctionModules	      "''"
+      MaskType		      "DO"
+      MaskDescription	      "Digital Output"
+      MaskPromptString	      "Output channels:|Sampling Time:|Threshold:"
+      MaskStyleString	      "popup(1|2|3|4|5|6|7|8),edit,edit"
+      MaskTunableValueString  "on,on,on"
+      MaskCallbackString      "||"
+      MaskEnableString	      "on,on,on"
+      MaskVisibilityString    "on,on,on"
+      MaskVariables	      "n_ch=@1;ts=@2;tr=@3;"
+      MaskIconFrame	      on
+      MaskIconOpaque	      on
+      MaskIconRotate	      "none"
+      MaskIconUnits	      "autoscale"
+      MaskValueString	      "1||"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+****** NAMED OBJECTS ******
+
+This example demonstrates the use of named tasks, semaphores and mail boxes.
+It is a mere adaption of jepplin example.
+To use it type:
+
+make
+./run
+
+To remove it type:
+
+./rem
+
+Alternatively use your own insmod/rmmod after make.

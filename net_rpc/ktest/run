@@ -1,0 +1,16 @@
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_shm.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_bits.o
+insmod ../../lxrt/sched_ext/rtai_sched_ext.o
+#insmod ../rtnet/krtnet.o
+insmod ../net_rpc.o  ThisNode="127.0.0.1"
+insmod ../scrambler.o
+../rtnet/urtnet &
+sync
+insmod ./comnode.o
+sync
+insmod ./task_code.o ComNode="127.0.0.1"
+sync
+insmod ./start_task.o ComNode="127.0.0.1" TaskNode="127.0.0.1"

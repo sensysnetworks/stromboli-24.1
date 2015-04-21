@@ -1,0 +1,20 @@
+sync
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rtai
+export LD_LIBRARY_PATH=../../lxrt/lib
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_shm.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_lxrt.o
+#insmod ../rtnet/krtnet.o
+insmod ../net_rpc.o ThisNode="127.0.0.1"
+insmod ../scrambler.o Key=137
+../rtnet/urtnet &
+sync
+./comnode &
+sync
+./task_code ComNode="127.0.0.1" &
+sync
+./start_task ComNode="127.0.0.1" TaskNode="127.0.0.1" &

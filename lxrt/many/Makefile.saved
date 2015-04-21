@@ -1,0 +1,11 @@
+all: rt_process
+
+include ../../Rules.make
+
+INCLUDE= -I$(LINUX_HOME)/include/ -I../../include/
+
+rt_process: rt_process.c rt_process.h ../rtai_lxrt.h
+	gcc ${INCLUDE} -O2 -o rt_process rt_process.c
+
+clean:
+	rm -f rt_process core

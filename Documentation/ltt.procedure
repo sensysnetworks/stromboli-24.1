@@ -1,0 +1,1647 @@
+LTT
+===
+
+Merging the LTT patch was non-trivial, so I decided to keep notes about
+what I did.  I took KY's patch-ltt-rtai-24.1.2-001220 and edited the
+contents quite a bit, to give the patch appended to this file.  Of course,
+this didn't apply cleanly, so I had to go back and do fixups.  The files in
+trace/ and include/rtai_trace.h were added separately, since they weren't
+really affected by the patch process.
+
+CVS tag ltt1 is the tag right before I checked anything in.
+
+I applied the LTT patch (ignoring the failures), checked in, and retagged
+as ltt2.
+
+I fixed the failures, checked in, and retagged as ltt3.
+
+I fixed the compilation problems, checked in, and retagged as ltt4.
+
+Note that this only merges the LTT patch, but doesn't fix any of the
+changes that were made in LTT for recent kernel releases.  So it won't work
+until those fixes are made as well.
+
+
+
+diff -urN rtai-24.1.2/arch/i386/rtai.c trace-rtai-24.1.2/arch/i386/rtai.c
+--- rtai-24.1.2/arch/i386/rtai.c	Sat Aug 19 15:51:46 2000
++++ trace-rtai-24.1.2/arch/i386/rtai.c	Tue Dec 19 21:46:40 2000
+@@ -51,6 +51,8 @@
+ #include <asm/rtai.h>
+ #include <asm/rtai_srq.h>
+ 
++#include <rtai_trace.h>
++
+ // proc filesystem additions.
+ static int rtai_proc_register(void);
+ static void rtai_proc_unregister(void);
+@@ -86,10 +88,51 @@
+ #define GLOBAL_IRQ_FNAME(y) y##_interrupt(void)
+ #define GLOBAL_IRQ_NAME(y) GLOBAL_IRQ_FNAME(GLOBAL##y)
+ 
++/****************************************************************************/
++/* Trace functions. These functions have to be used rather than insert
++the macros as-is. Otherwise the system crashes ... You've been warned. K.Y. */
++void trace_true_global_irq_entry(struct fill_t fill, int irq)
++{
++        TRACE_RTAI_GLOBAL_IRQ_ENTRY(irq);
++}
++void trace_true_global_irq_exit(void)
++{
++        TRACE_RTAI_GLOBAL_IRQ_EXIT();
++}
++void trace_true_own_irq_entry(struct fill_t fill, int irq)
++{
++        TRACE_RTAI_OWN_IRQ_ENTRY(irq);
++}
++void trace_true_own_irq_exit(void)
++{
++        TRACE_RTAI_OWN_IRQ_EXIT();
++}
++void trace_true_trap_entry(int err)
++{
++        TRACE_RTAI_TRAP_ENTRY(err);
++}
++void trace_true_trap_exit(void)
++{
++        TRACE_RTAI_TRAP_EXIT();
++}
++void trace_true_srq_entry(unsigned int srq, unsigned int whatever)
++{
++        TRACE_RTAI_SRQ_ENTRY(srq);
++}
++void trace_true_srq_exit(void)
++{
++        TRACE_RTAI_SRQ_EXIT();
++}
++/****************************************************************************/
++
+ #define BUILD_GLOBAL_IRQ(irq) static void GLOBAL_IRQ_NAME(irq) \
+ { \
+ 	SAVE_REG(irq); \
++	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_global_irq_entry)); \
+ 	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(dispatch_global_irq)); \
++        __asm__ __volatile__ ("pushl %eax"); \
++	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_global_irq_exit)); \
++        __asm__ __volatile__ ("popl %eax"); \
+ 	RSTR_REG; \
+ }
+ 
+@@ -100,7 +143,11 @@
+ #define BUILD_CPU_OWN_IRQ(irq) static void CPU_OWN_IRQ_NAME(irq) \
+ { \
+ 	SAVE_REG(irq); \
++     	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_own_irq_entry)); \
+ 	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(dispatch_cpu_own_irq)); \
++        __asm__ __volatile__ ("pushl %eax"); \
++     	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_own_irq_exit)); \
++        __asm__ __volatile__ ("popl %eax"); \
+ 	RSTR_REG; \
+ }
+ 
+@@ -121,7 +168,11 @@
+ #define BUILD_TRAP(vec) static void TRAP_NAME(vec) \
+ { \
+         TRAP_SAVE_REG(vec); \
++        __asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_trap_entry)); \
+         __asm__ __volatile__ ("call "SYMBOL_NAME_STR(dispatch_trap)); \
++        __asm__ __volatile__ ("pushl %eax"); \
++        __asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_trap_exit)); \
++        __asm__ __volatile__ ("popl %eax"); \
+         TRAP_RSTR_REG(vec); \
+ }
+ 
+@@ -134,7 +185,11 @@
+ 	pushl %ebx; pushl %edx; pushl %eax;\n\t \
+ 	movl $" STR(__KERNEL_DS) ",%ebx; mov %bx,%ds; mov %bx,%es");
+ 
++        __asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_srq_entry));
+ 	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(dispatch_srq));
++        __asm__ __volatile__ ("pushl %eax");
++        __asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_srq_exit));
++        __asm__ __volatile__ ("popl %eax");
+ 
+ 	__asm__ __volatile__ (" \
+ 	addl $8,%esp; popl %ebx; popl %ecx; popl %esi;\n\t \
+@@ -979,6 +1034,7 @@
+ 
+ long long dispatch_srq(unsigned int srq, unsigned int whatever)
+ {
++
+ 	if (srq > 1 && srq < NR_GLOBAL_IRQS && sysrq[srq].user_handler) {
+ 		return sysrq[srq].user_handler(whatever);
+ 	}
+@@ -1171,12 +1227,14 @@
+ 
+ void rt_switch_to_linux(int cpuid)
+ {
++        TRACE_RTAI_SWITCHTO_LINUX(cpuid);
+ 	set_bit(cpuid, &global.used_by_linux);
+ 	processor[cpuid].intr_flag = processor[cpuid].linux_intr_flag;
+ }
+ 
+ void rt_switch_to_real_time(int cpuid)
+ {
++        TRACE_RTAI_SWITCHTO_RT(cpuid);
+ 	processor[cpuid].linux_intr_flag = processor[cpuid].intr_flag;
+ 	processor[cpuid].intr_flag = 0;
+ 	clear_bit(cpuid, &global.used_by_linux);
+@@ -1202,6 +1260,8 @@
+ 	rtai_mounted++;
+ 	MOD_INC_USE_COUNT;
+ 
++	TRACE_RTAI_MOUNT();
++
+ 	if (rtai_mounted == 1) {
+ 
+ 		cpu_own_irq[HARD_LOCK_IPI].handler = hard_lock_all_handler;
+@@ -1246,6 +1306,9 @@
+ 
+ 	rt_spin_lock(&rtai_mount_lock);
+ 	rtai_mounted--;
++
++	TRACE_RTAI_UMOUNT();
++
+ 	MOD_DEC_USE_COUNT;
+ 	if (!rtai_mounted) {
+ 		flags = hard_lock_all();
+@@ -1508,6 +1571,9 @@
+ 
+ 	int count;
+ 	unsigned long flags;
++
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_REQUEST, handler, tick);
++
+ 	used_local_apic = use_local_apic = apic;
+ 	flags = hard_lock_all();
+ 	do {
+@@ -1561,6 +1627,9 @@
+ void rt_free_timer(void)
+ {
+ 	unsigned long flags;
++
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_FREE, 0, 0);
++
+ 	flags = hard_lock_all();
+ 	if (use_local_apic) {
+ 		global.hard_lock_all_service = 3;
+@@ -1588,6 +1657,8 @@
+ 	struct apic_timer_setup_data *p;
+ 	volatile struct rt_times *rt_times;
+ 
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_REQUEST_APIC, handler, 0);
++
+ 	flags = hard_lock_all();
+ 	global.hard_lock_all_service = 1;
+ 	do {
+@@ -1639,6 +1710,8 @@
+ void rt_free_apic_timers(void)
+ {
+ 	unsigned long flags;
++
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_APIC_FREE, 0, 0);
+ 
+ 	flags = hard_lock_all();
+ 	global.hard_lock_all_service = 3;
+diff -urN rtai-24.1.2/arch/ppc/rtai.c trace-rtai-24.1.2/arch/ppc/rtai.c
+--- rtai-24.1.2/arch/ppc/rtai.c	Sat Jun 24 07:42:12 2000
++++ trace-rtai-24.1.2/arch/ppc/rtai.c	Fri Dec 15 16:29:54 2000
+@@ -45,6 +45,8 @@
+ #include <asm/rtai.h>
+ #include <asm/rtai_srq.h>
+ 
++#include <rtai_trace.h>
++
+ // proc filesystem additions.
+ static int rtai_proc_register(void);
+ static void rtai_proc_unregister(void);
+@@ -406,11 +411,14 @@
+ static int dispatch_irq(struct pt_regs *regs, int isfake)
+ {
+ 	int irq;
+-	
++
+ 	rt_spin_lock(&global.ic_lock);
+ 	if ((irq = ppc_get_irq(regs)) >= 0) {
+ 		ic_ack_irq[irq](irq);            // Any umasking must be done in the irq handler.
+ 		rt_spin_unlock(&global.ic_lock);
++
++		TRACE_RTAI_GLOBAL_IRQ_ENTRY(irq, !user_mode(regs));
++
+ 		if (global_irq[irq].handler) {
+         	        ((void (*)(int))global_irq[irq].handler)(irq);
+ 			rt_spin_lock_irq(&(global.data_lock));
+@@ -426,11 +434,18 @@
+ 			rt_spin_unlock_irq(&(global.data_lock));
+ 			linux_sti();
+ //			processor[hard_cpu_id()].intr_flag = 0;
++
++			TRACE_RTAI_GLOBAL_IRQ_EXIT();
++
+ 			return 1;
+ 		} else {
+ 			rt_spin_unlock(&(global.data_lock));
++
++			TRACE_RTAI_GLOBAL_IRQ_EXIT();
++
+ 			return 0;
+ 		}
++		TRACE_RTAI_GLOBAL_IRQ_EXIT(); /* PARANOIA */
+ 	} else {
+ 		rt_spin_unlock(&global.ic_lock);
+ 		return 0;
+@@ -470,6 +485,9 @@
+ 	long long retval;
+ 
+ 	if (regs->gpr[0] && regs->gpr[0] == ((srq = regs->gpr[3]) + (whatever = regs->gpr[4]))) {
++
++	        TRACE_RTAI_SRQ_ENTRY(srq, !user_mode(regs));
++
+ 		if (!(vec = srq >> 24)) {
+ 			if (srq > 1 && srq < NR_SYSRQS && sysrq[srq].user_handler) {
+ 				retval = sysrq[srq].user_handler(whatever);
+@@ -487,6 +505,9 @@
+ 		regs->gpr[3] = ((unsigned long *)&retval)[0];
+ 		regs->gpr[4] = ((unsigned long *)&retval)[1];
+ 		regs->nip += 4;
++
++		TRACE_RTAI_SRQ_EXIT();
++
+ 		return 0;
+ 	} else {
+ 		return 1;
+@@ -741,12 +781,14 @@
+ 
+ void rt_switch_to_linux(int cpuid)
+ {
++        TRACE_RTAI_SWITCHTO_LINUX(cpuid);
+ 	set_bit(cpuid, &global.used_by_linux);
+ 	processor[cpuid].intr_flag = processor[cpuid].linux_intr_flag;
+ }
+ 
+ void rt_switch_to_real_time(int cpuid)
+ {
++        TRACE_RTAI_SWITCHTO_RT(cpuid);
+ 	processor[cpuid].linux_intr_flag = processor[cpuid].intr_flag;
+ 	processor[cpuid].intr_flag = 0;
+ 	clear_bit(cpuid, &global.used_by_linux);
+@@ -778,6 +820,8 @@
+ 	rtai_mounted++;
+ //	MOD_INC_USE_COUNT;
+ 
++	TRACE_RTAI_MOUNT();
++
+ 	if (rtai_mounted == 1) {
+ 
+ 		global_irq[HARD_LOCK_IPI].handler = hard_lock_all_handler;
+@@ -830,6 +874,9 @@
+ 
+ 	rt_spin_lock(&rtai_mount_lock);
+ 	rtai_mounted--;
++
++	TRACE_RTAI_UMOUNT();
++
+ //	MOD_DEC_USE_COUNT;
+ 	if (!rtai_mounted) {
+ 		flags = hard_lock_all();
+@@ -1055,6 +1102,9 @@
+ 	unsigned int cpuid;
+ 	RTIME t;
+ 	unsigned long flags;
++
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_REQUEST, handler, tick);
++
+ 	if (processor[cpuid = hard_cpu_id()].rt_timer_handler) {
+ 		return;
+ 	}
+@@ -1079,6 +1129,9 @@
+ void rt_free_timer(void)
+ {
+ 	unsigned long flags;
++
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_FREE, 0, 0);
++
+ 	flags = hard_lock_all();
+ 	rtai_regs.trap = 0;
+ 	processor[hard_cpu_id()].rt_timer_handler = 0;
+@@ -1093,6 +1146,8 @@
+ 	struct apic_timer_setup_data *p;
+ 	struct rt_times *rt_times;
+ 
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_REQUEST_APIC, handler, 0);
++
+ 	flags = hard_lock_all();
+ 	do {
+ 		t = rdtsc();
+@@ -1124,6 +1179,9 @@
+ void rt_free_apic_timers(void)
+ {
+ 	unsigned long flags, cpuid;
++
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_APIC_FREE, 0, 0);
++
+ 	flags = hard_lock_all();
+ 	for (cpuid = 0; cpuid < NR_RT_CPUS; cpuid++) {
+ 		processor[cpuid = hard_cpu_id()].rt_timer_handler = 0;
+diff -urN rtai-24.1.2/fifos/rtai_fifos.c trace-rtai-24.1.2/fifos/rtai_fifos.c
+--- rtai-24.1.2/fifos/rtai_fifos.c	Tue Jun 13 16:26:13 2000
++++ trace-rtai-24.1.2/fifos/rtai_fifos.c	Fri Dec 15 16:29:54 2000
+@@ -44,6 +44,8 @@
+ #include <asm/rtai.h>
+ #include <rtai_fifos.h>
+ 
++#include <rtai_trace.h>
++
+ typedef struct lx_queue {
+ 	struct lx_queue *prev;
+ 	struct lx_queue *next;
+@@ -587,6 +589,9 @@
+ {
+ 	MBX *mbx;
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_RESET, minor, 0);
++
+ 	if (mbx_delete(mbx = &(fifo[minor].mbx))) {
+ 		return -EFAULT;
+ 	}
+@@ -601,6 +606,9 @@
+ 	MBX *mbx;
+ 	
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_RESIZE, minor, size);
++
+ 	malloc_type = fifo[minor].malloc_type;
+ 	if (size <= PAGE_SIZE*32) {
+ 		if (!(bufadr = kmalloc(size, GFP_KERNEL))) {
+@@ -634,6 +642,9 @@
+ 	if (minor >= MAX_FIFOS) {
+ 		return -ENODEV;
+ 	}
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_CREATE, minor, size);
++
+ 	if (!(fifo[minor].opncnt)) {
+ 		if (size <= PAGE_SIZE*32) {
+ 			if (!(buf = kmalloc(size, GFP_KERNEL))) {
+@@ -664,6 +675,9 @@
+ int rtf_destroy(unsigned int minor)
+ {
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_DESTROY, minor, 0);
++
+ 	MOD_DEC_USE_COUNT;
+ 	(fifo[minor].opncnt)--;
+ 	if(!(fifo[minor].opncnt)) {
+@@ -685,6 +699,9 @@
+ 	if (minor >= MAX_FIFOS || !handler) {
+ 		return -EINVAL;
+ 	}
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_CREATE_HANDLER, minor, handler);
++
+ 	fifo[minor].handler = handler;
+ 	return 0;
+ }
+@@ -692,6 +709,9 @@
+ int rtf_put(unsigned int minor, void *buf, int count)
+ {
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_PUT, minor, count);
++
+ 	count -= mbx_send_wp(&(fifo[minor].mbx), buf, count, 0);
+ 	return count;
+ }
+@@ -699,6 +719,9 @@
+ int rtf_get(unsigned int minor, void *buf, int count)
+ {
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_GET, minor, count);
++
+ 	count -= mbx_receive_wp(&(fifo[minor].mbx), buf, count, 0);
+ 	return count;
+ }
+@@ -706,6 +729,9 @@
+ int rtf_sem_init(unsigned int minor, int value)
+ {
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_INIT, minor, value);
++
+ 	mbx_sem_init(&(fifo[minor].sem), value);
+ 	return 0;
+ }
+@@ -713,6 +739,9 @@
+ int rtf_sem_post(unsigned int minor)
+ {
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_POST, minor, 0);
++
+ 	mbx_sem_signal(&(fifo[minor].sem), 0);
+ 	return 0;
+ }
+@@ -720,18 +749,26 @@
+ int rtf_sem_trywait(unsigned int minor)
+ {
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_TRY_WAIT, minor, 0);
++
+ 	return mbx_sem_wait_if(&(fifo[minor].sem));
+ }
+ 
+ int rtf_sem_delete(unsigned int minor)
+ {
+ 	VALID_FIFO;
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_DESTROY, minor, 0);
++
+ 	return mbx_sem_delete(&(fifo[minor].sem));
+ }
+ 
+ static int rtf_open(struct inode *inode, struct file *filp)
+ {
+ #define DEFAULT_SIZE 1000
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_OPEN, MINOR(inode->i_rdev), DEFAULT_SIZE);
++
+ 	return rtf_create(MINOR(inode->i_rdev), DEFAULT_SIZE);
+ }
+ 
+@@ -739,6 +776,9 @@
+ {	
+ 	int minor;
+ 	minor = MINOR((filp->f_dentry->d_inode)->i_rdev);
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_FASYNC, minor, fd);
++
+ 	return fasync_helper(fd, filp, mode, &(fifo[minor].asynq));
+ 	if (!mode) {
+ 		fifo[minor].asynq = 0;
+@@ -749,6 +789,9 @@
+ {
+ 	int minor;
+ 	minor = MINOR(inode->i_rdev);
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_RELEASE, minor, 0);
++
+ 	wake_up_interruptible(&(fifo[minor].pollq));
+ 	rtf_fasync(-1, filp, 0);
+ 	return rtf_destroy(minor);
+@@ -760,6 +803,8 @@
+ 	unsigned int minor = MINOR(inode->i_rdev);
+ 	int handler_ret;
+ 
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_READ, minor, count);
++
+ 	if (filp->f_flags & O_NONBLOCK) {
+ 		count -= mbx_receive_wp(&(fifo[minor].mbx), buf, count, 1);
+ 		if (!count) {
+@@ -788,6 +833,8 @@
+ 	unsigned int minor = MINOR(inode->i_rdev);
+ 	int handler_ret;
+ 
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_WRITE, minor, count);
++
+ 	if (filp->f_flags & O_NONBLOCK) {
+ 		count -= mbx_send_wp(&(fifo[minor].mbx), (char *)buf, count, 1);
+ 		if (!count) {
+@@ -814,6 +861,9 @@
+ 	FIFO *fifop;
+ 
+ 	fifop = fifo + (minor = MINOR(inode->i_rdev));
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_IOCTL, minor, cmd);
++
+ 	switch(cmd) {
+ 		case RESET: {
+ 			return rtf_reset(minor);
+@@ -822,6 +872,7 @@
+ 			return rtf_resize(minor, arg);
+ 		}
+ 		case SUSPEND_TIMED: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SUSPEND_TIMED, DELAY(arg), 0);
+ 			current->state = TASK_INTERRUPTIBLE;
+ 			schedule_timeout(DELAY(arg));
+ 			return 0;
+@@ -835,6 +886,7 @@
+ 		case READ_ALL_AT_ONCE: {
+ 			struct { char *buf; int count; } args;
+ 			int handler_ret;
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_READ_ALLATONCE, 0, 0);
+ 			copy_from_user(&args, (void *)arg, sizeof(args));
+ 			args.count -= mbx_receive(&(fifop->mbx), args.buf, args.count, 1);
+ 			if (args.count) {
+@@ -851,6 +903,7 @@
+ 			struct { char *buf; int count, delay; } args;
+ 			int handler_ret;
+ 			copy_from_user(&args, (void *)arg, sizeof(args));
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_READ_TIMED, args.count, DELAY(args.delay));
+ 			if (!args.delay) {
+ 				args.count -= mbx_receive_wp(&(fifop->mbx), args.buf, args.count, 1);
+ 				if (!args.count) {
+@@ -873,6 +926,7 @@
+ 			struct { char *buf; int count, delay; } args;
+ 			int handler_ret;
+ 			copy_from_user(&args, (void *)arg, sizeof(args));
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_WRITE_TIMED, args.count, DELAY(args.delay));
+ 			if (!args.delay) {
+ 				args.count -= mbx_send_wp(&(fifop->mbx), args.buf, args.count, 1);
+ 				if (!args.count) {
+@@ -889,27 +943,34 @@
+ 			return args.count;
+ 		}
+ 		case RTF_SEM_INIT: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_INIT, minor, arg);
+ 			mbx_sem_init(&(fifop->sem), arg);
+ 			return 0;
+ 		}
+ 		case RTF_SEM_WAIT: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_WAIT, minor, 0);
+ 			return mbx_sem_wait(&(fifop->sem));
+ 		}
+ 		case RTF_SEM_TRYWAIT: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_TRY_WAIT, minor, 0);
+ 			return mbx_sem_wait_if(&(fifop->sem));
+ 		}
+ 		case RTF_SEM_TIMED_WAIT: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_TIMED_WAIT, minor, DELAY(arg));
+ 			return mbx_sem_wait_timed(&(fifop->sem), DELAY(arg));
+ 		}
+ 		case RTF_SEM_POST: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_POST, minor, 0);
+ 			mbx_sem_signal(&(fifop->sem), 0);
+ 			return 0;
+ 		}
+ 		case RTF_SEM_DESTROY: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SEM_DESTROY, minor, 0);
+ 			mbx_sem_delete(&(fifop->sem));
+ 			return 0;
+ 		}
+ 		case SET_ASYNC_SIG: {
++			TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_SET_ASYNC_SIG, arg, 0);
+ 			async_sig = arg;
+ 			return 0;
+ 		}
+@@ -923,6 +984,9 @@
+ 
+ 	retval = 0;
+ 	minor = MINOR((filp->f_dentry->d_inode)->i_rdev);
++
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_POLL, minor, 0);
++
+ 	if (fifo[minor].mbx.avbs) {
+ 		retval |= POLLIN | POLLRDNORM;
+ 	}
+@@ -937,6 +1001,8 @@
+ 
+ static loff_t rtf_llseek(struct file *filp, loff_t offset, int origin)
+ {
++	TRACE_RTAI_FIFO(TRACE_RTAI_EV_FIFO_LLSEEK, MINOR((filp->f_dentry->d_inode)->i_rdev), offset);
++
+ 	return rtf_reset(MINOR((filp->f_dentry->d_inode)->i_rdev));
+ }
+ 
+diff -urN rtai-24.1.2/include/asm-i386/rtai_lxrt.h trace-rtai-24.1.2/include/asm-i386/rtai_lxrt.h
+--- rtai-24.1.2/include/asm-i386/rtai_lxrt.h	Sun Jun 25 05:52:51 2000
++++ trace-rtai-24.1.2/include/asm-i386/rtai_lxrt.h	Fri Dec 15 17:46:35 2000
+@@ -70,6 +69,13 @@
+ 
+ #define RTAI_LXRT_HANDLER rtai_lxrt_handler
+ 
++/****************************************************************************/
++/* Trace functions. These functions have to be used rather than insert
++the macros as-is. Otherwise the system crashes ... You've been warned. K.Y. */
++extern void trace_true_lxrt_rtai_syscall_entry(void);
++extern void trace_true_lxrt_rtai_syscall_exit(void);
++/****************************************************************************/
++
+ #define DEFINE_LXRT_HANDLER \
+ static void rtai_lxrt_handler(void) \
+ { \
+@@ -78,9 +84,11 @@
+ 	cld; pushl %es; pushl %ds; pushl %eax; pushl %ebp;\n\t \
+ 	pushl %edi; pushl %esi; pushl %edx; pushl %ecx;\n\t \
+ 	pushl %ebx; pushl %edx; pushl %eax;\n\t \
+-	movl $" STR(__KERNEL_DS) ",%ebx; mov %bx,%ds; mov %bx,%es\n\t \
+-	call "SYMBOL_NAME_STR(lxrt_handler)"\n\t \
+-	addl $8,%esp; movl %edx,8(%esp); movl %eax,24(%esp)"); \
++	movl $" STR(__KERNEL_DS) ",%ebx; mov %bx,%ds; mov %bx,%es\n\t"); \
++        __asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_lxrt_rtai_syscall_entry)); \
++	__asm__ __volatile__ ("call "SYMBOL_NAME_STR(lxrt_handler)); \
++	__asm__ __volatile__ ("addl $8,%esp; movl %edx,8(%esp); movl %eax,24(%esp)"); \
++        __asm__ __volatile__ ("call "SYMBOL_NAME_STR(trace_true_lxrt_rtai_syscall_exit)); \
+ 	__asm__ __volatile__ (" \
+ 	testl %%eax,%%eax; jz 1f; popl %%ebx; popl %%ecx;\n\t \
+ 	popl %%edx; popl %%esi; popl %%edi; popl %%ebp;\n\t \
+diff -urN rtai-24.1.2/include/rtai_sched.h trace-rtai-24.1.2/include/rtai_sched.h
+--- rtai-24.1.2/include/rtai_sched.h	Wed Aug 23 04:25:30 2000
++++ trace-rtai-24.1.2/include/rtai_sched.h	Fri Dec 15 16:29:54 2000
+@@ -90,6 +90,9 @@
+ 	int owndres;
+ 	struct rt_queue *blocked_on;
+ 	struct rt_queue msg_queue;
++#if 1
++        int tid;
++#endif
+ 	unsigned int msg;
+ 	struct rt_queue ret_queue;
+ 	void (*signal)(void);
+diff -urN rtai-24.1.2/lxrt/lxrt.c trace-rtai-24.1.2/lxrt/lxrt.c
+--- rtai-24.1.2/lxrt/lxrt.c	Sun Aug 27 10:32:49 2000
++++ trace-rtai-24.1.2/lxrt/lxrt.c	Fri Dec 15 16:54:59 2000
+@@ -36,6 +36,8 @@
+ #include <asm/rtai_lxrt.h>
+ #include "rtai_lxrt.h"
+ 
++#include <rtai_trace.h>
++
+ /*     The macro below must be >= the max number of all objects to be 
+     registered and shared (objects are: rt_tasks, semaphores, mailboxes).  */
+ #define MAX_SLOTS  100
+@@ -173,6 +175,19 @@
+ 
+ extern volatile unsigned long lxrt_hrt_flags; 
+ 
++/****************************************************************************/
++/* Trace functions. These functions have to be used rather than insert
++the macros as-is. Otherwise the system crashes ... You've been warned. K.Y. */
++void trace_true_lxrt_rtai_syscall_entry(void)
++{
++	TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_RTAI_SYSCALL_ENTRY, 0, 0, 0);
++}
++void trace_true_lxrt_rtai_syscall_exit(void)
++{
++	TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_RTAI_SYSCALL_EXIT, 0, 0, 0);
++}
++/****************************************************************************/
++
+ DEFINE_LXRT_HANDLER
+ 
+ #ifdef HARD_LXRT
+@@ -241,6 +256,10 @@
+ 			new_task->run_on = 1 << cpuid;
+ 		}
+ //		if (new_task->lnxtsk.task) {
++		        TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_SCHED_CHANGE,
++					prev->pid,
++					new_task->lnxtsk.task->pid,
++					prev->state);
+ 			rthal.switch_mem(prev, new_task->lnxtsk.task, cpuid);
+ 			my_switch_to(prev, new_task->lnxtsk.task, prev);
+ //		} else {
+@@ -345,6 +364,9 @@
+ 	}
+ 	exec_sigfun = 1;
+ 	rt_global_cli();
++
++	TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_STEAL_TASK, rt_task->lnxtsk.task->pid, 0, 0);
++
+ 	if (!nr_linux_rt_process++) {
+ 	        rthal.lxrt_global_cli = linux_lxrt_global_cli;
+ 	}
+@@ -403,6 +425,9 @@
+ //	lxrt_tq_giveb.routine = lxrt_do_give_back;
+ 	lxrt_tq_giveb.data = rt_task;
+ 	rt_global_cli();
++
++	TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_GIVE_BACK_TASK, rt_task->lnxtsk.task->pid, 0, 0);
++
+ 	if (nr_linux_rt_process > 0) { 
+ 		nr_linux_rt_process--; 
+ 	}
+@@ -445,6 +470,9 @@
+ 	int state;
+ 
+ 	rt_global_cli();
++
++	TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_SUSPEND, rt_task->lnxtsk.task->pid, 0, 0);
++
+ 	state = (rt_task->lnxtsk.task)->state;
+ 	if (state == TASK_LXRT_OWNED) {
+ 		rt_task->pstate = READY;
+@@ -474,6 +502,15 @@
+ 
+ 	copy_from_user(rt_task->stack_top, arg, narg*sizeof(int));
+ 
++	if(rt_task->lnxtsk.task != NULL)
++	  {
++	  TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_RESUME, rt_task->lnxtsk.task->pid, type, 0);
++	  }
++	else
++	  {
++	  TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_RESUME, -1, type, 0);
++	  }
++
+ /* Here type > 0 means any messaging with the need of copying from/to user 
+    space. My knowledge of Linux memory menagment has led to this mess. 
+    Whoever can do it better is warmly welcomed.                             */
+@@ -526,6 +563,8 @@
+ 	union {unsigned long name; RT_TASK *rt_task; SEM *sem; MBX *mbx; } arg0;
+ 	unsigned long name;
+ 	int srq;
++
++	TRACE_RTAI_LXRT(TRACE_RTAI_EV_LXRT_HANDLE, SRQ(lxsrq), 0, 0);
+ 
+ 	get_user(arg0.name, (unsigned long *)arg);
+ 	if ((srq = SRQ(lxsrq)) < GET_ADR) {
+diff -urN rtai-24.1.2/posix/src/rtai_pqueue.c trace-rtai-24.1.2/posix/src/rtai_pqueue.c
+--- rtai-24.1.2/posix/src/rtai_pqueue.c	Tue Jun 13 17:34:57 2000
++++ trace-rtai-24.1.2/posix/src/rtai_pqueue.c	Fri Dec 15 16:29:54 2000
+@@ -33,6 +33,8 @@
+ #include <rtai_utils.h>
+ #include <rt_mem_mgr.h>
+ 
++#include <rtai_trace.h>
++
+ ///////////////////////////////////////////////////////////////////////////////
+ //      LOCAL DEFINITIONS
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -806,6 +808,8 @@
+ 
+     }  // End if, else if, else - creating or opening    
+ 
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_OPEN, rt_pqueue_descr[q_index].q_id, 0, 0);
++
+     //Return the message queue's id and mark it as open
+     DBG("queue %s, id %d opened\n", rt_pqueue_descr[q_index].q_name,
+     				    rt_pqueue_descr[q_index].q_id);
+@@ -826,6 +830,8 @@
+ 
+     DBG("\n");
+ 
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_RECV, mq, buflen, 0);
++
+     //Check that the supplied queue id is valid
+     if ( 0 <= q_index && q_index < MAX_PQUEUES)
+     { 
+@@ -928,6 +934,8 @@
+ 
+     DBG("\n");
+ 
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_SEND, mq, msglen, msgprio);
++
+     //Check that the supplied queue id is valid
+     if ( 0 <= q_index && q_index < MAX_PQUEUES)
+     { 
+@@ -1044,6 +1052,8 @@
+ 
+     DBG("\n");
+ 
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_CLOSE, mq, 0, 0);
++
+     //Check that the supplied queue id is valid
+     if ( 0 <= q_index && q_index < MAX_PQUEUES)
+     { 
+@@ -1099,6 +1109,8 @@
+ 
+     DBG("\n");
+ 
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_GET_ATTR, mq, 0, 0);
++
+     //Check that the supplied queue id is valid
+     if ( 0 <= q_index && q_index < MAX_PQUEUES)
+     { 
+@@ -1126,6 +1138,8 @@
+ 
+     DBG("\n");
+ 
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_SET_ATTR, mq, 0, 0);
++
+     //Check that the supplied queue id is valid
+     if ( 0 <= q_index && q_index < MAX_PQUEUES)
+     {
+@@ -1176,6 +1190,8 @@
+ 
+     DBG("\n");
+ 
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_NOTIFY, mq, 0, 0);
++
+     //Check that the supplied queue id is valid
+     if ( 0 <= q_index && q_index < MAX_PQUEUES)
+     {
+@@ -1214,6 +1230,8 @@
+ int q_index = mq - 1;
+ 
+     DBG("\n");
++
++    TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_MQ_UNLINK, mq, 0, 0);
+ 
+     //Check that the supplied queue id is valid
+     if ( 0 <= q_index && q_index < MAX_PQUEUES)
+diff -urN rtai-24.1.2/posix/src/rtai_pthread.c trace-rtai-24.1.2/posix/src/rtai_pthread.c
+--- rtai-24.1.2/posix/src/rtai_pthread.c	Mon Aug 14 18:39:26 2000
++++ trace-rtai-24.1.2/posix/src/rtai_pthread.c	Fri Dec 15 16:29:54 2000
+@@ -37,6 +37,8 @@
+ 
+ #include <rtai_utils.h>
+ 
++#include <rtai_trace.h>
++
+ #define RUNNABLE_ON_CPUS 3
+ #define RUN_ON_CPUS (smp_num_cpus > 1 ? RUNNABLE_ON_CPUS : 1)
+ 
+@@ -163,6 +165,11 @@
+       }
+       rt_pthread_descr[j].p_start_args.schedpolicy = SCHED_OTHER;
+ 
++      TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_CREATE,
++		       start_routine,
++		       rt_pthread_descr[j].p_tid,
++		       0);
++
+ // Initialise the scheduling parameters for the new thread.
+       if(attr != NULL && attr->schedpolicy != SCHED_OTHER) {
+         switch(attr->inheritsched) {
+@@ -273,6 +280,8 @@
+ 
+   Z_APPS *zapps_ptr = NULL;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_EXIT, 0, 0, 0);
++
+   rt_task_ptr = rt_whoami();
+ // ****TPW
+   zapps_ptr = (Z_APPS*)rt_task_ptr->system_data_ptr;
+@@ -290,6 +299,7 @@
+ 
+ int sched_yield(void) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_SCHED_YIELD, 0, 0, 0);
+   rt_task_yield();
+   return(0);
+ 
+@@ -309,6 +319,9 @@
+   thread_ptr = (pthread_descr)zapps_ptr->pthreads;
+   //thread_ptr = (pthread_descr)rt_task_ptr->system_data_ptr;
+ // ***TPW
++
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_SELF, thread_ptr->p_tid, 0, 0);
++
+   return(thread_ptr->p_tid);
+ 
+ } // End function - pthread_self
+@@ -320,6 +333,8 @@
+ 
+ int pthread_attr_init(pthread_attr_t *attr) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_INIT, attr, 0, 0);
++
+   attr->detachstate = PTHREAD_CREATE_JOINABLE;
+   attr->schedpolicy = SCHED_OTHER;
+   attr->schedparam.sched_priority = 0;
+@@ -332,6 +347,8 @@
+ 
+ int pthread_attr_destroy(pthread_attr_t *attr) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_DESTROY, attr, 0, 0);
++
+   return(0);
+ 
+ }  // End function - pthread_attr_destroy
+@@ -339,6 +356,8 @@
+ 
+ int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_SETDETACHSTATE, attr, detachstate, 0);
++
+   if (detachstate < PTHREAD_CREATE_JOINABLE ||
+       detachstate > PTHREAD_CREATE_DETACHED)
+     return(EINVAL);
+@@ -350,6 +369,8 @@
+ 
+ int pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_GETDETACHSTATE, attr, attr->detachstate, 0);
++
+   *detachstate = attr->detachstate;
+   return(0);
+ 
+@@ -362,6 +383,8 @@
+   int max_prio = get_max_priority(attr->schedpolicy);
+   int min_prio = get_min_priority(attr->schedpolicy);
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_SETSCHEDPARAM, attr, 0, 0);
++
+   if(param->sched_priority < min_prio || param->sched_priority > max_prio) {
+     return(EINVAL);
+   }
+@@ -374,6 +397,8 @@
+ int pthread_attr_getschedparam(const pthread_attr_t *attr,
+ 			       struct sched_param *param) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_GETSCHEDPARAM, attr, 0, 0);
++
+   *param = attr->schedparam;
+   return(0);
+ 
+@@ -382,6 +407,8 @@
+ 
+ int pthread_attr_setschedpolicy(pthread_attr_t *attr, int policy) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_SETSCHEDPOLICY, attr, policy, 0);
++
+   if(policy != SCHED_OTHER && policy != SCHED_FIFO && policy != SCHED_RR) {
+     return(EINVAL);
+   }
+@@ -393,6 +420,8 @@
+ 
+ int pthread_attr_getschedpolicy(const pthread_attr_t *attr, int *policy) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_GETSCHEDPOLICY, attr, attr->schedpolicy, 0);
++
+   *policy = attr->schedpolicy;
+   return(0);
+ 
+@@ -401,6 +430,8 @@
+ 
+ int pthread_attr_setinheritsched(pthread_attr_t *attr, int inherit) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_SETINHERITSCHED, attr, inherit, 0);
++
+   if(inherit != PTHREAD_INHERIT_SCHED && inherit != PTHREAD_EXPLICIT_SCHED) {
+     return(EINVAL);
+   }
+@@ -412,6 +443,8 @@
+ 
+ int pthread_attr_getinheritsched(const pthread_attr_t *attr, int *inherit) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_SETINHERITSCHED, attr, attr->inheritsched, 0);
++
+   *inherit = attr->inheritsched;
+   return(0);
+ 
+@@ -420,6 +453,8 @@
+ 
+ int pthread_attr_setscope(pthread_attr_t *attr, int scope) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_SETSCOPE, attr, scope, 0);
++
+   switch (scope) {
+   case PTHREAD_SCOPE_SYSTEM:
+     attr->scope = scope;
+@@ -435,6 +470,8 @@
+ 
+ int pthread_attr_getscope(const pthread_attr_t *attr, int *scope) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_ATTR_GETSCOPE, attr, attr->scope, 0);
++
+   *scope = attr->scope;
+   return(0);
+ 
+@@ -461,6 +498,8 @@
+     return(ESRCH);
+   }
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_SETSCHEDPARAM, pthread_handle->p_tid, policy, 0);
++
+   max_prio = get_max_priority(policy);
+   min_prio = get_min_priority(policy);
+ 
+@@ -495,6 +534,11 @@
+     return(ESRCH);
+   }
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_GETSCHEDPARAM,
++		   pthread_handle->p_tid,
++		   pthread_handle->p_policy,
++		   0);
++
+ // Get the new scheduling parameters for the thread.
+   *policy = pthread_handle->p_policy;
+   param->sched_priority = pthread_handle->p_priority;
+@@ -510,6 +554,7 @@
+ 
+ int clock_gettime(int clockid, struct timespec *current_time) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_CLOCK_GETTIME, clockid, 0, 0);
+ 
+   if(clockid != CLOCK_REALTIME) {
+     current_time->tv_sec = 0;
+@@ -638,6 +683,8 @@
+ 
+   QUEUE *rt_q;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEX_INIT, mutex, 0, 0);
++
+   mutex->m_owner = 0;
+   mutex->m_kind =
+     mutex_attr == NULL ? PTHREAD_MUTEX_FAST_NP : mutex_attr->mutexkind;
+@@ -658,6 +705,8 @@
+   unsigned long flags;
+   QUEUE *rt_q;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEX_DESTROY, mutex, 0, 0);
++
+   if(mutex->m_semaphore.magic != RT_SEM_MAGIC) {
+     return(EINVAL);
+   }
+@@ -684,6 +733,8 @@
+ 
+ int pthread_mutexattr_init(pthread_mutexattr_t *attr) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEXATTR_INIT, attr, 0, 0);
++
+   attr->mutexkind = PTHREAD_MUTEX_FAST_NP;
+   return(0);
+ 
+@@ -693,6 +744,8 @@
+ 
+ int pthread_mutexattr_destroy(pthread_mutexattr_t *attr) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEXATTR_DESTROY, attr, 0, 0);
++
+   return(0);
+ 
+ }  // End function - pthread_mutex_attr_destroy
+@@ -700,6 +753,8 @@
+ 
+ int pthread_mutexattr_setkind_np(pthread_mutexattr_t *attr, int kind) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEXATTR_SETKIND_NP, attr, kind, 0);
++
+   if (kind != PTHREAD_MUTEX_FAST_NP
+       && kind != PTHREAD_MUTEX_RECURSIVE_NP
+       && kind != PTHREAD_MUTEX_ERRORCHECK_NP)
+@@ -712,6 +767,8 @@
+ 
+ int pthread_mutexattr_getkind_np(const pthread_mutexattr_t *attr, int *kind) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEXATTR_GETKIND_NP, attr, kind, 0);
++
+   *kind = attr->mutexkind;
+   return(0);
+ 
+@@ -727,6 +784,9 @@
+   if(mutex->m_semaphore.magic != RT_SEM_MAGIC) {
+     return(EINVAL);
+   }
++
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEX_TRY_LOCK, mutex, 0, 0);
++
+   flags = rt_global_save_flags_and_cli();
+   self = rt_whoami();
+   switch(mutex->m_kind) {
+@@ -777,6 +837,9 @@
+   if(mutex->m_semaphore.magic != RT_SEM_MAGIC) {
+     return(EINVAL);
+   }
++
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEX_LOCK, mutex, 0, 0);
++
+   flags = rt_global_save_flags_and_cli();
+   current_task = rt_whoami();
+   switch(mutex->m_kind) {
+@@ -862,6 +925,8 @@
+   unsigned long flags;
+   RT_TASK *current_task;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_MUTEX_UNLOCK, mutex, 0, 0);
++
+   flags = rt_global_save_flags_and_cli();
+   current_task = rt_whoami();
+   if(mutex->m_semaphore.magic != RT_SEM_MAGIC ||
+@@ -943,6 +1008,8 @@
+ 
+   QUEUE *rt_q;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_COND_INIT, cond, 0, 0);
++
+   cond->c_waiting.magic = RT_SEM_MAGIC;
+   rt_q = &(cond->c_waiting.queue);
+   rt_q->prev = &(cond->c_waiting.queue);
+@@ -959,6 +1026,8 @@
+   int return_code;
+   QUEUE *rt_q;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_COND_DESTROY, cond, 0, 0);
++
+   rt_q = &(cond->c_waiting.queue);
+   flags = rt_global_save_flags_and_cli();
+   if( (rt_q->next != &(cond->c_waiting.queue)) &&
+@@ -978,6 +1047,8 @@
+ 
+ int pthread_condattr_init(pthread_condattr_t *attr) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_CONDATTR_INIT, attr, 0, 0);
++
+   return(0);
+ 
+ }  // End function - pthread_condattr_init
+@@ -986,6 +1057,8 @@
+ 
+ int pthread_condattr_destroy(pthread_condattr_t *attr) {
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_CONDATTR_DESTROY, attr, 0, 0);
++
+   return(0);
+ 
+ }  // End function - pthread_condattr_destroy
+@@ -997,6 +1070,8 @@
+   QUEUE *rt_q;
+   RT_TASK *current_task;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_COND_WAIT, cond, mutex, 0);
++
+   flags = rt_global_save_flags_and_cli();
+   current_task = rt_whoami();
+   current_task->state |= SEMAPHORE;
+@@ -1018,6 +1093,8 @@
+   QUEUE *rt_q;
+   RT_TASK *current_task;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_COND_TIMEDWAIT, cond, mutex, 0);
++
+ //  TODO
+ // Gotta figure out how to get absoulte time in RT land, sigh....
+   return(ETIMEDOUT);
+@@ -1031,6 +1108,8 @@
+   QUEUE *rt_q;
+   RT_TASK *next_task;
+ 
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_COND_SIGNAL, cond, 0, 0);
++
+   flags = rt_global_save_flags_and_cli();
+   if(cond->c_waiting.queue.next != &(cond->c_waiting.queue) &&
+      cond->c_waiting.queue.next != NULL && cond->c_waiting.queue.prev != NULL) {
+@@ -1055,6 +1134,8 @@
+   unsigned long flags;
+   QUEUE *rt_q;
+   RT_TASK *next_task;
++
++  TRACE_RTAI_POSIX(TRACE_RTAI_EV_POSIX_PTHREAD_COND_BROADCAST, cond, 0, 0);
+ 
+   flags = rt_global_save_flags_and_cli();
+   if(cond->c_waiting.queue.next != NULL && cond->c_waiting.queue.prev != NULL) {
+diff -urN rtai-24.1.2/shmem/rtai_shm.c trace-rtai-24.1.2/shmem/rtai_shm.c
+--- rtai-24.1.2/shmem/rtai_shm.c	Tue Jun 13 18:10:46 2000
++++ trace-rtai-24.1.2/shmem/rtai_shm.c	Fri Dec 15 16:29:54 2000
+@@ -36,6 +36,8 @@
+ #include <asm/pgtable.h>
+ #include <asm/io.h>
+ 
++#include <rtai_trace.h>
++
+ #include <asm/rtai.h>
+ #include <asm/rtai_shm.h>
+ #include <rtai_shm.h>
+@@ -155,6 +157,9 @@
+ 	if (size <= 0) {
+ 		return 0;
+ 	}
++
++	TRACE_RTAI_SHM(TRACE_RTAI_EV_SHM_KMALLOC, name, size, pid);
++
+ 	spin_lock_irqsave(&shm_lock, flags);
+ 	if ((slot = find_name_and_reg(name, pid))) {
+ 		shm_list[slot].count++;
+@@ -188,6 +193,9 @@
+ 	unsigned long flags;
+ 	int slot, size;
+ 	void *adr;
++
++	TRACE_RTAI_SHM(TRACE_RTAI_EV_SHM_KFREE, name, 0, pid);
++
+ 	spin_lock_irqsave(&shm_lock, flags);
+ 	if ((slot = find_name_and_drg(name, pid))) {
+ 		MOD_DEC_USE_COUNT;
+@@ -211,6 +219,7 @@
+ 	long long name_pid;
+ 	switch (srq) {
+ 		case 1:
++		        TRACE_RTAI_SHM(TRACE_RTAI_EV_SHM_MALLOC, name, srq, current->pid);
+ 			if (rtai_kmalloc_f(((unsigned long *)name)[0], ((unsigned long *)name)[1], current->pid)) {
+ 				return shm_list[find_name(((unsigned long *)name)[0])].size;
+ 			}
+@@ -218,6 +227,7 @@
+ 		case 2:
+ 			NAME(name_pid) = name;
+ 			PID(name_pid)  = current->pid;
++		        TRACE_RTAI_SHM(TRACE_RTAI_EV_SHM_GET_SIZE, name, srq, current->pid);
+ 			for (owner = 1; owner <= MAX_OWNERS; owner++) {
+ 				if (name_pid_list[owner] == name_pid) {
+ 					if (vmarea[owner] && (vmarea[owner]->vm_ops)->close == rtai_shm_vm_close) {
+@@ -232,6 +242,7 @@
+ 			}
+ 			return 0;
+ 		case 3:
++		        TRACE_RTAI_SHM(TRACE_RTAI_EV_SHM_FREE, name, srq, current->pid);
+ 			rtai_kfree_f(name, current->pid);
+ 			return 0;
+ 	}
+diff -urN rtai-24.1.2/upscheduler/rtai_sched.c trace-rtai-24.1.2/upscheduler/rtai_sched.c
+--- rtai-24.1.2/upscheduler/rtai_sched.c	Sun Aug 27 09:56:48 2000
++++ trace-rtai-24.1.2/upscheduler/rtai_sched.c	Fri Dec 15 16:29:54 2000
+@@ -79,6 +79,8 @@
+ #include <asm/rtai_sched.h>
+ #include <rtai_sched.h>
+ 
++#include <rtai_trace.h>
++
+ #define RT_TASK_MAGIC 0x754d2774
+ 
+ #define RT_SEM_MAGIC 0xaabcdeff
+@@ -119,6 +121,8 @@
+ 
+ static int preempt_always;
+ 
++static int rt_next_tid = 1;       /* Next task ID */
++
+ #define MAX_SRQ  64
+ static struct { int srq, in, out; void *mp[MAX_SRQ]; } frstk_srq;
+ 
+@@ -171,6 +175,9 @@
+ 	task->ret_queue.task = NOTHING;        
+ 	task->blocked_on = NOTHING;        
+ 	task->signal = signal;
++	task->tid = rt_next_tid++;
++
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_INIT, task->tid, (uint32_t)rt_thread, priority);
+ 
+ 	init_arch_stack();
+ 
+@@ -284,6 +291,9 @@
+ 			rt_switch_to_linux(0);
+ 			restore_cr0(linux_cr0);
+ 		}
++
++		TRACE_RTAI_SCHED_CHANGE(rt_current->tid, new_task->tid, rt_current->state);
++
+ 		rt_switch_to(new_task);
+ 		if (rt_current->signal) {
+ 			(*rt_current->signal)();
+@@ -382,6 +392,8 @@
+ 		return -EINVAL;
+ 	}
+ 
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_DELETE, task->tid, 0, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if (!task->owndres || task == rt_current || rt_current->priority == RT_LINUX_PRIORITY) {
+ 		if (task->blocked_on) {
+@@ -441,6 +453,8 @@
+ 	RTIME now;
+ 	int prio, delay, preempt;
+ 
++	TRACE_RTAI_TIMER(TRACE_RTAI_EV_TIMER_HANDLE_EXPIRY, 0, 0);
++
+ 	rt_times.tick_time = rt_times.intr_time;
+ 	rt_time_h = rt_times.tick_time + rt_half_tick;
+ 	if (rt_times.tick_time > rt_times.linux_time) {
+@@ -503,6 +517,9 @@
+ 				restore_fpenv(fpu_task->fpu_reg);
+ 			}
+ 		}
++
++		TRACE_RTAI_SCHED_CHANGE(rt_current->tid, new_task->tid, rt_current->state);
++
+ 		rt_switch_to(new_task);
+ 		if (rt_current->signal) {
+ 			(*rt_current->signal)();
+@@ -629,6 +646,9 @@
+ 	if (task->magic != RT_TASK_MAGIC) {
+ 		return -EINVAL;
+ 	}
++
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_SIG_HANDLER, task->tid, (uint32_t) handler, 0);
++
+ 	task->signal = handler;
+ 	return 0;
+ }
+@@ -920,6 +940,8 @@
+ {
+ 	unsigned long flags;
+ 
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_YIELD, 0, 0, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if (rt_current->next) {
+ 		(rt_current->prev)->next = rt_current->next;
+@@ -942,6 +964,8 @@
+ 		return -EINVAL;
+ 	}
+ 
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_SUSPEND, task->tid, 0, 0);
++
+ 	hard_save_flags_and_cli(flags);
+         if (!task->suspdepth++ && !task->owndres) {
+ 		task->state |= SUSPENDED;
+@@ -962,6 +986,8 @@
+ 		return -EINVAL;
+ 	}
+ 
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_RESUME, task->tid, 0, 0);
++
+ 	hard_save_flags_and_cli(flags);
+         if (task->suspdepth > 0 && !(--task->suspdepth)) {
+ 		if (((task->state &= ~SUSPENDED) & ~DELAYED) == READY) {
+@@ -980,6 +1006,9 @@
+ 	if (task->magic != RT_TASK_MAGIC) {
+ 		return -EINVAL;
+ 	}
++
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_MAKE_PERIOD_RELATIVE, task->tid, start_delay, period);
++
+ 	start_delay = nano2count(start_delay);
+ 	period = nano2count(period);
+ 	flags = rt_global_save_flags_and_cli();
+@@ -999,6 +1028,9 @@
+ 	if (task->magic != RT_TASK_MAGIC) {
+ 		return -EINVAL;
+ 	}
++
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_MAKE_PERIOD, task->tid, start_time, period);
++
+ 	hard_save_flags_and_cli(flags);
+ 	task->resume_time = start_time;
+ 	task->period = period;
+@@ -1013,6 +1045,8 @@
+ {
+ 	unsigned long flags;
+ 
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_WAIT_PERIOD, 0, 0, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((rt_current->resume_time += rt_current->period) > rt_time_h) {
+ 		rt_current->state |= DELAYED;
+@@ -1031,6 +1065,9 @@
+ void rt_busy_sleep(int ns)
+ {
+ 	RTIME end_time;
++
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_BUSY_SLEEP, ns, 0, 0);
++
+ 	end_time = rdtsc() + llimd(ns, tuned.cpu_freq, 1000000000);
+ 	while (rdtsc() < end_time);
+ }
+@@ -1039,6 +1076,9 @@
+ void rt_sleep(RTIME delay)
+ {
+ 	unsigned long flags;
++
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_SLEEP, 0, delay, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((rt_current->resume_time = (oneshot_timer ? rdtsc(): rt_times.tick_time) + delay) > rt_time_h) {
+ 		rt_current->state |= DELAYED;
+@@ -1051,6 +1091,9 @@
+ void rt_sleep_until(RTIME time)
+ {
+ 	unsigned long flags;
++
++	TRACE_RTAI_TASK(TRACE_RTAI_EV_TASK_SLEEP_UNTIL, 0, time, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((rt_current->resume_time = time) > rt_time_h) {
+ 		rt_current->state |= DELAYED;
+@@ -1123,6 +1166,8 @@
+ 
+ void rt_sem_init(SEM *sem, int value)
+ {
++        TRACE_RTAI_SEM(TRACE_RTAI_EV_SEM_INIT, sem, value);
++
+ 	rt_typed_sem_init(sem, value, 0);
+ }
+ 
+@@ -1136,6 +1181,8 @@
+ 		return SEM_ERR;
+ 	}
+ 
++        TRACE_RTAI_SEM(TRACE_RTAI_EV_SEM_DELETE, sem, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	sem->magic = 0;
+ 	q = &(sem->queue);
+@@ -1156,6 +1203,8 @@
+ 		return SEM_ERR;
+ 	}
+ 
++        TRACE_RTAI_SEM(TRACE_RTAI_EV_SEM_SIGNAL, sem, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if (sem->type) {
+ 		if (sem->type > 1) {
+@@ -1207,6 +1256,8 @@
+ 		return SEM_ERR;
+ 	}
+ 
++        TRACE_RTAI_SEM(TRACE_RTAI_EV_SEM_WAIT, sem, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	count = sem->count;
+ 	if (--(sem->count) < 0) {
+@@ -1246,6 +1297,8 @@
+ 		return SEM_ERR;
+ 	}
+ 
++        TRACE_RTAI_SEM(TRACE_RTAI_EV_SEM_WAIT_IF, sem, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((count = sem->count) > 0) {
+ 		sem->count--;
+@@ -1273,6 +1326,8 @@
+ 		return SEM_ERR;
+ 	}
+ 
++        TRACE_RTAI_SEM(TRACE_RTAI_EV_SEM_WAIT_UNTIL, sem, time);
++
+ 	hard_save_flags_and_cli(flags);
+ 	count = sem->count;
+ 	if (--(sem->count) < 0) {
+@@ -1329,6 +1384,8 @@
+ 		return MSG_ERR;
+ 	}
+ 
++        TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_SEND, task->tid, msg, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((task->state & RECEIVE) &&
+ 	      (!task->msg_queue.task || task->msg_queue.task == rt_current)) {
+@@ -1367,6 +1424,8 @@
+ 		return MSG_ERR;
+ 	}
+ 
++        TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_SEND_IF, task->tid, msg, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((task->state & RECEIVE) &&
+ 	      (!task->msg_queue.task || task->msg_queue.task == rt_current)) {
+@@ -1400,6 +1459,8 @@
+ 		return MSG_ERR;
+ 	}
+ 
++        TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_SEND_UNTIL, task->tid, msg, time);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((task->state & RECEIVE) &&
+ 	      (!task->msg_queue.task || task->msg_queue.task == rt_current)) {
+@@ -1448,6 +1509,8 @@
+ 		return MSG_ERR;
+ 	}
+ 
++        TRACE_RTAI_RPC(TRACE_RTAI_EV_RPC_MAKE, task->tid, to_do, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((task->state & RECEIVE) &&
+ 		(!task->msg_queue.task || task->msg_queue.task == rt_current)) {
+@@ -1486,6 +1549,9 @@
+ 	if (task->magic != RT_TASK_MAGIC) {
+ 		return MSG_ERR;
+ 	}
++
++        TRACE_RTAI_RPC(TRACE_RTAI_EV_RPC_MAKE_IF, task->tid, to_do, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((task->state & RECEIVE) &&
+ 	      (!task->msg_queue.task || task->msg_queue.task == rt_current)) {
+@@ -1521,6 +1587,8 @@
+ 		return MSG_ERR;
+ 	}
+ 
++        TRACE_RTAI_RPC(TRACE_RTAI_EV_RPC_MAKE_UNTIL, task->tid, to_do, time);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((task->state & RECEIVE) &&
+ 	    (!task->msg_queue.task || task->msg_queue.task == rt_current)) {
+@@ -1577,6 +1645,8 @@
+ 		return MSG_ERR;
+ 	}
+ 
++        TRACE_RTAI_RPC(TRACE_RTAI_EV_RPC_RETURN, task->tid, result, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if ((task->state & RETURN) && task->msg_queue.task == rt_current) {
+ 		dequeue_blocked(task);
+@@ -1606,6 +1676,9 @@
+ 		return MSG_ERR;
+ 	}
+ 
++	if(!task) { TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_RECV, 0, 0, 0);}
++	else { TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_RECV, task->tid, 0, 0);}
++
+ 	hard_save_flags_and_cli(flags);
+ 
+ 	if (!task) task = (rt_current->msg_queue.next)->task;
+@@ -1659,6 +1732,9 @@
+ 		return MSG_ERR;
+ 	}
+ 
++	if(!task) { TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_RECV_IF, 0, 0, 0); }
++	else { TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_RECV_IF, task->tid, 0, 0); }
++
+ 	hard_save_flags_and_cli(flags);
+ 
+ 	if (!task) task = (rt_current->msg_queue.next)->task;
+@@ -1705,6 +1781,9 @@
+ 		return MSG_ERR;
+ 	}
+ 
++	if(!task) { TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_RECV_UNTIL, 0, 0, time); }
++	else { TRACE_RTAI_MSG(TRACE_RTAI_EV_MSG_RECV_UNTIL, task->tid, 0, time); }
++
+ 	hard_save_flags_and_cli(flags);
+ 
+ 	if (!task) task = (rt_current->msg_queue.next)->task;
+@@ -1933,6 +2012,9 @@
+ 	if (!(mbx->bufadr = kmalloc(size, GFP_KERNEL))) { 
+ 		return -ENOMEM;
+ 	}
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_INIT, mbx, size, 0);
++
+ 	rt_sem_init(&(mbx->sndsem), 1);
+ 	rt_sem_init(&(mbx->rcvsem), 1);
+ 	mbx->magic = RT_MBX_MAGIC;
+@@ -1947,6 +2029,9 @@
+ int rt_mbx_delete(MBX *mbx)
+ {
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_DELETE, mbx, 0, 0);
++
+ 	mbx->magic = 0;
+ 	if (rt_sem_delete(&(mbx->sndsem)) || rt_sem_delete(&(mbx->rcvsem))) {
+ 		return -EFAULT;
+@@ -1959,6 +2044,9 @@
+ int rt_mbx_send(MBX *mbx, void *msg, int msg_size)
+ {
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_SEND, mbx, msg_size, 0);
++
+ 	if (mbx_sem_wait(&(mbx->sndsem))) {
+ 		return msg_size;
+ 	}
+@@ -1979,6 +2067,9 @@
+ 	unsigned long flags;
+ 
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_SEND_WP, mbx, msg_size, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if (mbx->sndsem.count && mbx->frbs) {
+ 		mbx->sndsem.count = 0;
+@@ -1998,6 +2089,9 @@
+ 	unsigned long flags;
+ 
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_SEND_IF, mbx, msg_size, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if (mbx->sndsem.count && msg_size <= mbx->frbs) {
+ 		mbx->sndsem.count = 0;
+@@ -2015,6 +2109,9 @@
+ int rt_mbx_send_until(MBX *mbx, void *msg, int msg_size, RTIME time)
+ {
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_SEND_UNTIL, mbx, msg_size, time);
++
+ 	if (mbx_sem_wait_until(&(mbx->sndsem), time)) {
+ 		return msg_size;
+ 	}
+@@ -2040,6 +2137,9 @@
+ {
+ 
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_RECV, mbx, msg_size, 0);
++
+ 	if (mbx_sem_wait(&(mbx->rcvsem))) {
+ 		return msg_size;
+ 	}
+@@ -2060,6 +2160,9 @@
+ 	unsigned long flags;
+ 
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_RECV_WP, mbx, msg_size, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if (mbx->rcvsem.count && mbx->avbs) {
+ 		mbx->rcvsem.count = 0;
+@@ -2079,6 +2182,9 @@
+ 	unsigned long flags;
+ 
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_RECV_IF, mbx, msg_size, 0);
++
+ 	hard_save_flags_and_cli(flags);
+ 	if (mbx->rcvsem.count && msg_size <= mbx->avbs) {
+ 		mbx->rcvsem.count = 0;
+@@ -2096,6 +2202,9 @@
+ int rt_mbx_receive_until(MBX *mbx, void *msg, int msg_size, RTIME time)
+ {
+ 	CHK_MBX_MAGIC;
++
++        TRACE_RTAI_MBX(TRACE_RTAI_EV_MBX_RECV_UNTIL, mbx, msg_size, time);
++
+ 	if (mbx_sem_wait_until(&(mbx->rcvsem), time)) {
+ 		return msg_size;
+ 	}

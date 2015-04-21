@@ -1,0 +1,749 @@
+diff -urN linux.org/arch/arm/config.in linux.clean/arch/arm/config.in
+--- linux.org/arch/arm/config.in	Thu Jan 10 17:42:30 2002
++++ linux.clean/arch/arm/config.in	Mon Mar  4 09:00:54 2002
+@@ -416,6 +416,9 @@
+    define_bool CONFIG_PCMCIA n
+ fi
+ bool 'Networking support' CONFIG_NET
++
++bool     'RTAI Realtime Hardware abstraction Layer' CONFIG_RTHAL
++
+ bool 'System V IPC' CONFIG_SYSVIPC
+ bool 'BSD Process Accounting' CONFIG_BSD_PROCESS_ACCT
+ bool 'Sysctl support' CONFIG_SYSCTL
+diff -urN linux.org/arch/arm/defconfig linux.clean/arch/arm/defconfig
+--- linux.org/arch/arm/defconfig	Sun May 20 02:43:05 2001
++++ linux.clean/arch/arm/defconfig	Wed Feb 13 14:26:01 2002
+@@ -77,6 +77,7 @@
+ # CONFIG_HOTPLUG is not set
+ # CONFIG_PCMCIA is not set
+ CONFIG_NET=y
++# CONFIG_RTHAL is not set
+ CONFIG_SYSVIPC=y
+ # CONFIG_BSD_PROCESS_ACCT is not set
+ CONFIG_SYSCTL=y
+diff -urN linux.org/arch/arm/kernel/armksyms.c linux.clean/arch/arm/kernel/armksyms.c
+--- linux.org/arch/arm/kernel/armksyms.c	Thu Jan 10 17:42:30 2002
++++ linux.clean/arch/arm/kernel/armksyms.c	Sat Feb 16 00:03:47 2002
+@@ -20,6 +20,10 @@
+ #include <linux/interrupt.h>
+ #include <linux/pm.h>
+ #include <linux/vt_kern.h>
++#ifdef CONFIG_RTHAL
++#include <linux/console.h>
++#include <linux/sched.h>
++#endif
+ 
+ #include <asm/byteorder.h>
+ #include <asm/elf.h>
+@@ -103,6 +107,9 @@
+ 
+ EXPORT_SYMBOL_NOVERS(__do_softirq);
+ 
++#ifdef CONFIG_RTHAL
++EXPORT_SYMBOL(console_drivers);
++#endif
+ 	/* platform dependent support */
+ EXPORT_SYMBOL(dump_thread);
+ EXPORT_SYMBOL(dump_fpu);
+@@ -247,10 +254,13 @@
+ EXPORT_SYMBOL(elf_hwcap);
+ 
+ 	/* syscalls */
++#ifndef CONFIG_RTHAL
++/* exported elsewhere when CONFIG_RTHAL is on */
+ EXPORT_SYMBOL(sys_write);
+ EXPORT_SYMBOL(sys_read);
+-EXPORT_SYMBOL(sys_lseek);
+ EXPORT_SYMBOL(sys_open);
++#endif
++EXPORT_SYMBOL(sys_lseek);
+ EXPORT_SYMBOL(sys_exit);
+ EXPORT_SYMBOL(sys_wait4);
+ 
+@@ -261,3 +271,12 @@
+ EXPORT_SYMBOL_NOVERS(__up_wakeup);
+ 
+ EXPORT_SYMBOL(get_wchan);
++
++	/* RTAI stuff */
++#ifdef CONFIG_RTHAL
++extern struct irqdesc irq_desc[NR_IRQS];
++EXPORT_SYMBOL(rthal);
++EXPORT_SYMBOL(irq_desc); 
++EXPORT_SYMBOL(do_timer);
++#endif
++
+diff -urN linux.org/arch/arm/kernel/entry-armv.S linux.clean/arch/arm/kernel/entry-armv.S
+--- linux.org/arch/arm/kernel/entry-armv.S	Thu Jan 10 17:42:30 2002
++++ linux.clean/arch/arm/kernel/entry-armv.S	Sun Mar 10 11:01:27 2002
+@@ -381,6 +381,11 @@
+ 		ands	\irqstat, \irqstat, \irqnr
+ 		mov	\irqnr, #0
+ 		beq	1001f
++#ifdef CONFIG_RTHAL
++		tst	\irqstat, #0x04000000	@ check OSMR0 first
++		movne	\irqnr, #26
++		bne	1001f
++#endif
+ 		tst	\irqstat, #0xff
+ 		moveq	\irqstat, \irqstat, lsr #8
+ 		addeq	\irqnr, \irqnr, #8
+@@ -678,7 +683,12 @@
+ 		@ routine called with r0 = irq number, r1 = struct pt_regs *
+ 		@
+ 		adrsvc	ne, lr, 1b
++#ifndef CONFIG_RTHAL
+ 		bne	do_IRQ
++#else
++		ldrne	r7, .rthal			@ load pointer rthal
++		ldrne	pc, [r7, #0]			@ branch to rthal.do_IRQ (1st in RTHAL)
++#endif
+ 		ldr	r0, [sp, #S_PSR]		@ irqs are already disabled
+ 		msr	spsr, r0
+ 		ldmia	sp, {r0 - pc}^			@ load r0 - pc, cpsr
+@@ -693,6 +704,19 @@
+ 		add	r4, sp, #S_SP
+ 		stmia	r4, {r5 - r9}			@ save sp_SVC, lr_SVC, pc, cpsr, old_ro
+ 
++#ifdef CONFIG_RTHAL
++		ldr	r7, .rthal			@ load pointer rthal
++		ldr	r7, [r7, #8]			@ load pointer rthal.do_TRAP (3rd in RTHAL)
++		cmp	r7, #0
++		beq	2f
++		mov	r0, #4				@ SIGILL
++		mov	r1, sp				@ struct pt_regs *regs
++		mov	lr, pc
++		mov	pc, r7				@ check, if this is a relevant code
++		cmp	r0, #0				@ check return value
++		beq	1f				@ else let linux do what it has to do
++2:		
++#endif
+ 		adrsvc	al, r9, 1f			@ r9  = normal FP return
+ 		bl	call_fpe			@ lr  = undefined instr return
+ 
+@@ -735,6 +758,9 @@
+ #ifdef MULTI_CPU
+ .LCprocfns:	.word	SYMBOL_NAME(processor)
+ #endif
++#ifdef CONFIG_RTHAL
++.rthal:		.word	SYMBOL_NAME(rthal)
++#endif
+ .LCfp:		.word	SYMBOL_NAME(fp_enter)
+ 
+ 		irq_prio_table
+@@ -782,7 +808,12 @@
+ 		@
+ 		@ routine called with r0 = irq number, r1 = struct pt_regs *
+ 		@
++#ifndef CONFIG_RTHAL
+ 		bne	do_IRQ
++#else
++		ldrne	r7, .rthal			@ load pointer rthal
++		ldrne	pc, [r7, #0]			@ branch to rthal.do_IRQ (1st in RTHAL)
++#endif
+ 		mov	why, #0
+ 		get_current_task tsk
+ 		b	ret_to_user
+diff -urN linux.org/arch/arm/kernel/entry-common.S linux.clean/arch/arm/kernel/entry-common.S
+--- linux.org/arch/arm/kernel/entry-common.S	Thu Oct 11 18:04:57 2001
++++ linux.clean/arch/arm/kernel/entry-common.S	Wed Feb 13 14:26:01 2002
+@@ -60,6 +60,7 @@
+ 	bne	reschedule
+ 	teq	r2, #0				@ sigpending => do_signal()
+ 	blne	__do_signal
++ret_from_all:
+ 	restore_user_regs
+ 
+ __do_signal:
+@@ -137,6 +138,11 @@
+ 	get_current_task tsk
+ 	ldr	ip, [tsk, #TSK_PTRACE]		@ check for syscall tracing
+ 	bic	scno, scno, #0xff000000		@ mask off SWI op-code
++#ifdef CONFIG_RTHAL
++	ldr	tbl, .rtai_magic		@ check for RTAI SRQ
++	cmp	scno, tbl			@ (use tbl for scratch)
++	beq	4f
++#endif
+ 	eor	scno, scno, #OS_NUMBER << 20	@ check OS number
+ 	adr	tbl, sys_call_table		@ load syscall table pointer
+ 	tst	ip, #PT_TRACESYS		@ are we tracing syscalls?
+@@ -152,6 +158,20 @@
+ 	eor	r0, scno, #OS_NUMBER << 20	@ put OS number back
+ 	bcs	SYMBOL_NAME(arm_syscall)	
+ 	b	SYMBOL_NAME(sys_ni_syscall)	@ not private func
++
++#ifdef CONFIG_RTHAL
++4:	ldr	r7, .rthal		@ load pointer to rthal
++	ldr	r7, [r7, #4]		@ load pointer to do_SRQ, [rthal+4]
++	cmp	r7, #0
++	movne	lr, pc                  @ call ...
++	movne	pc, r7			@ ... if available
++	str	r0, [sp, #S_R0 + S_OFF]	@ save returned r0
++	str	r1, [sp, #S_R1 + S_OFF]	@ save returned r1
++	add	sp, sp, #S_OFF		@ hmm, leave anyway
++	b	ret_from_all
++.rtai_magic:	.word	0x404404		@ RTAI SRQ MAGIC
++.rthal:		.word	SYMBOL_NAME(rthal)	@ RTHAL
++#endif
+ 
+ 	/*
+ 	 * This is the really slow path.  We're going to be doing
+diff -urN linux.org/arch/arm/kernel/irq.c linux.clean/arch/arm/kernel/irq.c
+--- linux.org/arch/arm/kernel/irq.c	Wed Jul  4 23:56:44 2001
++++ linux.clean/arch/arm/kernel/irq.c	Sun Mar 10 10:46:52 2002
+@@ -18,6 +18,9 @@
+  *  Naturally it's not a 1:1 relation, but there are similarities.
+  */
+ #include <linux/config.h>
++#ifdef CONFIG_RTHAL
++#include <linux/module.h>
++#endif
+ #include <linux/ptrace.h>
+ #include <linux/kernel_stat.h>
+ #include <linux/signal.h>
+@@ -523,3 +526,66 @@
+ 	init_arch_irq();
+ 	init_dma();
+ }
++
++#ifdef CONFIG_RTHAL
++
++/*
++RTAI
++This is the most appropriate place to setup rthal.
++*/
++
++#include <asm/proc/hard_system.h>
++
++static void linux_cli(void)
++{
++	HARD_CLI();
++}
++
++static void linux_sti(void)
++{
++	HARD_STI();
++}
++
++static unsigned int linux_save_flags(void)
++{
++	int flags;
++	HARD_SAVE_FLAGS(flags);
++	return flags;
++}
++
++static unsigned int linux_save_flags_and_cli(void)
++{
++	int flags;
++	HARD_SAVE_FLAGS_CLI(flags);
++	return flags;
++}
++
++static void linux_restore_flags(unsigned int flags)
++{
++	HARD_RESTORE_FLAGS(flags);
++}
++
++static void linux_fcli(void)
++{
++	HARD_CLF();
++}
++
++static void linux_fsti(void)
++{
++	HARD_STF();
++}
++
++struct rt_hal rthal = {
++	do_IRQ, /* irq-dispatcher */
++	NULL, /* srq-dispatcher */
++	NULL, /* trap-handler */
++	linux_cli,
++	linux_sti,
++	linux_save_flags,
++	linux_restore_flags,
++	linux_save_flags_and_cli,
++	linux_fcli,
++	linux_fsti,
++};
++
++#endif
+diff -urN linux.org/arch/arm/mach-clps711x/time.c linux.clean/arch/arm/mach-clps711x/time.c
+--- linux.org/arch/arm/mach-clps711x/time.c	Thu Jan 10 17:42:30 2002
++++ linux.clean/arch/arm/mach-clps711x/time.c	Fri Feb 15 11:25:49 2002
+@@ -49,6 +49,15 @@
+ 	clps_writel(syscon, SYSCON1);
+ 
+ 	clps_writel(LATCH-1, TC2D); /* 512kHz / 100Hz - 1 */
+-
++	
+ 	xtime.tv_sec = clps_readl(RTCDR);
++
++#ifdef CONFIG_RTHAL
++	// build a free running timer (tsc)
++	syscon = clps_readl(SYSCON1);
++	syscon |= SYSCON1_TC1S ;
++	clps_writel(syscon, SYSCON1);
++	clps_writel(0,TC1D);
++#endif
++
+ }
+diff -urN linux.org/arch/arm/mach-sa1100/irq.c linux.clean/arch/arm/mach-sa1100/irq.c
+--- linux.org/arch/arm/mach-sa1100/irq.c	Thu Jan 10 17:42:30 2002
++++ linux.clean/arch/arm/mach-sa1100/irq.c	Sun Mar 10 10:54:35 2002
+@@ -101,7 +101,7 @@
+ static int GPIO_11_27_enabled;		/* enabled i.e. unmasked GPIO IRQs */
+ static int GPIO_11_27_spurious;		/* GPIOs that triggered when masked */
+ 
+-static void sa1100_GPIO11_27_demux(int irq, void *dev_id,
++void sa1100_GPIO11_27_demux(int irq, void *dev_id,
+ 				   struct pt_regs *regs)
+ {
+ 	int i, spurious;
+@@ -128,7 +128,11 @@
+ 
+ 		for (i = 11; i <= 27; ++i) {
+ 			if (irq & (1<<i)) {
++#ifndef CONFIG_RTHAL
+ 				do_IRQ(IRQ_GPIO11 + i - 11, regs);
++#else
++				rthal.do_IRQ(IRQ_GPIO11 + i - 11, regs);
++#endif
+ 			}
+ 		}
+ 	}
+@@ -171,7 +171,11 @@
+ 			struct pt_regs dummy;
+ 
+ 			memzero(&dummy, sizeof(dummy));
++#ifndef CONFIG_RTHAL
+ 			do_IRQ(irq, &dummy);
++#else
++			rthal.do_IRQ(irq, &dummy);
++#endif
+ 
+ 			/* we are being called recursively from do_IRQ() */
+ 			return;
+@@ -242,3 +250,5 @@
+ 	 */
+ 	irq_desc[IRQ_LCD].noautoenable = 1;
+ }
++
++EXPORT_SYMBOL(sa1100_GPIO11_27_demux);
+diff -urN linux.org/arch/arm/mm/ioremap.c linux.clean/arch/arm/mm/ioremap.c
+--- linux.org/arch/arm/mm/ioremap.c	Thu Apr 12 21:20:31 2001
++++ linux.clean/arch/arm/mm/ioremap.c	Wed Feb 13 14:26:01 2002
+@@ -108,6 +108,9 @@
+ 		if (remap_area_pmd(pmd, address, end - address,
+ 					 phys_addr + address, flags))
+ 			break;
++#ifdef CONFIG_RTHAL
++		set_pgdir(address, *dir);
++#endif
+ 		error = 0;
+ 		address = (address + PGDIR_SIZE) & PGDIR_MASK;
+ 		dir++;
+diff -urN linux.org/include/asm-arm/arch-sa1100/irq.h linux.clean/include/asm-arm/arch-sa1100/irq.h
+--- linux.org/include/asm-arm/arch-sa1100/irq.h	Sun Aug 12 20:14:00 2001
++++ linux.clean/include/asm-arm/arch-sa1100/irq.h	Sun Mar 10 11:04:12 2002
+@@ -4,6 +4,9 @@
+  * Author: Nicolas Pitre
+  */
+ 
++#ifndef _ASM_ARCH_IRQ_H
++#define _ASM_ARCH_IRQ_H
++
+ #define fixup_irq(x)	(x)
+ 
+ /*
+@@ -11,3 +14,6 @@
+  * Since it doesn't exist elsewhere, we'll put it here for now.
+  */
+ extern void do_IRQ(int irq, struct pt_regs *regs);
++extern void sa1100_GPIO11_27_demux(int irq, void *dev_id, struct pt_regs *regs);
++
++#endif /* _ASM_ARCH_IRQ_H */
+diff -urN linux.org/include/asm-arm/atomic.h linux.clean/include/asm-arm/atomic.h
+--- linux.org/include/asm-arm/atomic.h	Thu Oct 11 18:04:57 2001
++++ linux.clean/include/asm-arm/atomic.h	Sat Mar  9 01:44:14 2002
+@@ -27,7 +27,18 @@
+ #define ATOMIC_INIT(i)	{ (i) }
+ 
+ #ifdef __KERNEL__
++
++#ifdef CONFIG_RTHAL
++/* RTAI Modification, azu */
++#include <asm/proc/hard_system.h>
++#define my_atomic_save_flags_cli(x) HARD_SAVE_FLAGS_CLI(x)
++#define my_atomic_restore_flags(x) HARD_RESTORE_FLAGS(x)
++#else
++/* Normal mode */
+ #include <asm/proc/system.h>
++#define my_atomic_save_flags_cli(x) __save_flags_cli(x)
++#define my_atomic_restore_flags(x) __restore_flags(x)
++#endif
+ 
+ #define atomic_read(v)	((v)->counter)
+ #define atomic_set(v,i)	(((v)->counter) = (i))
+@@ -36,36 +47,36 @@
+ {
+ 	unsigned long flags;
+ 
+-	__save_flags_cli(flags);
++	my_atomic_save_flags_cli(flags);
+ 	v->counter += i;
+-	__restore_flags(flags);
++	my_atomic_restore_flags(flags);
+ }
+ 
+ static __inline__ void atomic_sub(int i, volatile atomic_t *v)
+ {
+ 	unsigned long flags;
+ 
+-	__save_flags_cli(flags);
++	my_atomic_save_flags_cli(flags);
+ 	v->counter -= i;
+-	__restore_flags(flags);
++	my_atomic_restore_flags(flags);
+ }
+ 
+ static __inline__ void atomic_inc(volatile atomic_t *v)
+ {
+ 	unsigned long flags;
+ 
+-	__save_flags_cli(flags);
++	my_atomic_save_flags_cli(flags);
+ 	v->counter += 1;
+-	__restore_flags(flags);
++	my_atomic_restore_flags(flags);
+ }
+ 
+ static __inline__ void atomic_dec(volatile atomic_t *v)
+ {
+ 	unsigned long flags;
+ 
+-	__save_flags_cli(flags);
++	my_atomic_save_flags_cli(flags);
+ 	v->counter -= 1;
+-	__restore_flags(flags);
++	my_atomic_restore_flags(flags);
+ }
+ 
+ static __inline__ int atomic_dec_and_test(volatile atomic_t *v)
+@@ -73,10 +84,10 @@
+ 	unsigned long flags;
+ 	int result;
+ 
+-	__save_flags_cli(flags);
++	my_atomic_save_flags_cli(flags);
+ 	v->counter -= 1;
+ 	result = (v->counter == 0);
+-	__restore_flags(flags);
++	my_atomic_restore_flags(flags);
+ 
+ 	return result;
+ }
+@@ -86,10 +97,10 @@
+ 	unsigned long flags;
+ 	int result;
+ 
+-	__save_flags_cli(flags);
++	my_atomic_save_flags_cli(flags);
+ 	v->counter += i;
+ 	result = (v->counter < 0);
+-	__restore_flags(flags);
++	my_atomic_restore_flags(flags);
+ 
+ 	return result;
+ }
+@@ -98,9 +109,9 @@
+ {
+ 	unsigned long flags;
+ 
+-	__save_flags_cli(flags);
++	my_atomic_save_flags_cli(flags);
+ 	*addr &= ~mask;
+-	__restore_flags(flags);
++	my_atomic_restore_flags(flags);
+ }
+ 
+ /* Atomic operations are already serializing on ARM */
+diff -urN linux.org/include/asm-arm/hw_irq.h linux.clean/include/asm-arm/hw_irq.h
+--- linux.org/include/asm-arm/hw_irq.h	Thu Jan  1 01:00:00 1970
++++ linux.clean/include/asm-arm/hw_irq.h	Wed Feb 13 14:26:01 2002
+@@ -0,0 +1,7 @@
++/*
++ * hw_irq.h
++ *
++ * just a dummy for include/linux/irq.c
++ */
++
++#include <asm/irq.h>
+diff -urN linux.org/include/asm-arm/irq.h linux.clean/include/asm-arm/irq.h
+--- linux.org/include/asm-arm/irq.h	Thu Jun 17 10:11:35 1999
++++ linux.clean/include/asm-arm/irq.h	Mon Mar  4 09:03:31 2002
+@@ -24,5 +24,9 @@
+ extern void disable_irq(unsigned int);
+ extern void enable_irq(unsigned int);
+ 
++#ifdef CONFIG_RTHAL
++extern struct rt_hal rthal;
++#endif
++
+ #endif
+ 
+diff -urN linux.org/include/asm-arm/pgalloc.h linux.clean/include/asm-arm/pgalloc.h
+--- linux.org/include/asm-arm/pgalloc.h	Sun Aug 12 20:14:00 2001
++++ linux.clean/include/asm-arm/pgalloc.h	Sat Mar  9 01:44:14 2002
+@@ -138,4 +138,34 @@
+ 
+ extern int do_check_pgt_cache(int, int);
+ 
++#ifdef CONFIG_RTHAL
++extern inline void set_pgdir(unsigned long address, pgd_t entry)
++{
++	struct task_struct * p;
++	pgd_t *pgd;
++#ifdef CONFIG_SMP
++	int i;
+ #endif
++
++	read_lock(&tasklist_lock);
++	for_each_task(p) {
++		if (!p->mm)
++			continue;
++		*pgd_offset(p->mm,address) = entry;
++	}
++	read_unlock(&tasklist_lock);
++#ifndef CONFIG_SMP
++	for (pgd = (pgd_t *)pgd_quicklist; pgd; pgd = (pgd_t *)*(unsigned long *)pgd)
++		pgd[address >> PGDIR_SHIFT] = entry;
++#else
++	/* To pgd_alloc/pgd_free, one holds master kernel lock and so does our callee, so we can
++	   modify pgd caches of other CPUs as well. -jj */
++	for (i = 0; i < NR_CPUS; i++)
++		for (pgd = (pgd_t *)cpu_data[i].pgd_quick; pgd; pgd = (pgd_t *)*(unsigned long *)pgd)
++			pgd[address >> PGDIR_SHIFT] = entry;
++#endif
++}
++#endif /* CONFIG_RTHAL */
++
++#endif
++
+diff -urN linux.org/include/asm-arm/proc-armv/hard_system.h linux.clean/include/asm-arm/proc-armv/hard_system.h
+--- linux.org/include/asm-arm/proc-armv/hard_system.h	Thu Jan  1 01:00:00 1970
++++ linux.clean/include/asm-arm/proc-armv/hard_system.h	Wed Feb 13 14:26:01 2002
+@@ -0,0 +1,115 @@
++/*
++RTAI
++The hard manipulation for enabling/disabling interrupts and related stuff.
++*/
++
++/*
++ *  linux/include/asm-arm/proc-armv/hard_system.h
++ *
++ *  Copyright (C) 1996 Russell King
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++#ifndef __ASM_PROC_HARD_SYSTEM_H
++#define __ASM_PROC_HARD_SYSTEM_H
++
++#include <linux/config.h>
++
++/*
++ * Save the current interrupt enable state & disable IRQs
++ */
++#define HARD_SAVE_FLAGS_CLI(x)					\
++	({							\
++		unsigned long temp;				\
++	__asm__ __volatile__(					\
++	"mrs	%0, cpsr		@ save_flags_cli\n"	\
++"	orr	%1, %0, #128\n"					\
++"	msr	cpsr_c, %1"					\
++	: "=r" (x), "=r" (temp)					\
++	:							\
++	: "memory");						\
++	})
++	
++/*
++ * Enable IRQs
++ */
++#define HARD_STI()							\
++	({							\
++		unsigned long temp;				\
++	__asm__ __volatile__(					\
++	"mrs	%0, cpsr		@ sti\n"		\
++"	bic	%0, %0, #128\n"					\
++"	msr	cpsr_c, %0"					\
++	: "=r" (temp)						\
++	:							\
++	: "memory");						\
++	})
++
++/*
++ * Disable IRQs
++ */
++#define HARD_CLI()							\
++	({							\
++		unsigned long temp;				\
++	__asm__ __volatile__(					\
++	"mrs	%0, cpsr		@ cli\n"		\
++"	orr	%0, %0, #128\n"					\
++"	msr	cpsr_c, %0"					\
++	: "=r" (temp)						\
++	:							\
++	: "memory");						\
++	})
++
++/*
++ * Enable FIQs
++ */
++#define HARD_STF()							\
++	({							\
++		unsigned long temp;				\
++	__asm__ __volatile__(					\
++	"mrs	%0, cpsr		@ stf\n"		\
++"	bic	%0, %0, #64\n"					\
++"	msr	cpsr_c, %0"					\
++	: "=r" (temp)						\
++	:							\
++	: "memory");						\
++	})
++
++/*
++ * Disable FIQs
++ */
++#define HARD_STF()							\
++	({							\
++		unsigned long temp;				\
++	__asm__ __volatile__(					\
++	"mrs	%0, cpsr		@ clf\n"		\
++"	orr	%0, %0, #64\n"					\
++"	msr	cpsr_c, %0"					\
++	: "=r" (temp)						\
++	:							\
++	: "memory");						\
++	})
++
++/*
++ * save current IRQ & FIQ state
++ */
++#define HARD_SAVE_FLAGS(x)						\
++	__asm__ __volatile__(					\
++	"mrs	%0, cpsr		@ save_flags\n"		\
++	  : "=r" (x)						\
++	  :							\
++	  : "memory")
++
++/*
++ * restore saved IRQ & FIQ state
++ */
++#define HARD_RESTORE_FLAGS(x)					\
++	__asm__ __volatile__(					\
++	"msr	cpsr_c, %0		@ restore_flags\n"	\
++	:							\
++	: "r" (x)						\
++	: "memory")
++
++#endif
+diff -urN linux.org/include/asm-arm/proc-armv/system.h linux.clean/include/asm-arm/proc-armv/system.h
+--- linux.org/include/asm-arm/proc-armv/system.h	Sun Aug 12 20:14:00 2001
++++ linux.clean/include/asm-arm/proc-armv/system.h	Fri Mar  8 23:52:31 2002
+@@ -46,6 +46,34 @@
+  * A couple of speedups for the ARM
+  */
+ 
++#ifdef CONFIG_RTHAL
++#include <asm/proc/ptrace.h>
++
++/*
++RTAI
++Definition of rthal.
++Do not change this structure unless you know what you are doing!
++Filled with values in arch/arm/kernel/irq.c
++*/
++
++struct rt_hal {
++	void (*do_IRQ)(int, struct pt_regs*); /* must be first - arch/arm/kernel/entry-armv.S */
++	long long (*do_SRQ)(int, unsigned long); /* must be second - arch/arm/kernel/entry-common.S */
++	int (*do_TRAP)(int, struct pt_regs*); /* must be third - arch/arm/kernel/entry-armv.S */
++	void (*disint)(void);
++	void (*enint)(void);
++	unsigned int (*getflags)(void);
++	void (*setflags)(unsigned int);
++	unsigned int (*getflags_and_cli)(void);
++	void (*fdisint)(void);
++	void (*fenint)(void);
++} __attribute__ ((__aligned__ (32)));
++
++extern struct rt_hal rthal;
++
++#endif
++
++#ifndef CONFIG_RTHAL
+ /*
+  * Save the current interrupt enable state & disable IRQs
+  */
+@@ -140,6 +167,17 @@
+ 	:							\
+ 	: "r" (x)						\
+ 	: "memory")
++#else
++#define __save_flags_cli(x)    do { x = rthal.getflags_and_cli(); } while (0)
++#define __sti()                do { rthal.enint(); } while (0)
++#define __cli()                do { rthal.disint(); } while (0)
++#define __stf()                do { rthal.fenint(); } while (0)
++#define __clf()                do { rthal.fdisint(); } while (0)
++#define __save_flags(x)        do { x = rthal.getflags(); } while (0)
++#define __restore_flags(x)     do { rthal.setflags(x); } while (0)
++
++#include <asm/proc/hard_system.h>
++#endif	
+ 
+ #if defined(CONFIG_CPU_SA1100) || defined(CONFIG_CPU_SA110)
+ /*
+@@ -167,6 +205,7 @@
+ 
+ 	switch (size) {
+ #ifdef swp_is_buggy
++#ifndef CONFIG_RTHAL /* original stuff */
+ 		case 1:
+ 			__save_flags_cli(flags);
+ 			ret = *(volatile unsigned char *)ptr;
+@@ -180,6 +219,21 @@
+ 			*(volatile unsigned long *)ptr = x;
+ 			__restore_flags(flags);
+ 			break;
++#else /* CONFIG_RTHAL keep it atomic */
++		case 1:
++			HARD_SAVE_FLAGS_CLI(flags);
++			ret = *(volatile unsigned char *)ptr;
++			*(volatile unsigned char *)ptr = x;
++			HARD_RESTORE_FLAGS(flags);
++			break;
++
++		case 4:
++			HARD_SAVE_FLAGS_CLI(flags);
++			ret = *(volatile unsigned long *)ptr;
++			*(volatile unsigned long *)ptr = x;
++			HARD_RESTORE_FLAGS(flags);
++			break;
++#endif /* CONFIG_RTHAL */
+ #else
+ 		case 1:	__asm__ __volatile__ ("swpb %0, %1, [%2]"
+ 					: "=r" (ret)
+diff -urN linux.org/include/asm-arm/system.h linux.clean/include/asm-arm/system.h
+--- linux.org/include/asm-arm/system.h	Tue Nov 28 02:07:59 2000
++++ linux.clean/include/asm-arm/system.h	Sat Mar  9 01:44:14 2002
+@@ -42,6 +42,7 @@
+ #define nop() __asm__ __volatile__("mov\tr0,r0\t@ nop\n\t");
+ 
+ #define prepare_to_switch()    do { } while(0)
++#define end_switch()           do { } while(0)
+ 
+ /*
+  * switch_to(prev, next) should switch from task `prev' to `next'

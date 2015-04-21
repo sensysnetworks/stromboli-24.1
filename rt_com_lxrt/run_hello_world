@@ -1,0 +1,35 @@
+sync
+if lsmod | grep "rt_com_lxrt">/dev/null ; then
+    rmmod rt_com_lxrt
+fi
+if lsmod | grep "rt_com">/dev/null ; then
+    rmmod rt_com
+fi
+if lsmod | grep "rtai_lxrt">/dev/null ; then
+    rmmod rtai_lxrt
+fi
+if lsmod | grep "rtai_sched">/dev/null ; then
+    rmmod rtai_sched
+fi
+if lsmod | grep "rt_mem_mgr">/dev/null ; then
+    rmmod rt_mem_mgr
+fi
+if lsmod | grep "rtai">/dev/null ; then
+    rmmod rtai
+fi
+sync
+insmod rtai
+insmod rt_mem_mgr
+insmod rtai_sched
+insmod rtai_lxrt
+./freeports
+insmod ../rt_com/rt_com.o
+insmod rt_com_lxrt.o
+./hello_world_lxrt
+sync
+rmmod rt_com_lxrt
+rmmod rt_com
+rmmod rtai_lxrt
+rmmod rtai_sched
+rmmod rt_mem_mgr
+rmmod rtai

@@ -1,0 +1,8 @@
+- signal handling
+- thread execution on finished requests
+- order request after thread priority
+- handling errno in a better way
+- more testing
+- better kernel_thread handling ( zombies )
+- better MODCOUNT handling, unloading the module while
+  having task running should be imposible

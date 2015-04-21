@@ -1,0 +1,10 @@
+#!/bin/sh
+
+buildDir=$1
+
+cd src/uClibc
+sed -e "s:^DEVEL_PREFIX.*\$:DEVEL_PREFIX = ${buildDir}/usr/\$(TARGET_ARCH)-linux-uclibc:g" \
+    -e "s:^DOLFS.*\$:DOLFS = true:g" \
+    -e "s:^KERNEL_SOURCE.*\$:KERNEL_SOURCE = ${buildDir}/src/linux:g" \
+    extra/Configs/Config.i386 > Config
+cd -

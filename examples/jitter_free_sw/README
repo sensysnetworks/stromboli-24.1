@@ -1,0 +1,30 @@
+****** JITTER_FREE_SW EXAMPLE ******
+
+This example features NTASKS realtime tasks
+running periodically in oneshot mode.
+On each period one of them sets a bit on the parallel port, another one
+resets it. By choosing an appropriate timings one can produce
+a rectangular wave on the parallel port which can be watched
+on an oscilloscope plugged into it.
+
+With respect to the "sw" test they are different in that they implement a 
+schedule ahead concept and wait, with interrupt disabled insured by the signal
+function, for the right time to execute. So the associated wave fronts are 
+almost jitter free and on a scope you should see steady square fronts.
+(Suggested to me by Tomasz Motylesky, usage of the same idea in MARUTI, a hard 
+real time FERRARI, pointed out by Manoj Apte).
+
+->>>> Be carefull about the macros MAX_JITTER, TICK_PERIOD
+      and NTASKS; they must suite your PC.
+
+To run the example type:
+
+make clean
+make
+./run
+
+to stop it type:
+
+./rem
+
+Alternatively use your own insmod/rmmod after make.

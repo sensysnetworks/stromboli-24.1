@@ -1,0 +1,7 @@
+This module links modules that are needed for QNX compatibility, named objects 
+creation and release of resources in the "informed" way. It should be used as 
+a scheduler extension for kernel space only applications, i.e. those not using 
+LXRT. In the case LXRT is already in use everything will be in LXRT already.
+
+The example does the same thing as the IPC example without LXRT at all as the
+client and server run in the kernel.

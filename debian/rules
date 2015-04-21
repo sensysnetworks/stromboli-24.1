@@ -1,0 +1,128 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper. 
+# GNU copyright 1997 by Joey Hess.
+#
+# This version is for a hypothetical package that builds an
+# architecture-dependant package, as well as an architecture-independent
+# package.
+
+p_mod=rtai-modules-$(KVERS)
+p_src=rtai-source
+p_base=rtai-base
+
+d_mod=debian/$(p_mod)
+d_src=debian/$(p_src)
+d_base=debian/$(p_base)
+
+.PHONY: kdist_image
+kdist_image:	checkroot
+	$(RM) debian/files
+	yes "" | ./configure --linuxdir $(KSRC) --non-interactive --reconf
+	$(MAKE)
+	$(RM) -rf $(d_mod)
+	install -d $(d_mod) $(d_mod)/DEBIAN
+	install -d "$(d_mod)/usr/share/doc/$(p_mod)"
+	install debian/rtai-modules.postinst $(d_mod)/DEBIAN/postinst
+	install debian/rtai-modules.prerm $(d_mod)/DEBIAN/prerm
+	$(MAKE) INSTALL_MOD_PATH=`pwd`/$(d_mod) install
+	install -m644 debian/changelog \
+	  $(d_mod)/usr/share/doc/$(p_mod)/changelog.Debian
+	install -m 644 Documentation/rtai/devices.txt \
+	  $(d_mod)/usr/share/doc/rtai-source/
+	install -m 644 Documentation/rtai/drivers.txt \
+	  $(d_mod)/usr/share/doc/rtai-source/
+	gzip -9v $(d_mod)/usr/share/doc/$(p_mod)/*
+	install -m644 debian/copyright \
+	  $(d_mod)/usr/share/doc/$(p_mod)/copyright
+	chown -R root.root $(d_mod)
+	chmod -R g-ws $(d_mod)
+	echo "kpkg:Package-Version=$(epoch)$(pversion)+$(non_epoch_version)" \
+	  >> debian/substvars
+	echo "kpkg:Kernel-Version=$(KVERS)" >> debian/substvars
+	sed 's/\$$KVERS/$(KVERS)/' debian/rtai-modules.control >debian/control
+	dpkg-gencontrol -p$(p_mod) -P$(d_mod) -isp
+	dpkg-deb --build $(d_mod) $(KSRC)/..
+
+.PHONY: kdist_config
+kdist_config:
+	echo "****** kdist_configure *****"
+	env
+	yes "" | ./configure --linuxdir $(KSRC) --non-interactive --reconf
+	
+.PHONY: kdist_clean clean
+kdist_clean clean:
+	$(MAKE) distclean
+	$(RM) -r debian/tmp $(d_mod) $(d_src) $(d_base) debian/*~ \
+	  debian/files debian/substvars
+
+build:
+
+.PHONY: binary-source
+binary-source: checkroot
+	$(RM) -r $(d_src)
+	install -d $(d_src) $(d_src)/DEBIAN
+	install -m 755 debian/rtai-source.postinst $(d_src)/DEBIAN/postinst
+	install -m 755 debian/rtai-source.prerm    $(d_src)/DEBIAN/prerm
+	install -d $(d_src)/usr/src/modules/rtai
+	install -d $(d_src)/usr/share/doc/rtai-source
+
+	find . \( -path ./$(d_src) -o -name 'tmp*' \) -prune -o -print | \
+	  cpio -admp $(d_src)/usr/src/modules/rtai
+	cd $(d_src)/usr/src/modules/rtai && \
+	  $(MAKE) -f debian/rules clean
+	chown -R root.src $(d_src)/usr/src
+	find $(d_src) -type d | xargs chmod 775
+	find $(d_src) -type f -perm -100 | xargs chmod 775
+	find $(d_src) -type f -not -perm -100 | xargs chmod 664
+	cd $(d_src)/usr/src && \
+	  tar cf rtai.tar modules && \
+	  $(RM) -r modules
+	gzip -9 $(d_src)/usr/src/rtai.tar
+	install -m 644 README.24.1.8 \
+	  $(d_src)/usr/share/doc/rtai-source/README-24.1.8
+	install -m 644 debian/changelog \
+	  $(d_src)/usr/share/doc/rtai-source/changelog.Debian
+	gzip -9v $(d_src)/usr/share/doc/rtai-source/*
+	install -m 644 debian/copyright \
+	  $(d_src)/usr/share/doc/rtai-source/copyright
+	
+	chown -R root.root $(d_src)
+	chmod -R g-ws $(d_src)
+	dpkg-gencontrol -p$(p_src) -P$(d_src) -isp
+	dpkg-deb --build $(d_src) ..
+
+.PHONY: binary-base
+binary-base: checkroot
+	$(RM) -r $(d_base)
+	install -d $(d_base) $(d_base)/DEBIAN/
+	install -m 755 debian/$(p_base).postinst $(d_base)/DEBIAN/postinst
+	install -m 755 debian/$(p_base).prerm    $(d_base)/DEBIAN/prerm
+	install -m 644 debian/$(p_base).conffiles $(d_base)/DEBIAN/conffiles
+
+	install -d $(d_base)/etc/modutils/
+	install -m 644 debian/etc.modutils.rtai $(d_base)/etc/modutils/rtai
+
+	install -d $(d_base)/usr/share/doc/$(p_base)
+	install -m 644 README.24.1.8 \
+	  $(d_base)/usr/share/doc/$(p_base)/README-24.1.8
+	install -m 644 debian/changelog \
+	  $(d_base)/usr/share/doc/$(p_base)/changelog.Debian
+	gzip -9v $(d_base)/usr/share/doc/$(p_base)/*
+	install -m 644 debian/copyright \
+	  $(d_base)/usr/share/doc/$(p_base)/copyright
+
+	dpkg-gencontrol -p$(p_base) -P$(d_base) -isp
+	dpkg-deb --build $(d_base) ..
+
+.PHONY: binary-arch
+binary-arch:
+
+.PHONY: binary-indep
+binary-indep: binary-source binary-base
+
+checkroot:
+	test root = "`whoami`"
+
+.PHONY: binary
+binary: binary-indep
+

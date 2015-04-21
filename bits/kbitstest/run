@@ -1,0 +1,18 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example demonstrates a few basic services of rtai_bits.
+
+Type <return> to continue
+EOF
+read junk
+
+sync
+../../scripts/rt_modprobe ex_bits.o
+
+echo "Wait for the end, then type <return> to remove modules"
+read junk
+
+sync
+../../scripts/rt_rmmod ex_bits

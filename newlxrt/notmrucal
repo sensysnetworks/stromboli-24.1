@@ -1,0 +1,4 @@
+cd ../lxrt/latency_calibration
+./rt_process 1 &
+sleep 1
+./check

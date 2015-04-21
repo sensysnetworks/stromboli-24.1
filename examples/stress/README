@@ -1,0 +1,24 @@
+****** STRESS EXAMPLE ******
+
+What you find here is a stress test aimed at verifying that the schedulers do
+well under intense load.
+It is a simple test that combines the latency calibration with the preemption
+example in such a way to have two level of preemption nesting on an odd number
+of tasks. The odd number should be relevant as it mixes up scheduling with 
+messages under SMP. 
+
+To verify what is happening you can launch either "./checkl", for the latency
+output, or "./checkp" for the preemption output. You can choose also to execute
+them both on different screens.
+
+Note that under UP the tests suck more than 95% of the computing power. Change 
+ticking to decrease the load. So be careful to adjust test parameters to your
+machine to avoid unfair blames on the scheduler.
+
+We tested for some hours (up to 10), both 8254 and APIC, with the followings: 
+	- at least one "ping -f somewhere";
+	- a "ping -f localhost";
+	- a "top" on alpha screen and one on an X screen;
+	- a "while "true"; do ls -lR / >list; done"
+	- a "while "true"; cat /proc/interrupts; done"
+	- dd if=/dev/hda2 of=/dev/hda3 bs=1000k &

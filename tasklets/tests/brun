@@ -1,0 +1,18 @@
+#!/bin/sh
+
+cat <<-EOF
+
+This example tests tasklets with the simple firing of a
+single periodic timer echoing execution in user space.
+
+Press <enter> to execute
+EOF
+read junk
+
+../../scripts/rt_modprobe ../../modules/rtai_lxrt.o
+../../scripts/rt_modprobe ../rtai_tasklets.o
+
+./btest
+
+../../scripts/rt_rmmod rtai_tasklets
+../../scripts/rt_rmmod rtai_lxrt

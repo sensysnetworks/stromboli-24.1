@@ -1,0 +1,82 @@
+
+LXRT Unix server
+================
+
+This example introduces the basic frame of a generalized, per process, UNIX 
+server to be used by hard real time LXRT applications that want to access
+Linux IO services.
+
+Clearly, hard real time tasks are timed by Linux while using the server.
+So the garantee to satisfy hard real timing constraints vanishes, even if
+they remain under control of the LXRT scheduler (i.e. Linux cannot schedule
+them directly).
+
+There is clearly a partial loss of efficiency with respect to plain Linux
+usage. In fact I (Paolo) do not like such a solution very much and prefer an 
+application specific server. However users who want to have it simple will 
+find it usefull, especially during development. That's why it is here.
+
+How does it work?
+-----------------
+
+This example clearly shows the power of remote procedure call as a unified
+inter tasks communication and synchronization mechanism. There are two
+switches per Linux service request, a standard microkernel way of working.
+The context switches and the need to copying some data, is responsable for
+most of the penalty you have to pay for using this server. The response
+feeling is not so bad anyhow. Those with QNX experience will understand
+the concept easily.
+
+The rt_start_unix_server() call executed before the switch to hard real time
+mode forks the program ./unix_server who will act an agent to execute the
+IO functions while in soft real time mode (POSIX with SCHED_FIFO scheduling).
+Shared memory is used to avoid using memcpy() and thus minimise call overhead.
+
+All the native IO calls are used by the agent and their return values
+returned as is to the real time task.
+
+The rt_end_unix_server() call instructs the server to release the shared
+memory, rt_task_delete() his real time agent, and exit normally. Any open
+files are not closed before exiting for now.
+
+Once more if you want it faster use your own server, and recall that Linux
+should not be your main concern while you are running hard real time in user
+space. It should be needed just for some support services to be taken in
+intervals when hard real time is not requested.
+
+Clearly this new module will be perfected and additional functionality 
+added.
+
+API Functions prototypes
+------------------------
+
+The API is pretty much standard except for the function name rt_ prefix to
+indicate that the call can be made while in hard real time mode. Refer to
+your libc6 manual if you need to understant howthe underlying Unix call
+behaves. The following functions have been implemented so far: 
+
+void rt_start_unix_server(void *task, int rt_prio, int shmsize)
+
+int rt_end_unix_server(void)
+
+int rt_scanf(const char *fmt, ...)
+
+int rt_printf(const char *fmt, ...)
+
+int rt_open(const char *pathname, int flags, mode_t mode)
+
+int rt_close(int fd)
+
+int rt_write(int fd, void *buf, size_t count)
+
+int rt_read(int fd, void *buf, size_t count)
+
+int rt_select(int n, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)
+
+off_t rt_lseek(int fd, off_t offset, int whence)
+
+int rt_sync(void)
+
+int rt_ioctl(int d, int request, unsigned long argp, int size)
+
+

@@ -1,0 +1,75 @@
+RTAI POSIX THREADS - Examples
+=============================
+
+ptest:		This test program tests that a single pthread can be created from
+                the module initialization function.  The thread displays its id 
+		and scheduling policy and priority, loops 5 times displaying the
+		loop count and then terminates.
+
+rtaitest:	This program tests the creation of a thread from another thread.
+                A parent thread is created at module initialization which sits in
+                a loop for 5 counts displaying its loop count and then creates a
+                child thread before terminating itself.  The child thread then
+                loops for a count of 3 displaying the loop count before exiting.
+
+clockif_test:	This program demonstrates how to create a timer structure of
+                type timespec from the current real time counter.
+
+mutextest:	This program tests the mutex operations. At module 
+		initialisation a mutex is created and locked. A low priority 
+		control thread is created (SCHED_OTHER/0) which tries to lock 
+		the mutex. NUM_THREADS threads are then created with increrasing
+		priorities (SCHED_FIFO) which also try to gain the mutex. The 
+		mutex queue is displayed to verify that the tasks are queued 
+		correctly and that tasks are inserted into the mutex queue in 
+		order of increasing priority. The initialisation function then 
+		releases the mutex and the threads insert data into a data 
+		buffer using the mutex to gain atomic access. The contents of 
+		the data buffer are displayed when the test module is removed 
+		to verify that the data has been inserted into the buffer is 
+		the expected order.
+
+mutexprio_test: This program tests that the mutex priority inheritance is 
+		working correctly. It creates a "control" thread with scheduling
+		parameters of SCHED_OTHER/0 which initialises a mutex and then 
+		locks it. The control thread then creates NUM_THREADS 
+		"application" threads with scheduling parameters of 
+		SCHED_FIFO/12+<thread no>. The "application" threads attempt to 
+		gain the mutex to fill a data buffer. As the mutex is already 
+		locked they sleep on the mutex.  The priority of the "control"
+		thread is raised to that of the highest "application" thread, 
+		and it unlocks the mutex allowing the "application" threads to 
+		proceed. This program also shows that threads are inserted into 
+		the mutex queue in priority order. The thread priorities are 
+		displayed at relevant points to verify that the priorities are 
+		manipulated correctly.                                                    
+
+cond_brd_test:	Tests conditional variable broadcast operation. 
+		NUM_THREADS wait threads are created which all wait on a
+		conditional variable. A control thread sets the conditional
+		variable and then brodcasts to all the threads waiting on the
+		conditional variable.
+
+condtest:	This program tests conditional variables operations. A control
+		thread and 2 waiting threads are created.  The waiting threads
+		each wait on a conditional variable being set to a pre-
+		determined value. The control thread set the condition variable 
+		to the first value and signals the 1st waiting thread which sets
+		the conditional variable to the next value and signals the next 
+		waiting thread. 
+
+dyn_thread_create: This program tests dynamic thread creation. NUM_THREADS wait 
+		threads are created which all wait on a conditional variable. A
+		control thread sets the conditional variable and then broadcasts
+		to all the threads waiting on the conditional variable. This is 
+		repeated NUM_LOOP times to check that the dynamic thread 
+		creation mechanism is working.
+
+pqueuetest:	This tests cooperation between pthreads and pqueues. A control 
+		thread is created which creates two pqueues, puts a message on 
+		one and then blocks until a reply is received on the other. A 
+		child thread is created that opens the pqueues and blocks until 
+		a message is received. When the message arrives, it is printed 
+		and a reply posted back to the other queue. The queues are then 
+		closed. The control thread unlinks the pqueues once it receives 
+		it's reply from the child thread and everything dies gracefully.

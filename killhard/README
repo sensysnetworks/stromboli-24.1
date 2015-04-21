@@ -1,0 +1,12 @@
+This is a simple helper task that kills any LXRT processes.
+It works but must be used with some care when killing a hard real time process 
+that interacts with other hard real time peers, e.g. in such a case the order
+in which processes are killed can be important.
+
+Its usage is much as the standard Linux kill, i.e.:
+./killh pid.
+
+Notice that a hard real time LXRT process is forced back to soft whenever a 
+signal is sent to it. Thus the standard kill should work also, with the same
+care suggested above, and maintaining the specific hardkill mode is done just 
+to gather some more experience on how they work.

@@ -1,0 +1,32 @@
+sync
+export LD_LIBRARY_PATH=../lib
+echo -------------------------------------------------------------- test_hrt -soft
+./test_hrt -soft
+./test_hrt -soft -kernelcrash
+./test_hrt -soft -function
+./test_hrt -soft -function -kernelcrash
+echo -------------------------------------------------------------- test_hrt
+./test_hrt
+./test_hrt -kernelcrash
+./test_hrt -function
+./test_hrt -function -kernelcrash
+echo -------------------------------------------------------------- lxrt_multi 
+./lxrt_multi n=4
+./lxrt_multi n=8
+./lxrt_multi n=10
+./lxrt_multi n=12
+echo -------------------------------------------------------------- lxrt_multi -kernel
+./lxrt_multi -kernel n=4
+./lxrt_multi -kernel n=8
+./lxrt_multi -kernel n=10
+./lxrt_multi -kernel n=12
+echo -------------------------------------------------------------- addr_space -soft
+./addr_space -soft
+#./addr_space -soft -kernelcrash
+#./addr_space -soft -function
+#./addr_space -soft -function -kernelcrash
+echo -------------------------------------------------------------- addr_space
+./addr_space
+#./addr_space -kernelcrash
+#./addr_space -function
+#./addr_space -function -kernelcrash

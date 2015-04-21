@@ -1,0 +1,27 @@
+#!/bin/sh
+
+if [ $UID != 0 ]; then
+	SUDO='sudo '
+else
+	SUDO=''
+fi
+
+echo 
+echo "Press enter to load lxrt module:"
+read junk
+
+sync
+../../scripts/rt_modprobe ../../modules/rtai_lxrt.o
+
+echo
+echo "Now press <enter> to run the RT program:"
+read junk
+
+$SUDO ./rt_process
+
+echo 
+echo "To remove the modules, press <enter>:"
+read junk
+
+../../scripts/rt_rmmod rtai_lxrt
+

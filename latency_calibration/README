@@ -1,0 +1,58 @@
+Latency Calibration
+===================
+
+The material found here has been derived from a similar directory that was
+once distributed with the original NMT-RTLinux.
+
+This directory contains a test module to make a fine tuning of the oneshot
+real-time scheduler. The idea is to measure the difference in time between
+the expected switch time and the time when a task is actually called by the
+scheduler.
+
+Note that under the appropriate arch directory you'll find an equivalent
+module that gives you directly the macro to insert in rtai.h.
+
+To run it do:
+
+  make clean
+  make
+  ./run, and follow what it says you.
+
+"run" (well, in fact the module itself) understands the following command
+line parameters: 
+
+  overall=x	Calculate overall (x=1) or per-loop (x=0) statistics
+  period=x	Period in ns; default: 100000
+  loops=x	Averages are calculated over x loops; default: 1
+  use_fpu=x	Do we want to use the FPU? Default: 0
+  start_timer=x	Declares if the timer should be started or not (default: 1)
+
+Check will print a sequence of 3 "miss" numbers (nanosecs) - min, max, average.
+Use these numbers to change the LATENCY value in "rtai.h" in directory 
+"include" or to set the it at rtai_sched installation by typing
+
+  insmod modules/rtai_sched Latency=<x>"
+
+where <x> is derived from running "check" and should make the average value
+printed by it approximately zero. In practice that means you should set
+LATENCY to the average value printed by "check" if this is greater than
+500. Tuning beyond such a precision is illusory.
+
+It must be noted that the results obtained depend somewhat on the computer
+load and on the number of real time tasks you are running.
+
+There is also a provision to load the module while something else is running
+that has already called start_rt_timer, used for mixed up testing, also with
+LXRT installed. 
+
+For that insert the module by hand with the command:
+
+  insmod ./rt_process "star_timer=0" 
+
+Or use the run script with:
+
+  ./run start_timer=0.
+
+To set parameters you can use the standard parametrization at insmod or do,
+just an e.g.: ./run period=1000000 use_fpu=1 start_timer=0.
+

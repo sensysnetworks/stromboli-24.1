@@ -1,0 +1,28 @@
+sync
+echo " "
+echo "This example demonstrates the use of semaphores."
+echo "It implements a digital wrist clock in the way detailed in:"
+echo "Andre' Schiper, Programmation Concurrent,"
+echo "Presses Polytechnique et Universitaires, Geneve."
+
+echo "Type <return> to install modules"
+read junk
+sync
+insmod ../../modules/rtai.o
+insmod ../../modules/rtai_sched.o
+insmod ../../modules/rtai_fifos.o
+insmod ./dispclk.o
+insmod ./cmdcrn.o
+insmod ./cmdclk.o
+insmod ./clock.o
+echo "Now start the application"
+echo "Type <return> to continue"
+read junk
+./keybrd
+rmmod clock
+rmmod cmdclk
+rmmod cmdcrn
+rmmod dispclk
+rmmod rtai_fifos
+rmmod rtai_sched
+rmmod rtai

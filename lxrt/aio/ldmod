@@ -1,0 +1,15 @@
+#!/bin/sh
+sync
+sync
+insmod ../../modules/rtai.o
+sync
+sync
+insmod ../../modules/rtai_sched.o
+sync
+sync
+insmod ../rtai_lxrt.o
+sync
+sync
+insmod ./aio.o
+sync
+sync

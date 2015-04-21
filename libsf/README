@@ -1,0 +1,41 @@
+Soft Float Library
+==================
+
+(C) 2002 Thomas Gleixner (gleixner@autronix.de)
+
+To avoid using the kernel floatingpoint emulator via undefined 
+opcode exceptions, you can use the softfloat library module.
+
+Version	1.0
+-----------
+
+Attention: You need gcc/glibc compiled with softfloat support !
+
+Current implementation for ARMV only. To support other arch-
+itectures, a architecture specific directory has to be defined.
+The name of this directory has to be the same as the ARCH define, 
+which we get from the kernel defines. See: TOPDIR/.buildvars 
+
+Contents of TOPDIR/libsf/$ARCH:
+
+- fplib_glue.S	arch specific function wrappers, if needed
+		
+- subdirectory PROCESSOR
+
+The name of this directory has to be the same as the PROCESSOR
+define, which we get from the kernel defines. See: TOPDIR/.buildvars 		
+If the contents are the same for different processors, you can use 
+a link to a existing directory
+
+Contents of TOPDIR/libsf/$ARCH/PROCESSOR:
+
+- Makefile 	processor specific flags and include paths
+
+- arch.h	processor specific include file, which 
+		contains defines for the libgcc hack
+		(see libgcc for further information)
+
+If your arch/processor needs more exports from libgcc than actually 
+implemented, modify TOPDIR/libsf/sf_exports.h and define these 
+in your specific arch.h file.
+

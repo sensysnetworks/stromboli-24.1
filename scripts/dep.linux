@@ -1,0 +1,120 @@
+#!/bin/sh
+
+if [ -f /lib/modules/$(uname -r)/build/Makefile ];then
+	default="/lib/modules/$(uname -r)/build"
+else
+	default="/usr/src/linux"
+fi
+default=${LINUXDIR:=$default}
+if [ "${interactive}" = "y" ];then
+	echo -n "Enter location of Linux source tree [$default]: "
+	read LINUXDIR
+fi
+: ${LINUXDIR:=$default}
+
+if [ ! -d "$LINUXDIR/include/linux" ];then
+	echo
+	echo $LINUXDIR: not a kernel source tree
+        echo
+	exit 1
+fi
+
+if [ ! -f "$LINUXDIR/.config" ];then
+	echo
+	echo Kernel source tree at $LINUXDIR is not configured
+	echo Fix before continuing
+	echo
+	exit 1
+fi
+
+if [ ! -f "$LINUXDIR/.hdepend" ];then
+	echo
+	echo You need to run \'make dep\' on the kernel source before
+	echo continuing.
+	echo
+	exit 1
+fi
+
+echo using LINUXDIR=$LINUXDIR
+
+export LINUXDIR
+
+. $LINUXDIR/.config
+
+#
+# check for a bad situation
+#
+if [ "$CONFIG_MODULES" = "n" ]
+then
+	cat <<EOF
+ *****
+ *****    WARNING!!!
+ *****
+ *****    Your kernel is configured to not allow loadable modules.
+ *****    You are attempting to compile a loadable module for this
+ *****    kernel.  This is a problem.  Please correct it.
+ *****
+EOF
+exit
+fi
+
+#
+# check if kernel is cross compiled; accept pre-defined settings
+#
+if [ "$CROSS_COMPILE" = "" ]; then
+CROSS_COMPILE=$(scripts/realtime-config --linuxdir=$LINUXDIR --cross-compile)
+fi
+
+if [ "$CROSS_COMPILE" = "" ]; then
+#
+# check running kernel vs. /usr/src/linux and warn if necessary
+#
+UTS_VERSION=$(grep UTS_RELEASE ${LINUXDIR}/include/linux/version.h| \
+	sed 's/[^"]*"\(.*\)\{1\}"/\1/')
+
+echo "Kernel source version is ${UTS_VERSION}"
+
+UNAME=$(uname -r)
+
+if [ "${UNAME}" != "${UTS_VERSION}" ]
+then
+	cat <<EOF
+ ***
+ ***    WARNING!!!
+ ***
+ ***    The kernel that is currently running ($UNAME)
+ ***    appears to be a different version than the source in
+ ***    $LINUXDIR ($UTS_VERSION).
+ ***    If so, the current compile will create a module that is
+ ***    INCOMPATIBLE with the running kernel.  (This could be
+ ***    what you want, however.)
+ ***
+EOF
+fi
+
+else
+
+echo "using CROSS_COMPILE=$CROSS_COMPILE"
+#
+# report ARCH
+#
+ARCH=$(scripts/realtime-config --linuxdir=$LINUXDIR --arch)
+echo "using ARCH=$ARCH"
+
+fi
+
+topdir=${PWD}
+
+cd ${topdir}/scripts/linux_flags
+make LINUXDIR=${LINUXDIR} &>/dev/null
+cd ${topdir}
+mv scripts/linux_flags/flags .buildvars
+
+
+if [ "$(echo ${UTS_VERSION} | grep '^2.[45]')" != "" ];then
+	echo "FLAT_MODULES := no" >>.buildvars
+else
+	echo "FLAT_MODULES := yes" >>.buildvars
+fi
+
+

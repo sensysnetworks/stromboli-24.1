@@ -1,0 +1,19 @@
+sync
+./user_hrt -oneshot p=80000 -soft
+./user_hrt -oneshot p=80000 -soft
+./user_hrt -oneshot p=80000 -soft
+./user_hrt -oneshot p=80000 -soft
+./user_hrt -oneshot p=80000 -soft
+./user_hrt -oneshot p=80000 -soft
+./user_hrt -oneshot p=80000
+./user_hrt -oneshot p=80000
+./user_hrt -oneshot p=80000
+./user_hrt -oneshot p=80000
+./user_hrt -oneshot p=80000
+./user_hrt -oneshot p=80000
+./user_hrt -oneshot p=80000 -uspsh
+./user_hrt -oneshot p=80000 -uspsh
+./user_hrt -oneshot p=80000 -uspsh
+./user_hrt -oneshot p=80000 -uspsh
+./user_hrt -oneshot p=80000 -uspsh
+./user_hrt -oneshot p=80000 -uspsh

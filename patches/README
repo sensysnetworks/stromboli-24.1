@@ -1,0 +1,45 @@
+
+The optimum kernel and patch to use is architecture dependent.
+
+    i386:
+
+  	- Linux-2.4.17
+	- patch-2.4.17-rthal5g.
+
+    powerpc:
+
+	Read Documentation/README.powerpc.patches for
+	additional information about PowerPC patching.
+
+    mips:
+
+  	The MIPS rthal patch is separate from the others, and
+	the recommended kernel is 2.4.5-pre1, with the MIPS
+	and IDT-MIPS patches applied.
+	
+	- Linux-2.4.5-pre1
+	- patch-2.4.5-pre1-mips
+	- patch-2.4.5-pre1-idtmips
+	- patch-2.4.5-pre1-idtmips-rthal6.20011113
+
+	Do not use patch-2.4.5-pre1-idtmips-rthal6.20011213.
+
+    arm:
+    	Old rtai version
+	- Linux-2.4.17-18 or (preferred) 2.4.19
+	- latest rmk patch from www.arm.linux.org.uk
+	- if building for PXA2xx - a -pxaX patch
+	- one of the following patches, depending on the kernel
+	  version and the target CPU:
+	  patch-2.4.18-rmk-arm-rthal5
+	  patch-2.4.19-rmk-arm-rthal5
+	  patch-2.4.19-rmk-pxa-arm-rthal5
+	  patch-2.4.21-rmk-arm-fixed-rthal5 (note: apart from RTAI-specific
+		modifications it contains a critical for StrongARM patch for
+		2.4.21 and several convenience changes)
+	  patch-2.4.21-sa11x0-pxa-fixed-rthal5 (based on 2.4.21-rmk1-pxa1,
+		contains the above fixes, suitable for SA11x0 and PXA25x)
+	
+	New rtai version (Thomas)
+	- please use those in arch/arm/patches
+

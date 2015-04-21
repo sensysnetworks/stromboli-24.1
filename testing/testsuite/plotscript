@@ -1,0 +1,33 @@
+#!/usr/bin/gnuplot
+
+set terminal png 
+
+set xlabel "samples"
+set ylabel "latency [ns]"
+
+set size 600.0/640,300.0/480
+
+set output "plot-6h.png"
+
+set title "RTAI Latency Calibration - 6 h\nBoard: Gericom Laptop with SIS630 Chipset; Celeron 1000 \n Timer period: 100 microseconds; Statistics per second"
+
+plot [0:21600][0:30000] \
+  "/home/robert/latency_calibrate.log" using 6 \
+  title "max" with lines, \
+  "/home/robert/latency_calibrate.log" using 4 \
+  title "min" with lines, \
+  "/home/robert/latency_calibrate.log" using 8 \
+  title "average" with lines
+
+set output "plot-1h.png"
+
+set title "RTAI Latency Calibration - 1 h\nBoard: Gericom Laptop with SIS630 Chipset; Celeron 1000 \n Timer period: 100 microseconds; Statistics per second"
+
+plot [0:3600][0:30000] \
+  "/home/robert/latency_calibrate.log" using 6 \
+  title "max" with lines, \
+  "/home/robert/latency_calibrate.log" using 4 \
+  title "min" with lines, \
+  "/home/robert/latency_calibrate.log" using 8 \
+  title "average" with lines
+

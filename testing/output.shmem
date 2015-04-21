@@ -1,0 +1,42 @@
+I: Testing openability of /dev/rtai_shm
+I: ok
+I: allocating chunk 1
+rtai_malloc() returned 0x400f6000
+I: reallocate chunk 1
+rtai_malloc() returned (nil)
+W: rtai_malloc() returned NULL, expected?
+I: test allocated chunk for correct mapping
+0x400f6000 ok
+0x400f7000 ok
+0x400f8000 ok
+0x400f9000 ok
+0x400fa000 ok
+0x400fb000 ok
+0x400fc000 ok
+0x400fd000 ok
+0x400fe000 ok
+0x400ff000 ok
+0x40100000 ok
+0x40101000 ok
+0x40102000 ok
+0x40103000 ok
+0x40104000 ok
+0x40105000 ok
+0x40106000 ok
+I: test allocated chunk for zero
+I: ok
+I: allocate chunk 2
+rtai_malloc() returned 0x40015000
+I: free chunk 2
+I: free chunk 1
+I: testing unmap of chunk1
+ok (segfaulted)
+I: testing unmap of chunk2
+ok (segfaulted)
+I: kernel alloc
+I: allocating chunk 1
+rtai_malloc() returned 0x40015000
+I: kernel touch
+touched area: 42
+I: free chunk 1
+I: kernel free

@@ -1,0 +1,15 @@
+sync
+rmmod leds_lxrt
+sync
+rmmod rtai_fifos_lxrt
+sync
+rmmod rtai_shm
+sync
+rmmod rtai_lxrt
+sync
+rmmod rtai_sched
+sync
+rmmod rtai_fifos
+sync
+rmmod rtai
+sync

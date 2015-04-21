@@ -1,0 +1,5 @@
+sync
+./Controller_standalone $1 &
+sync
+../param SysNode="127.0.0.1"
+sync

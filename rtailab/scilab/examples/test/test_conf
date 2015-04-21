@@ -1,0 +1,16 @@
+s/\/\* att_1_init \*\//out_rtai_scope_init(1,2,"IO",0.000000,0.000000,0.000000,0.000000,0.000000);/g
+s/\/\* att_1_output \*\//out_rtai_scope_output(1,u,*t);/g
+s/\/\* att_1_end \*\//out_rtai_scope_end(1);/g
+s/\/\* sens_1_init \*\//inp_square_init(1,0,"0",1.000000,10.000000,5.000000,0.000000,0.000000);/g
+s/\/\* sens_1_input \*\//inp_square_input(1,y,*t);/g
+s/\/\* sens_1_update \*\//inp_square_update();/g
+s/\/\* sens_1_end \*\//inp_square_end(1);/g
+s/\/\* att_2_init \*\//out_rtai_scope_init(2,1,"U",0.000000,0.000000,0.000000,0.000000,0.000000);/g
+s/\/\* att_2_output \*\//out_rtai_scope_output(2,u,*t);/g
+s/\/\* att_2_end \*\//out_rtai_scope_end(2);/g
+s/\/\* att_3_init \*\//out_rtai_led_init(3,1,"LED",0.000000,0.000000,0.000000,0.000000,0.000000);/g
+s/\/\* att_3_output \*\//out_rtai_led_output(3,u,*t);/g
+s/\/\* att_3_end \*\//out_rtai_led_end(3);/g
+s/\/\* att_4_init \*\//out_rtai_meter_init(4,1,"METER",0.000000,0.000000,0.000000,0.000000,0.000000);/g
+s/\/\* att_4_output \*\//out_rtai_meter_output(4,u,*t);/g
+s/\/\* att_4_end \*\//out_rtai_meter_end(4);/g

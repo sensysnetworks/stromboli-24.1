@@ -1,0 +1,24 @@
+cd ktest
+./run
+read junk
+./rem
+cd ../utest
+./run
+read junk
+./rem
+cd ../uresumefromintr
+./run
+./rem
+./run
+./rem
+./run
+./rem
+cd ../uasync
+./run 0
+./run 1
+cd ../usound
+./run
+cd ../usoundmsg
+./run
+./rem
+cd --

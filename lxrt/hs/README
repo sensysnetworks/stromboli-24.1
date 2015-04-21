@@ -1,0 +1,11 @@
+This example demonstrates automatic switches back and forth hard real timer.
+Whenever you ask for a Linux service while being in hard real time LXRT sends
+you to soft real time and then calls Linux. Your process will go back to hard
+real time at the next LXRT call. In between you are in the hand of Linux.
+To use it you must enable the macro ALLOW_SYSW in lxrt.c
+
+Since it avoids crashes it should be usefull during testing.
+
+Test.c shows it by continuously suspending itself on rt_sleep. Its use has
+allowed to verify the reliability of the mechanism for switching back and forth
+from hard to soft and viceversa.

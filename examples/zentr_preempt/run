@@ -1,0 +1,10 @@
+#!/bin/sh
+
+../../scripts/rt_modprobe ../../modules/rtai_sched.o
+../../scripts/rt_modprobe ../../modules/rtai_fifos.o
+
+./run_test
+
+../../scripts/rt_rmmod rtai_sched
+../../scripts/rt_rmmod rtai_fifos
+

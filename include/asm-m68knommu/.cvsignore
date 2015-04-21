@@ -1,0 +1,5 @@
+rtai_lxrt.h
+rtai_sched.h
+rtai_shm.h
+rtai_srq.h
+up_task_sw.S

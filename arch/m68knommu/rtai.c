@@ -653,7 +653,7 @@ static void rt_ack_tmr(void) {
 #ifdef CONFIG_NETtel
 #define RT_TIMER_IRQ 30
 #endif
-#ifdef CONFIG_MOTOROLA
+#if defined(CONFIG_MOTOROLA) || defined(CONFIG_COLDFIRE)
 #define RT_TIMER_IRQ 72
 #endif
 
@@ -718,7 +718,7 @@ void rt_request_timer(void (*handler)(void), unsigned int tick, int unused) {
   } while(0);
 #endif
 
-#ifdef CONFIG_MOTOROLA
+#if defined(CONFIG_MOTOROLA) || defined(CONFIG_COLDFIRE)
   do {
     volatile unsigned long  *icrp;
     icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR1);
@@ -762,7 +762,7 @@ void rt_request_timer(void (*handler)(void), unsigned int tick, int unused) {
     } while(0);
 #endif
 
-#ifdef CONFIG_MOTOROLA
+#if defined(CONFIG_MOTOROLA) || defined(CONFIG_COLDFIRE)
     do {
       volatile unsigned long  *icrp;
       icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR1);
@@ -787,7 +787,7 @@ void rt_request_timer(void (*handler)(void), unsigned int tick, int unused) {
     *icrp = MCFSIM_ICR_AUTOVEC | MCFSIM_ICR_LEVEL6 | MCFSIM_ICR_PRI3;
 #endif
 
-#ifdef CONFIG_MOTOROLA
+#if defined(CONFIG_MOTOROLA) || defined(CONFIG_COLDFIRE)
     do {
       volatile unsigned long  *icrp;
       icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR1);
@@ -844,7 +844,7 @@ void rt_free_timer(void) {
   *icrp = MCFSIM_ICR_AUTOVEC | MCFSIM_ICR_LEVEL1 | MCFSIM_ICR_PRI3;
 #endif
 
-#ifdef CONFIG_MOTOROLA
+#if defined(CONFIG_MOTOROLA) || defined(CONFIG_COLDFIRE)
   do {
     volatile unsigned long  *icrp;
     icrp = (volatile unsigned long *) (MCF_MBAR + MCFSIM_ICR1);

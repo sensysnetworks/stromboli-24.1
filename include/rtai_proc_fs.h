@@ -20,6 +20,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
 #ifndef _RTAI_PROC_FS_H_
 #define _RTAI_PROC_FS_H_
 
+#define RTAI_VERSION "24.1.13"
+
 #define LIMIT (PAGE_SIZE - 80)
 
 extern struct proc_dir_entry *rtai_proc_root;

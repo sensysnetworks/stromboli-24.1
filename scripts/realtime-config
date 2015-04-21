@@ -123,6 +123,13 @@ kernel_cflags_mips()
 	arch_cflags_fp="-mhard-float"
 }
 
+kernel_cflags_m68knommu()
+{
+	x="-DNO_MM -m5200 -fno-builtin -fomit-frame-pointer -pipe"
+	arch_cflags=$x
+	arch_cflags_fp=
+};
+
 kernel_cflags_arm()
 {
 # Select CPU dependent flags.  Note that order of declaration is important;
@@ -300,6 +307,9 @@ case "$arch" in
 	;;
   cris)
   	kernel_cflags_cris
+	;;
+  m68knommu)
+  	kernel_cflags_m68knommu
 	;;
   *)
   	echo "Fix realtime_config!"

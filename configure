@@ -38,7 +38,7 @@ if [ "$menu" = "y" ];then
 	fi
 	scripts/Menuconfig scripts/config.in
 else
-	scripts/Configure ${old}
+	${SHELL} scripts/Configure ${old}
 fi
 
 

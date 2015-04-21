@@ -48,7 +48,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
 #ifdef CONFIG_NETtel
 #define TIMER_8254_IRQ 25
 #endif
-#ifdef CONFIG_MOTOROLA
+#if defined(CONFIG_MOTOROLA) || defined(CONFIG_COLDFIRE)
 #define TIMER_8254_IRQ 72
 #endif
 

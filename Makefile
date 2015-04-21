@@ -3,6 +3,12 @@ PATCHLEVEL = 1
 SUBLEVEL = 11
 EXTRAVERSION =
 
+# default setting for (Ethernet Access Point) coldfire 5272
+ARCH=m68knommu
+CROSS_COMPILE=m68k-elf-
+PROJECT-DIR=$(shell pwd)
+LINUXDIR=$(shell dirname $(PROJECT-DIR))/uClinux-dist/linux-2.4.x
+
 PROJECT = RTAI
 project = rtai
 
@@ -23,6 +29,11 @@ SUBDIRS := rtaidir rt_mem_mgr shmem smpscheduler mupscheduler upscheduler \
 	   fifos latency_calibration examples tasklets mups_examples \
 	   tbx posix watchdog testing trace rt_com libm leds rtnet libsf spdrv
 else
+ifeq ($(CONFIG_UCLINUX), y)
+SUBDIRS := rtaidir rt_mem_mgr shmem smpscheduler mupscheduler upscheduler \
+	   fifos latency_calibration examples tasklets mups_examples \
+	   tbx posix watchdog testing trace rt_com libm libsf
+else
 ifeq ($(CONFIG_ETRAX100LX_V2), y)
 SUBDIRS := rtaidir rt_mem_mgr upscheduler \
           fifos latency_calibration examples tasklets \
@@ -35,6 +46,7 @@ SUBDIRS := rtaidir rt_mem_mgr shmem smpscheduler mupscheduler upscheduler \
 	   tbx posix watchdog testing trace rt_com_lxrt rt_com libm net_rpc \
 	   leds rtnet bits libsf rtai_cpp fifos_lxrt newlxrt usi spdrv \
 	   usposix comedi_lxrt
+endif
 endif
 endif
 endif
